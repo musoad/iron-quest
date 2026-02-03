@@ -16,15 +16,15 @@
   <header class="topbar">
     <div>
       <h1>IRON QUEST</h1>
-      <p class="sub">XP Tracker (PWA) • Offline • IndexedDB</p>
+      <p class="sub">XP Tracker • Offline • IndexedDB</p>
     </div>
 
     <nav class="tabs" aria-label="Navigation">
-      <button class="tab active" data-tab="dash">Dashboard</button>
-      <button class="tab" data-tab="log">Log</button>
-      <button class="tab" data-tab="skills">Skilltrees</button>
-      <button class="tab" data-tab="boss">Bossfights</button>
-      <button class="tab" data-tab="export">Export</button>
+      <button type="button" class="tab active" data-tab="dash">Dashboard</button>
+      <button type="button" class="tab" data-tab="log">Log</button>
+      <button type="button" class="tab" data-tab="skills">Skilltrees</button>
+      <button type="button" class="tab" data-tab="boss">Bossfights</button>
+      <button type="button" class="tab" data-tab="export">Export</button>
     </nav>
   </header>
 
@@ -49,9 +49,7 @@
           <div class="pill"><b>Level:</b> <span id="level">1</span> – <span id="title">Anfänger</span></div>
         </div>
 
-        <p class="hint">
-          Sterne: 500–799 ⭐ • 800–1099 ⭐⭐ • 1100+ ⭐⭐⭐
-        </p>
+        <p class="hint">Sterne: 500–799 ⭐ • 800–1099 ⭐⭐ • 1100+ ⭐⭐⭐</p>
       </div>
 
       <div class="card">
@@ -121,13 +119,13 @@
           <div class="pill"><b>Hinweis:</b> Walking hat keine Bonus-XP</div>
         </div>
 
-        <button id="add">Eintrag speichern</button>
+        <button id="add" type="button">Eintrag speichern</button>
 
         <div class="divider"></div>
 
         <h2>Alle Einträge</h2>
         <ul id="list"></ul>
-        <button id="clear" class="secondary">Alle Einträge löschen</button>
+        <button id="clear" type="button" class="secondary">Alle Einträge löschen</button>
       </div>
     </section>
 
@@ -141,41 +139,41 @@
           <div class="skillbox">
             <h3>Mehrgelenkig (STR)</h3>
             <p>Skillpunkte: <b><span id="sp-multi">0</span></b></p>
-            <button class="secondary" data-sp="multi">+1 Skillpunkt</button>
+            <button type="button" class="secondary" data-sp="multi">+1 Skillpunkt</button>
             <ul class="skilllist" id="tree-multi"></ul>
           </div>
 
           <div class="skillbox">
             <h3>Unilateral (STA)</h3>
             <p>Skillpunkte: <b><span id="sp-uni">0</span></b></p>
-            <button class="secondary" data-sp="uni">+1 Skillpunkt</button>
+            <button type="button" class="secondary" data-sp="uni">+1 Skillpunkt</button>
             <ul class="skilllist" id="tree-uni"></ul>
           </div>
 
           <div class="skillbox">
             <h3>Core (STA/MOB)</h3>
             <p>Skillpunkte: <b><span id="sp-core">0</span></b></p>
-            <button class="secondary" data-sp="core">+1 Skillpunkt</button>
+            <button type="button" class="secondary" data-sp="core">+1 Skillpunkt</button>
             <ul class="skilllist" id="tree-core"></ul>
           </div>
 
           <div class="skillbox">
             <h3>Conditioning (END)</h3>
             <p>Skillpunkte: <b><span id="sp-cond">0</span></b></p>
-            <button class="secondary" data-sp="cond">+1 Skillpunkt</button>
+            <button type="button" class="secondary" data-sp="cond">+1 Skillpunkt</button>
             <ul class="skilllist" id="tree-cond"></ul>
           </div>
 
           <div class="skillbox">
             <h3>Komplexe (ELITE)</h3>
             <p>Skillpunkte: <b><span id="sp-comp">0</span></b></p>
-            <button class="secondary" data-sp="comp">+1 Skillpunkt</button>
+            <button type="button" class="secondary" data-sp="comp">+1 Skillpunkt</button>
             <ul class="skilllist" id="tree-comp"></ul>
           </div>
         </div>
 
         <div class="divider"></div>
-        <button id="resetSkills" class="danger">Skilltrees zurücksetzen</button>
+        <button id="resetSkills" type="button" class="danger">Skilltrees zurücksetzen</button>
       </div>
     </section>
 
@@ -188,7 +186,7 @@
         <label>Startdatum Woche 1
           <input id="startDate" type="date">
         </label>
-        <button id="saveStart" class="secondary">Startdatum speichern</button>
+        <button id="saveStart" type="button" class="secondary">Startdatum speichern</button>
 
         <div class="divider"></div>
         <div class="pill"><b>Aktuelle Woche:</b> <span id="bossCurrentWeek">—</span></div>
@@ -196,7 +194,7 @@
         <ul id="bossList" class="bosslist"></ul>
 
         <div class="divider"></div>
-        <button id="resetBoss" class="danger">Boss-Fights zurücksetzen</button>
+        <button id="resetBoss" type="button" class="danger">Boss-Fights zurücksetzen</button>
       </div>
     </section>
 
@@ -205,7 +203,7 @@
       <div class="card">
         <h2>Export</h2>
         <p class="hint">CSV Export für Excel/Google Sheets.</p>
-        <button id="exportCsv">CSV herunterladen</button>
+        <button id="exportCsv" type="button">CSV herunterladen</button>
 
         <div class="divider"></div>
         <h2>Status</h2>
