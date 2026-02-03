@@ -1,8 +1,10 @@
 /* =========================
    IRON QUEST – PWA
-   - Entries: IndexedDB
-   - UI: nicer checklist layout
-   - Start date: applied to Log (reps/sets), Boss, Weekly Plan
+   - IndexedDB entries
+   - Startdate used everywhere
+   - Attributes STR/STA/END/MOB
+   - Adaptive difficulty (based on previous week)
+   - Weekly RNG Mutations (fixed per week)
    ========================= */
 
 // ---------- IndexedDB ----------
@@ -63,12 +65,12 @@ async function idbClear() {
 }
 
 // ---------- localStorage keys ----------
-const KEY_SKILLS   = "ironquest_skills_v6";
-const KEY_BOSS     = "ironquest_boss_v6";
-const KEY_BOSSCHK  = "ironquest_boss_checks_v4";
-const KEY_START    = "ironquest_startdate_v6";
-const KEY_QUESTS   = "ironquest_dailyquests_v4";
-const KEY_ACH      = "ironquest_weeklyach_v4";
+const KEY_BOSS     = "ironquest_boss_v7";
+const KEY_BOSSCHK  = "ironquest_boss_checks_v5";
+const KEY_START    = "ironquest_startdate_v7";
+const KEY_QUESTS   = "ironquest_dailyquests_v5";
+const KEY_ACH      = "ironquest_weeklyach_v5";
+const KEY_MUT      = "ironquest_mutations_v1"; // week -> mutationId
 
 // ---------- Helpers ----------
 function $(id){ return document.getElementById(id); }
@@ -94,46 +96,21 @@ function sortEntriesDesc(entries){
 }
 function clampWeek(w){ return Math.max(1, Math.min(12, w || 1)); }
 
-// ✅ ensures start date exists (used everywhere)
+// ✅ Startdate is the anchor for everything
 function ensureStartDate(){
   let start = localStorage.getItem(KEY_START);
   if (!start) {
-    // Prefer the log date if present, else today
     const d = $("date")?.value;
     start = d || isoDate(new Date());
     localStorage.setItem(KEY_START, start);
   }
-  // keep boss input synced
   if ($("startDate")) $("startDate").value = start;
   return start;
 }
-
 function currentWeekToday(){
   const start = ensureStartDate();
   const today = isoDate(new Date());
   return getWeekNumber(start, today);
-}
-
-function weekBlock(w){
-  const ww = clampWeek(w);
-  return ww <= 4 ? 1 : (ww <= 8 ? 2 : 3);
-}
-function blockName(block){
-  if (block === 1) return "Block 1 (Technik/ROM)";
-  if (block === 2) return "Block 2 (Volumen/Progress)";
-  return "Block 3 (Dichte/Intensität)";
-}
-function weeklyProgressHint(week){
-  const b = weekBlock(week);
-  if (b === 1) return "Technik/ROM, Progress über Wiederholungen.";
-  if (b === 2) return "Mehr Volumen (Sätze), Progress über Gewicht oder Reps.";
-  return "Dichte/Intensität (Pausen etwas kürzer, Tempo kontrolliert).";
-}
-function blockHintShort(week){
-  const b = weekBlock(week);
-  if (b === 1) return "Clean & kontrolliert";
-  if (b === 2) return "Mehr Volumen";
-  return "Dicht & intensiv";
 }
 
 // ---------- Tabs ----------
@@ -154,7 +131,7 @@ function setupTabs(){
   });
 }
 
-// ---------- XP + Level ----------
+// ---------- Global XP ----------
 const XP_PER_SET = {
   "Mehrgelenkig": 100,
   "Unilateral": 120,
@@ -193,8 +170,115 @@ function starsForToday(xp){
   return "—";
 }
 
-// ---------- Recommended Sets + Reps ----------
-function recommendedSetsByWeek(type, week){
+// ---------- Blocks ----------
+function weekBlock(w){
+  const ww = clampWeek(w);
+  return ww <= 4 ? 1 : (ww <= 8 ? 2 : 3);
+}
+function blockName(block){
+  if (block === 1) return "Block 1 (Technik/ROM)";
+  if (block === 2) return "Block 2 (Volumen/Progress)";
+  return "Block 3 (Dichte/Intensität)";
+}
+function weeklyProgressHint(week){
+  const b = weekBlock(week);
+  if (b === 1) return "Technik/ROM, Progress über Wiederholungen.";
+  if (b === 2) return "Mehr Volumen (Sätze), Progress über Gewicht oder Reps.";
+  return "Dichte/Intensität (Pausen etwas kürzer, Tempo kontrolliert).";
+}
+
+// ---------- Weekly Mutations (RNG, fixed per week) ----------
+const MUTATIONS = [
+  {
+    id: "tempo",
+    name: "Tempo Week",
+    desc: "Langsame Exzentrik, saubere ROM. STR/STA XP Bonus.",
+    effect: "STR/STA XP +10%",
+    mult: { STR: 1.10, STA: 1.10 }
+  },
+  {
+    id: "corefocus",
+    name: "Core Focus",
+    desc: "Core & Kontrolle im Zentrum. MOB XP Bonus.",
+    effect: "MOB XP +25%",
+    mult: { MOB: 1.25 }
+  },
+  {
+    id: "engine",
+    name: "Engine Mode",
+    desc: "Konditionierung bekommt den Boost. END XP Bonus.",
+    effect: "END XP +15%",
+    mult: { END: 1.15 }
+  },
+  {
+    id: "neatboost",
+    name: "NEAT Boost",
+    desc: "Alltag zählt mehr. Walking/NEAT XP Bonus.",
+    effect: "NEAT XP +20%",
+    mult: { NEAT: 1.20 }
+  },
+  {
+    id: "unilateral",
+    name: "Unilateral Blessing",
+    desc: "Stabilität und Balance. STA XP Bonus.",
+    effect: "STA XP +15%",
+    mult: { STA: 1.15 }
+  },
+];
+
+function loadMutMap(){ return loadJSON(KEY_MUT, {}); }
+function saveMutMap(m){ saveJSON(KEY_MUT, m); }
+
+function getMutationForWeek(week){
+  const w = clampWeek(week);
+  const map = loadMutMap();
+  if (!map[w]) {
+    const choice = MUTATIONS[Math.floor(Math.random() * MUTATIONS.length)];
+    map[w] = choice.id;
+    saveMutMap(map);
+  }
+  return MUTATIONS.find(m => m.id === map[w]) || MUTATIONS[0];
+}
+
+// ---------- Adaptive difficulty (based on previous week performance) ----------
+function computeWeekDayXP(entries, weekNum){
+  const dayXP = {};
+  for (const e of entries){
+    if (e.week !== weekNum) continue;
+    dayXP[e.date] = (dayXP[e.date] || 0) + (e.xp || 0);
+  }
+  return dayXP;
+}
+
+function getAdaptiveModifiers(entries, curWeek){
+  const prev = curWeek - 1;
+  if (prev < 1) return { setDelta: 0, repDelta: 0, note: "Startwoche: neutral." };
+
+  const dayXP = computeWeekDayXP(entries, prev);
+  const days = Object.keys(dayXP);
+  const trainDays = days.filter(d => dayXP[d] >= 500).length;
+  const twoStarDays = days.filter(d => dayXP[d] >= 800).length;
+  const threeStarDays = days.filter(d => dayXP[d] >= 1100).length;
+
+  // Simple rules:
+  // Strong week -> increase
+  if (trainDays >= 4 && (twoStarDays >= 2 || threeStarDays >= 1)) {
+    return { setDelta: +1, repDelta: +1, note: `Starke Woche (W${prev}) → +1 Satz & +1 Rep Empfehlung.` };
+  }
+  // Very strong -> reps +2
+  if (trainDays >= 5 && threeStarDays >= 2) {
+    return { setDelta: +1, repDelta: +2, note: `Elite Woche (W${prev}) → +1 Satz & +2 Reps Empfehlung.` };
+  }
+  // Weak -> deload
+  if (trainDays <= 2) {
+    return { setDelta: -1, repDelta: -1, note: `Schwache Woche (W${prev}) → Deload: -1 Satz & -1 Rep Empfehlung.` };
+  }
+
+  return { setDelta: 0, repDelta: 0, note: `Stabil (W${prev}) → neutral.` };
+}
+
+// ---------- Recommended Sets + Reps (with Adaptive) ----------
+function baseRecommendedSets(type, week){
   const b = weekBlock(week);
   if (type === "NEAT") return { text:"Minuten statt Sätze", value:null };
   if (type === "Conditioning") {
@@ -217,7 +301,39 @@ function recommendedSetsByWeek(type, week){
   return { text:"4–5 Sätze (Tempo/Pausen härter)", value:5 };
 }
 
-function recommendedRepsByWeek(type, week){
+function applySetDeltaText(text, delta){
+  // Handles "3–4 Sätze", "4–5 Runden", "3 Sätze"
+  const nums = text.match(/\d+/g)?.map(n => parseInt(n,10));
+  if (!nums || nums.length === 0) return text;
+  const newNums = nums.map(n => Math.max(1, n + delta));
+  let out = text;
+  let i = 0;
+  out = out.replace(/\d+/g, () => String(newNums[i++]));
+  return out;
+}
+
+function recommendedSetsByWeek(type, week, adaptive){
+  const base = baseRecommendedSets(type, week);
+  if (type === "NEAT") return base;
+  const d = adaptive?.setDelta ?? 0;
+  if (!d) return base;
+
+  const newText = applySetDeltaText(base.text, d);
+  const newVal = base.value == null ? null : Math.max(1, base.value + d);
+  return { text: newText + " (adaptive)", value: newVal };
+}
+
+function adjustRepRange(str, delta){
+  // Adjusts numeric ranges inside a string (best effort).
+  // examples: "10–12 Wdh/Satz", "6–8 Wdh pro Movement", "30–45s pro Satz"
+  const nums = str.match(/\d+/g)?.map(n => parseInt(n,10));
+  if (!nums || nums.length === 0) return str;
+  const newNums = nums.map(n => Math.max(1, n + delta));
+  let i = 0;
+  return str.replace(/\d+/g, () => String(newNums[i++]));
+}
+
+function baseRecommendedReps(type, week){
   const b = weekBlock(week);
   if (type === "NEAT") return "Minuten (z. B. 30–60)";
   if (type === "Core") {
@@ -238,6 +354,15 @@ function recommendedRepsByWeek(type, week){
   if (b === 1) return "10–12 Wdh/Satz";
   if (b === 2) return "8–10 Wdh/Satz";
   return "6–8 Wdh/Satz (Tempo kontrolliert)";
+}
+
+function recommendedRepsByWeek(type, week, adaptive){
+  const base = baseRecommendedReps(type, week);
+  const d = adaptive?.repDelta ?? 0;
+  if (!d) return base;
+  if (type === "NEAT") return base;
+  // Only adjust if there are numeric reps/seconds ranges
+  return adjustRepRange(base, d) + " (adaptive)";
 }
 
 // ---------- Exercises ----------
@@ -298,7 +423,97 @@ function typeForExercise(exName){
   return EXERCISES.find(e => e.name === exName)?.type ?? "Mehrgelenkig";
 }
 
-// ---------- Daily Quests (UI nicer) ----------
+// ---------- Attributes (computed from entries) ----------
+function baseAttrFromEntry(e){
+  const out = { STR:0, STA:0, END:0, MOB:0 };
+  const xp = e.xp || 0;
+  const t = e.type || "";
+
+  // Standard mapping
+  if (t === "Mehrgelenkig") out.STR += xp;
+  else if (t === "Unilateral") out.STA += xp;
+  else if (t === "Conditioning") out.END += xp;
+  else if (t === "Core") out.MOB += xp;
+  else if (t === "Komplexe") {
+    // mixed full-body: split
+    out.STR += xp * 0.4;
+    out.STA += xp * 0.2;
+    out.END += xp * 0.2;
+    out.MOB += xp * 0.2;
+  }
+  else if (t === "NEAT") {
+    out.END += xp * 0.7;
+    out.MOB += xp * 0.3;
+  }
+  else if (t === "Boss-Workout") {
+    // Boss workout lines are mixed: split evenly
+    out.STR += xp * 0.25;
+    out.STA += xp * 0.25;
+    out.END += xp * 0.25;
+    out.MOB += xp * 0.25;
+  }
+  else {
+    // Quest/Achievement/Boss marker etc: small split (optional)
+    out.END += xp * 0.25;
+    out.MOB += xp * 0.25;
+    out.STR += xp * 0.25;
+    out.STA += xp * 0.25;
+  }
+
+  return out;
+}
+
+function applyMutationToAttr(attr, mutation){
+  const out = { ...attr };
+
+  // If mutation provides NEAT multiplier, apply to NEAT-derived portion via heuristic:
+  // We already assigned NEAT to END/MOB. We'll apply NEAT multiplier to END+MOB only when entry type is NEAT.
+  // For general entries, we apply attribute multipliers directly.
+
+  if (mutation?.mult?.STR) out.STR *= mutation.mult.STR;
+  if (mutation?.mult?.STA) out.STA *= mutation.mult.STA;
+  if (mutation?.mult?.END) out.END *= mutation.mult.END;
+  if (mutation?.mult?.MOB) out.MOB *= mutation.mult.MOB;
+
+  return out;
+}
+
+function mutationXpMultiplierForType(type, mutation){
+  // affects displayed XP in calc + stored XP for entries
+  // NEAT mutation affects NEAT only
+  if (type === "NEAT" && mutation?.mult?.NEAT) return mutation.mult.NEAT;
+  // otherwise: small global effect via attribute multipliers:
+  // map type -> attribute
+  if (type === "Mehrgelenkig" && mutation?.mult?.STR) return mutation.mult.STR;
+  if (type === "Unilateral" && mutation?.mult?.STA) return mutation.mult.STA;
+  if (type === "Conditioning" && mutation?.mult?.END) return mutation.mult.END;
+  if (type === "Core" && mutation?.mult?.MOB) return mutation.mult.MOB;
+  if (type === "Komplexe") {
+    // average of all defined multipliers (or 1)
+    const ms = [mutation?.mult?.STR, mutation?.mult?.STA, mutation?.mult?.END, mutation?.mult?.MOB].filter(Boolean);
+    if (!ms.length) return 1;
+    return ms.reduce((a,b)=>a+b,0)/ms.length;
+  }
+  return 1;
+}
+
+// Attribute leveling: requirement increases per level
+function attrReqForLevel(level){
+  // Lv1->Lv2: 800, then +120 each level (feels RPG-like)
+  return 800 + (level - 1) * 120;
+}
+function attrLevelFromXp(totalXp){
+  let lvl = 1;
+  let xp = totalXp;
+  while (true) {
+    const req = attrReqForLevel(lvl);
+    if (xp >= req) { xp -= req; lvl += 1; }
+    else break;
+  }
+  return { lvl, into: xp, need: attrReqForLevel(lvl) };
+}
+
+// ---------- Daily Quests ----------
 const QUESTS = [
   { id:"steps10k", name:"10.000 Schritte", xp:100, note:"NEAT-Boost" },
   { id:"mobility10", name:"10 Min Mobility", xp:50, note:"Hüfte/Schulter/Wirbelsäule" },
@@ -307,11 +522,9 @@ const QUESTS = [
 ];
 function loadQuestState(){ return loadJSON(KEY_QUESTS, {}); }
 function saveQuestState(s){ saveJSON(KEY_QUESTS, s); }
-
 function isQuestDoneToday(qState, questId, today){
   return qState?.[today]?.[questId] === true;
 }
-
 async function setQuestDoneToday(questId, done){
   const today = isoDate(new Date());
   const qState = loadQuestState();
@@ -337,7 +550,6 @@ async function setQuestDoneToday(questId, done){
     });
   }
 }
-
 function renderQuests(){
   const today = isoDate(new Date());
   const qState = loadQuestState();
@@ -361,17 +573,14 @@ function renderQuests(){
     ul.appendChild(li);
 
     li.querySelector("input").addEventListener("change", async (e) => {
-      if (e.target.checked) {
-        await setQuestDoneToday(q.id, true);
-      } else {
-        alert("Quest deaktiviert – XP-Eintrag bleibt bestehen (einfaches System).");
-      }
+      if (e.target.checked) await setQuestDoneToday(q.id, true);
+      else alert("Quest deaktiviert – XP-Eintrag bleibt bestehen (einfaches System).");
       await renderAll();
     });
   });
 }
 
-// ---------- Bossfights (UI nicer + startdate applied) ----------
+// ---------- Bossfights ----------
 const BOSSES = [
   { week: 2, name: "The Foundation Beast", xp: 500, reward: "1 Joker + Titel: Foundation Slayer",
     workout: ["DB Goblet Squat – 5×10 (3s runter)","DB Floor Press – 5×8","DB Row – 5×10 (Pause oben)","Pause strikt 90s"]},
@@ -431,7 +640,7 @@ function renderBoss(curWeek){
   const bossState = loadBoss();
 
   if ($("bossStartDisplay")) $("bossStartDisplay").textContent = start;
-  if ($("bossCurrentWeek")) $("bossCurrentWeek").textContent = curWeek ? `W${curWeek}` : "—";
+  if ($("bossCurrentWeek")) $("bossCurrentWeek").textContent = `W${curWeek}`;
 
   const ul = $("bossList");
   if (!ul) return;
@@ -467,6 +676,7 @@ function renderBoss(curWeek){
 
     const chkUl = li.querySelector(`#bosschk_${b.week}`);
     const checks = getBossChecksFor(b.week, today);
+    const xpParts = splitXP(b.xp, b.workout.length);
 
     b.workout.forEach((line, idx) => {
       const checked = !!checks[idx];
@@ -478,7 +688,7 @@ function renderBoss(curWeek){
             <div class="checkTitle">${line}</div>
             <div class="checkSub">${b.name}</div>
           </div>
-          <div class="xpBadge">Teil XP</div>
+          <div class="xpBadge">+${xpParts[idx]} XP</div>
         </div>
       `;
       chkUl.appendChild(row);
@@ -534,145 +744,7 @@ function renderBoss(curWeek){
   });
 }
 
-// ---------- Weekly Plan ----------
-function groupExercisesByDay(){
-  const dayMap = {
-    "Tag 1 – Push": [],
-    "Tag 2 – Pull": [],
-    "Tag 3 – Beine & Core": [],
-    "Tag 4 – Ganzkörper": [],
-    "Tag 5 – Conditioning & Core": []
-  };
-  EXERCISES.forEach(ex => { if (dayMap[ex.group]) dayMap[ex.group].push(ex); });
-  return dayMap;
-}
-function getBossForWeek(w){ return BOSSES.find(b => b.week === w) || null; }
-
-function renderWeeklyPlan(curWeek){
-  const content = $("planContent");
-  if (!content) return;
-
-  const start = ensureStartDate();
-  const w = clampWeek(curWeek || 1);
-  const b = weekBlock(w);
-  const dayMap = groupExercisesByDay();
-  const boss = getBossForWeek(w);
-
-  if ($("planStart")) $("planStart").textContent = start;
-  if ($("planWeek")) $("planWeek").textContent = `W${w}`;
-  if ($("planBlock")) $("planBlock").textContent = blockName(b);
-  if ($("planHint")) $("planHint").textContent = weeklyProgressHint(w);
-
-  const questHint = `Quests: ${QUESTS.map(q => `${q.name} (+${q.xp})`).join(" • ")}`;
-
-  let html = "";
-  html += `<div class="pill"><b>Heute/Alltag:</b> ${questHint}</div>`;
-  html += `<div class="divider"></div>`;
-
-  if (boss) {
-    html += `
-      <div class="pill"><b>Boss diese Woche:</b> ${boss.name} (W${boss.week}) • +${boss.xp} XP<br>
-      <span class="small">Clear nur in W${boss.week} + Checkboxen im Boss-Tab.</span></div>
-      <div class="divider"></div>
-    `;
-  } else {
-    html += `<div class="pill"><b>Boss diese Woche:</b> keiner (Boss-Wochen: 2/4/6/8/10/12)</div><div class="divider"></div>`;
-  }
-
-  Object.keys(dayMap).forEach(dayName => {
-    html += `<div class="planDay"><h3>${dayName}</h3><ul class="planList">`;
-    dayMap[dayName].forEach(ex => {
-      const setRec = recommendedSetsByWeek(ex.type, w).text;
-      const repRec = recommendedRepsByWeek(ex.type, w);
-      html += `<li><b>${ex.name}</b><br><span class="small">${ex.type} • ${setRec} • ${repRec}</span></li>`;
-    });
-    html += `</ul></div>`;
-  });
-
-  html += `
-    <div class="planDay">
-      <h3>Extra (optional)</h3>
-      <ul class="planList">
-        <li><b>NEAT Walking Desk (3 km/h)</b><br><span class="small">${recommendedRepsByWeek("NEAT", w)} • XP = Minuten × 5</span></li>
-        <li><b>Ruhetag / Mobility</b><br><span class="small">10–20 Min Mobility + Spaziergang = Fortschritt</span></li>
-      </ul>
-    </div>
-  `;
-
-  content.innerHTML = html;
-}
-
-// ---------- Log UI ----------
-async function updateLogUI(){
-  const start = ensureStartDate();
-  if ($("logStart")) $("logStart").textContent = start;
-
-  const today = isoDate(new Date());
-  const curWeek = getWeekNumber(start, today);
-
-  const exName = $("exercise")?.value;
-  const type = typeForExercise(exName);
-
-  if ($("autoType")) $("autoType").textContent = type;
-
-  const setRec = recommendedSetsByWeek(type, curWeek);
-  const repRec = recommendedRepsByWeek(type, curWeek);
-  if ($("recommendedSets")) $("recommendedSets").textContent = setRec.text;
-  if ($("recommendedReps")) $("recommendedReps").textContent = repRec;
-  if ($("blockHintShort")) $("blockHintShort").textContent = blockHintShort(curWeek);
-
-  const isWalk = (type === "NEAT");
-  $("walkingRow")?.classList.toggle("hide", !isWalk);
-  $("setsRow")?.classList.toggle("hide", isWalk);
-
-  if (!isWalk && setRec.value && $("sets")) {
-    const current = parseInt($("sets").value || "1", 10);
-    if (!current || current === 1) $("sets").value = setRec.value;
-  }
-
-  ["rpe9","tech","pause"].forEach(id => {
-    const el = $(id);
-    if (!el) return;
-    el.disabled = isWalk;
-    if (isWalk) el.checked = false;
-  });
-
-  updateCalcPreview(curWeek);
-}
-
-function updateCalcPreview(curWeek){
-  const exName = $("exercise")?.value;
-  const type = typeForExercise(exName);
-  let xp = 0;
-
-  if (type === "NEAT") {
-    const minutes = Math.max(1, parseInt($("walkMin")?.value || "0", 10));
-    xp = neatXP(minutes);
-  } else {
-    const sets = Math.max(1, parseInt($("sets")?.value || "1", 10));
-    const flags = { rpe9: $("rpe9")?.checked, tech: $("tech")?.checked, pause: $("pause")?.checked };
-    xp = (XP_PER_SET[type] ?? 0) * sets + bonusXP(flags);
-  }
-
-  if ($("calcXp")) $("calcXp").textContent = xp;
-}
-
-// ---------- Dashboard render ----------
-async function computeStats(entries){
-  const startDate = ensureStartDate();
-  const today = isoDate(new Date());
-  const curWeek = getWeekNumber(startDate, today);
-
-  let todayXp = 0, weekXp = 0, totalXp = 0;
-  for (const e of entries){
-    totalXp += e.xp;
-    if (e.date === today) todayXp += e.xp;
-    if (e.week === curWeek) weekXp += e.xp;
-  }
-  return { todayXp, weekXp, totalXp, curWeek, startDate };
-}
-
-// ---------- Achievements (unchanged, minimal) ----------
+// ---------- Achievements ----------
 const ACHIEVEMENTS = [
   { id:"noskip", name:"No Skip Week", xp:500, rule:"5 Trainingstage (≥500 XP)" },
   { id:"perfect", name:"Perfect Run", xp:600, rule:"5 Tage ⭐⭐ oder ⭐⭐⭐" },
@@ -681,17 +753,18 @@ const ACHIEVEMENTS = [
 ];
 function loadWeeklyAch(){ return loadJSON(KEY_ACH, {}); }
 function saveWeeklyAch(s){ saveJSON(KEY_ACH, s); }
+
 function countDailyQuestsInWeek(weekNum){
   const q = loadQuestState();
   let count = 0;
+  const start = ensureStartDate();
   for (const dayISO of Object.keys(q)){
-    const w = getWeekNumber(ensureStartDate(), dayISO);
-    if (w === weekNum){
-      count += Object.values(q[dayISO] || {}).filter(Boolean).length;
-    }
+    const w = getWeekNumber(start, dayISO);
+    if (w === weekNum) count += Object.values(q[dayISO] || {}).filter(Boolean).length;
   }
   return count;
 }
+
 async function evaluateWeeklyAchievements(entries, weekNum){
   if (!weekNum) return { earned:[], newlyEarned:[], trainDays:0, threeStarDays:0 };
 
@@ -741,6 +814,198 @@ async function evaluateWeeklyAchievements(entries, weekNum){
   return { earned: shouldEarn, newlyEarned, trainDays, threeStarDays };
 }
 
+// ---------- Weekly Plan ----------
+function groupExercisesByDay(){
+  const dayMap = {
+    "Tag 1 – Push": [],
+    "Tag 2 – Pull": [],
+    "Tag 3 – Beine & Core": [],
+    "Tag 4 – Ganzkörper": [],
+    "Tag 5 – Conditioning & Core": []
+  };
+  EXERCISES.forEach(ex => { if (dayMap[ex.group]) dayMap[ex.group].push(ex); });
+  return dayMap;
+}
+function getBossForWeek(w){ return BOSSES.find(b => b.week === w) || null; }
+
+function renderWeeklyPlan(curWeek, entries){
+  const content = $("planContent");
+  if (!content) return;
+
+  const start = ensureStartDate();
+  const w = clampWeek(curWeek || 1);
+  const b = weekBlock(w);
+  const dayMap = groupExercisesByDay();
+  const boss = getBossForWeek(w);
+
+  const mutation = getMutationForWeek(w);
+  const adaptive = getAdaptiveModifiers(entries, w);
+
+  if ($("planStart")) $("planStart").textContent = start;
+  if ($("planWeek")) $("planWeek").textContent = `W${w}`;
+  if ($("planBlock")) $("planBlock").textContent = blockName(b);
+  if ($("planHint")) $("planHint").textContent = weeklyProgressHint(w);
+  if ($("planMutation")) $("planMutation").textContent = `${mutation.name} – ${mutation.effect}`;
+  if ($("planAdaptive")) $("planAdaptive").textContent = `${adaptive.setDelta>=0?"+":""}${adaptive.setDelta} Sätze, ${adaptive.repDelta>=0?"+":""}${adaptive.repDelta} Reps`;
+
+  const questHint = `Quests: ${QUESTS.map(q => `${q.name} (+${q.xp})`).join(" • ")}`;
+
+  let html = "";
+  html += `<div class="pill"><b>Heute/Alltag:</b> ${questHint}</div>`;
+  html += `<div class="divider"></div>`;
+
+  html += `<div class="pill"><b>Mutation:</b> ${mutation.name} • <span class="small">${mutation.desc}</span><br><span class="small">${mutation.effect}</span></div>`;
+  html += `<div class="divider"></div>`;
+
+  if (boss) {
+    html += `
+      <div class="pill"><b>Boss diese Woche:</b> ${boss.name} (W${boss.week}) • +${boss.xp} XP<br>
+      <span class="small">Clear nur in W${boss.week} + Checkboxen im Boss-Tab.</span></div>
+      <div class="divider"></div>
+    `;
+  } else {
+    html += `<div class="pill"><b>Boss diese Woche:</b> keiner (Boss-Wochen: 2/4/6/8/10/12)</div><div class="divider"></div>`;
+  }
+
+  Object.keys(dayMap).forEach(dayName => {
+    html += `<div class="planDay"><h3>${dayName}</h3><ul class="planList">`;
+    dayMap[dayName].forEach(ex => {
+      const setRec = recommendedSetsByWeek(ex.type, w, adaptive).text;
+      const repRec = recommendedRepsByWeek(ex.type, w, adaptive);
+      html += `<li><b>${ex.name}</b><br><span class="small">${ex.type} • ${setRec} • ${repRec}</span></li>`;
+    });
+    html += `</ul></div>`;
+  });
+
+  html += `
+    <div class="planDay">
+      <h3>Extra (optional)</h3>
+      <ul class="planList">
+        <li><b>NEAT Walking Desk (3 km/h)</b><br><span class="small">${recommendedRepsByWeek("NEAT", w, adaptive)} • XP = Minuten × 5</span></li>
+        <li><b>Ruhetag / Mobility</b><br><span class="small">10–20 Min Mobility + Spaziergang = Fortschritt</span></li>
+      </ul>
+    </div>
+  `;
+
+  content.innerHTML = html;
+}
+
+// ---------- Log UI ----------
+async function updateLogUI(entries){
+  const start = ensureStartDate();
+  if ($("logStart")) $("logStart").textContent = start;
+
+  const curWeek = currentWeekToday();
+  const mutation = getMutationForWeek(curWeek);
+  const adaptive = getAdaptiveModifiers(entries, curWeek);
+
+  const exName = $("exercise")?.value;
+  const type = typeForExercise(exName);
+
+  if ($("autoType")) $("autoType").textContent = type;
+
+  const setRec = recommendedSetsByWeek(type, curWeek, adaptive);
+  const repRec = recommendedRepsByWeek(type, curWeek, adaptive);
+
+  if ($("recommendedSets")) $("recommendedSets").textContent = setRec.text;
+  if ($("recommendedReps")) $("recommendedReps").textContent = repRec;
+
+  const isWalk = (type === "NEAT");
+  $("walkingRow")?.classList.toggle("hide", !isWalk);
+  $("setsRow")?.classList.toggle("hide", isWalk);
+
+  if (!isWalk && setRec.value && $("sets")) {
+    const current = parseInt($("sets").value || "1", 10);
+    if (!current || current === 1) $("sets").value = setRec.value;
+  }
+
+  ["rpe9","tech","pause"].forEach(id => {
+    const el = $(id);
+    if (!el) return;
+    el.disabled = isWalk;
+    if (isWalk) el.checked = false;
+  });
+
+  const mult = mutationXpMultiplierForType(type, mutation);
+  if ($("logAdaptive")) {
+    $("logAdaptive").textContent =
+      `Adaptive: ${adaptive.setDelta>=0?"+":""}${adaptive.setDelta} Sets, ${adaptive.repDelta>=0?"+":""}${adaptive.repDelta} Reps • Mutation: x${mult.toFixed(2)}`;
+  }
+
+  updateCalcPreview(curWeek, mutation, adaptive);
+}
+
+function updateCalcPreview(curWeek, mutation, adaptive){
+  const exName = $("exercise")?.value;
+  const type = typeForExercise(exName);
+
+  let xp = 0;
+  if (type === "NEAT") {
+    const minutes = Math.max(1, parseInt($("walkMin")?.value || "0", 10));
+    xp = neatXP(minutes);
+  } else {
+    const sets = Math.max(1, parseInt($("sets")?.value || "1", 10));
+    const flags = { rpe9: $("rpe9")?.checked, tech: $("tech")?.checked, pause: $("pause")?.checked };
+    xp = (XP_PER_SET[type] ?? 0) * sets + bonusXP(flags);
+  }
+
+  const mult = mutationXpMultiplierForType(type, mutation);
+  xp = Math.round(xp * mult);
+
+  if ($("calcXp")) $("calcXp").textContent = xp;
+}
+
+// ---------- Stats + Attributes ----------
+async function computeStats(entries){
+  const startDate = ensureStartDate();
+  const today = isoDate(new Date());
+  const curWeek = getWeekNumber(startDate, today);
+
+  let todayXp = 0, weekXp = 0, totalXp = 0;
+  for (const e of entries){
+    totalXp += e.xp || 0;
+    if (e.date === today) todayXp += e.xp || 0;
+    if (e.week === curWeek) weekXp += e.xp || 0;
+  }
+
+  // Attributes: apply this week's mutation per entry’s week
+  const attr = { STR:0, STA:0, END:0, MOB:0 };
+  for (const e of entries){
+    const mut = getMutationForWeek(e.week || curWeek);
+    const base = baseAttrFromEntry(e);
+    // apply mutation multipliers to attribute pools
+    const adj = applyMutationToAttr(base, mut);
+    attr.STR += adj.STR;
+    attr.STA += adj.STA;
+    attr.END += adj.END;
+    attr.MOB += adj.MOB;
+  }
+
+  return { todayXp, weekXp, totalXp, curWeek, startDate, attr };
+}
+
+function renderAttributes(attr){
+  const keys = ["STR","STA","END","MOB"];
+  keys.forEach(k => {
+    const xp = Math.round(attr[k] || 0);
+    const { lvl, into, need } = attrLevelFromXp(xp);
+    const pct = Math.max(0, Math.min(100, Math.round((into / need) * 100)));
+
+    if ($("lv"+k)) $("lv"+k).textContent = lvl;
+    if ($("xp"+k)) $("xp"+k).textContent = xp;
+    if ($("need"+k)) $("need"+k).textContent = Math.max(0, need - into);
+    if ($("bar"+k)) $("bar"+k).style.width = pct + "%";
+  });
+}
+
+function renderMutationUI(curWeek){
+  const m = getMutationForWeek(curWeek);
+  if ($("mutationName")) $("mutationName").textContent = `W${curWeek}: ${m.name}`;
+  if ($("mutationDesc")) $("mutationDesc").textContent = m.desc;
+  if ($("mutationEffect")) $("mutationEffect").textContent = m.effect;
+  if ($("mutationShort")) $("mutationShort").textContent = `${m.name} (${m.effect})`;
+}
+
 // ---------- Render All ----------
 async function renderAll(){
   ensureStartDate();
@@ -753,6 +1018,7 @@ async function renderAll(){
   const finalEntries = evalRes.newlyEarned?.length ? sortEntriesDesc(await idbGetAll()) : entries;
   const stats2 = await computeStats(finalEntries);
 
+  // header/dashboard
   if ($("startDisplay")) $("startDisplay").textContent = stats2.startDate;
   if ($("weekNumber")) $("weekNumber").textContent = `W${stats2.curWeek}`;
   if ($("blockNow")) $("blockNow").textContent = blockName(weekBlock(stats2.curWeek));
@@ -766,6 +1032,13 @@ async function renderAll(){
   if ($("level")) $("level").textContent = lvl;
   if ($("title")) $("title").textContent = getTitle(lvl);
 
+  // mutation
+  renderMutationUI(stats2.curWeek);
+
+  // attributes
+  renderAttributes(stats2.attr);
+
+  // weekly stats
   if ($("wkTrainDays")) $("wkTrainDays").textContent = evalRes.trainDays ?? 0;
   if ($("wkThreeStarDays")) $("wkThreeStarDays").textContent = evalRes.threeStarDays ?? 0;
 
@@ -773,6 +1046,10 @@ async function renderAll(){
   if ($("wkAchievements")) $("wkAchievements").textContent = earnedNames.length ? earnedNames.join(", ") : "—";
   if ($("wkProgressHint")) $("wkProgressHint").textContent = weeklyProgressHint(stats2.curWeek);
 
+  const adaptive = getAdaptiveModifiers(finalEntries, stats2.curWeek);
+  if ($("adaptiveHint")) $("adaptiveHint").textContent = adaptive.note;
+
+  // recent list
   const recent = finalEntries.slice(0, 6);
   const recentList = $("recentList");
   if (recentList){
@@ -784,6 +1061,7 @@ async function renderAll(){
     });
   }
 
+  // full list
   const list = $("list");
   if (list){
     list.innerHTML = finalEntries.length ? "" : "<li>Noch keine Einträge.</li>";
@@ -796,10 +1074,12 @@ async function renderAll(){
 
   if ($("countEntries")) $("countEntries").textContent = finalEntries.length;
 
+  // quests + boss + plan
   renderQuests();
   renderBoss(stats2.curWeek);
-  renderWeeklyPlan(stats2.curWeek);
-  await updateLogUI();
+  renderWeeklyPlan(stats2.curWeek, finalEntries);
+
+  await updateLogUI(finalEntries);
 }
 
 // ---------- CSV export ----------
@@ -834,10 +1114,11 @@ async function init(){
   buildExerciseDropdown();
   setupTabs();
 
-  $("exercise")?.addEventListener("change", async () => { await updateLogUI(); });
+  // events
+  $("exercise")?.addEventListener("change", async () => { await renderAll(); });
   ["sets","walkMin","rpe9","tech","pause"].forEach(id => {
-    $(id)?.addEventListener("input", async () => { await updateLogUI(); });
-    $(id)?.addEventListener("change", async () => { await updateLogUI(); });
+    $(id)?.addEventListener("input", async () => { await renderAll(); });
+    $(id)?.addEventListener("change", async () => { await renderAll(); });
   });
 
   $("add")?.addEventListener("click", async () => {
@@ -847,7 +1128,12 @@ async function init(){
 
     const start = ensureStartDate();
     const week = getWeekNumber(start, date);
-    const repRec = recommendedRepsByWeek(type, week);
+
+    const entries = sortEntriesDesc(await idbGetAll());
+    const adaptive = getAdaptiveModifiers(entries, week);
+    const mutation = getMutationForWeek(week);
+
+    const repRec = recommendedRepsByWeek(type, week, adaptive);
 
     let xp = 0, detail = "";
 
@@ -863,7 +1149,11 @@ async function init(){
       if (flags.rpe9 || flags.tech || flags.pause) detail += " • +bonus";
     }
 
-    await idbAdd({ date, week, exercise, type, detail, xp });
+    // apply mutation multiplier to XP stored
+    const mult = mutationXpMultiplierForType(type, mutation);
+    xp = Math.round(xp * mult);
+
+    await idbAdd({ date, week, exercise, type, detail: `${detail} • Mut: ${mutation.name} x${mult.toFixed(2)}`, xp });
 
     if ($("rpe9")) $("rpe9").checked = false;
     if ($("tech")) $("tech").checked = false;
