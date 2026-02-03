@@ -1,1 +1,82 @@
+<!doctype html>
+<html lang="de">
+<head>
+  <meta charset="utf-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1" />
+  <title>IRON QUEST</title>
+
+  <link rel="manifest" href="manifest.json">
+  <link rel="stylesheet" href="style.css">
+
+  <meta name="theme-color" content="#111111" />
+  <meta name="apple-mobile-web-app-capable" content="yes">
+  <meta name="apple-mobile-web-app-status-bar-style" content="black-translucent">
+</head>
+<body>
+  <header>
+    <h1>IRON QUEST</h1>
+    <p class="sub">XP Tracker (PWA)</p>
+  </header>
+
+  <main>
+    <section class="card">
+      <h2>Neuer Eintrag</h2>
+
+      <label>Datum
+        <input id="date" type="date">
+      </label>
+
+      <label>Übung
+        <input id="exercise" type="text" placeholder="z.B. Bulgarian Split Squat">
+      </label>
+
+      <label>Übungstyp
+        <select id="type">
+          <option value="Mehrgelenkig">Mehrgelenkig</option>
+          <option value="Unilateral">Unilateral</option>
+          <option value="Komplexe">Komplexe</option>
+          <option value="Core">Core</option>
+          <option value="Conditioning">Conditioning</option>
+          <option value="NEAT">NEAT (Walking)</option>
+        </select>
+      </label>
+
+      <label>Sätze / Runden
+        <input id="sets" type="number" min="1" value="1">
+      </label>
+
+      <div class="row">
+        <label class="check"><input id="rpe9" type="checkbox"> RPE9</label>
+        <label class="check"><input id="tech" type="checkbox"> Technik</label>
+        <label class="check"><input id="pause" type="checkbox"> Pausen</label>
+      </div>
+
+      <button id="add">Eintrag speichern</button>
+
+      <p class="hint">
+        XP wird automatisch berechnet. Daten bleiben lokal auf deinem Gerät.
+      </p>
+    </section>
+
+    <section class="card">
+      <h2>Heute</h2>
+      <p><b>Heute XP:</b> <span id="todayXp">0</span></p>
+      <p><b>Gesamt XP:</b> <span id="totalXp">0</span></p>
+      <p><b>Level:</b> <span id="level">1</span> – <span id="title">Anfänger</span></p>
+    </section>
+
+    <section class="card">
+      <h2>Letzte Einträge</h2>
+      <ul id="list"></ul>
+      <button id="clear" class="secondary">Alle Einträge löschen</button>
+    </section>
+  </main>
+
+  <footer>
+    <small>IRON QUEST – PWA</small>
+  </footer>
+
+  <script src="app.js"></script>
+</body>
+</html>
 
