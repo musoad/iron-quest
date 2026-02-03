@@ -16,7 +16,7 @@
   <header class="topbar">
     <div>
       <h1>IRON QUEST</h1>
-      <p class="sub">XP Tracker (PWA)</p>
+      <p class="sub">XP Tracker (PWA) • Offline • IndexedDB</p>
     </div>
 
     <nav class="tabs" aria-label="Navigation">
@@ -33,13 +33,25 @@
     <section id="tab-dash" class="panel active">
       <div class="card">
         <h2>Heute</h2>
-        <div class="grid2">
-          <p><b>Heute XP:</b> <span id="todayXp">0</span></p>
-          <p><b>Woche XP:</b> <span id="weekXp">0</span></p>
-          <p><b>Gesamt XP:</b> <span id="totalXp">0</span></p>
-          <p><b>Level:</b> <span id="level">1</span> – <span id="title">Anfänger</span></p>
+
+        <div class="row2">
+          <div class="pill"><b>Heute XP:</b> <span id="todayXp">0</span></div>
+          <div class="pill"><b>Tageswertung:</b> <span id="todayStars">—</span></div>
         </div>
-        <p class="hint">Alles wird lokal gespeichert (auf deinem Gerät).</p>
+
+        <div class="row2">
+          <div class="pill"><b>Woche:</b> <span id="weekNumber">—</span></div>
+          <div class="pill"><b>Woche XP:</b> <span id="weekXp">0</span></div>
+        </div>
+
+        <div class="row2">
+          <div class="pill"><b>Gesamt XP:</b> <span id="totalXp">0</span></div>
+          <div class="pill"><b>Level:</b> <span id="level">1</span> – <span id="title">Anfänger</span></div>
+        </div>
+
+        <p class="hint">
+          Sterne-Regel: 500–799 ⭐ • 800–1099 ⭐⭐ • 1100+ ⭐⭐⭐ (unter 500 = —)
+        </p>
       </div>
 
       <div class="card">
@@ -57,19 +69,8 @@
           <input id="date" type="date">
         </label>
 
-        <label>Übung
+        <label>Übung (Dropdown)
           <select id="exercise"></select>
-        </label>
-
-        <label>Übungstyp
-          <select id="type">
-            <option value="Mehrgelenkig">Mehrgelenkig</option>
-            <option value="Unilateral">Unilateral</option>
-            <option value="Komplexe">Komplexe</option>
-            <option value="Core">Core</option>
-            <option value="Conditioning">Conditioning</option>
-            <option value="NEAT">NEAT (Walking)</option>
-          </select>
         </label>
 
         <div id="setsRow">
@@ -82,18 +83,18 @@
           <label>Walking Minuten (3 km/h)
             <input id="walkMin" type="number" min="1" value="60">
           </label>
-          <p class="hint">XP = Minuten × 5 (weil 60 min = 300 XP)</p>
+          <p class="hint">XP = Minuten × 5 (60 min = 300 XP)</p>
         </div>
 
         <div class="row">
-          <label class="check"><input id="rpe9" type="checkbox"> RPE9</label>
-          <label class="check"><input id="tech" type="checkbox"> Technik</label>
-          <label class="check"><input id="pause" type="checkbox"> Pausen</label>
+          <label class="check"><input id="rpe9" type="checkbox"> RPE9 (+50)</label>
+          <label class="check"><input id="tech" type="checkbox"> Technik (+25)</label>
+          <label class="check"><input id="pause" type="checkbox"> Pausen (+25)</label>
         </div>
 
         <div class="row2">
+          <div class="pill"><b>Übungstyp:</b> <span id="autoType">—</span></div>
           <div class="pill"><b>Berechnete XP:</b> <span id="calcXp">0</span></div>
-          <div class="pill"><b>Bonus XP:</b> <span id="calcBonus">0</span></div>
         </div>
 
         <button id="add">Eintrag speichern</button>
@@ -110,7 +111,7 @@
     <section id="tab-skills" class="panel">
       <div class="card">
         <h2>Skilltrees</h2>
-        <p class="hint">Du bekommst <b>1 Skillpunkt pro Woche pro Tree</b>. Trage ihn ein, wenn du freischaltest.</p>
+        <p class="hint">Du vergibst Skillpunkte manuell (Game-Feeling). Speicherung lokal.</p>
 
         <div class="grid2">
           <div class="skillbox">
@@ -157,16 +158,16 @@
     <!-- BOSSFIGHTS -->
     <section id="tab-boss" class="panel">
       <div class="card">
-        <h2>Boss-Fight-Kalender (12 Wochen)</h2>
-        <p class="hint">Wochen 2/4/6/8/10/12. „Clear“ gibt Rewards + XP.</p>
+        <h2>Boss-Fight-Kalender</h2>
+        <p class="hint">Boss „Clear“ ist nur in der <b>richtigen Woche</b> möglich.</p>
 
         <label>Startdatum Woche 1
           <input id="startDate" type="date">
         </label>
-
         <button id="saveStart" class="secondary">Startdatum speichern</button>
 
         <div class="divider"></div>
+        <div class="pill"><b>Aktuelle Woche:</b> <span id="bossCurrentWeek">—</span></div>
 
         <ul id="bossList" class="bosslist"></ul>
 
@@ -179,13 +180,11 @@
     <section id="tab-export" class="panel">
       <div class="card">
         <h2>Export</h2>
-        <p class="hint">Exportiert alle Einträge als CSV (für Excel/Google Sheets).</p>
-
+        <p class="hint">CSV Export für Excel/Google Sheets.</p>
         <button id="exportCsv">CSV herunterladen</button>
 
         <div class="divider"></div>
-        <h2>Debug</h2>
-        <p class="hint">Falls du mal prüfen willst, ob Einträge vorhanden sind.</p>
+        <h2>Status</h2>
         <p><b>Anzahl Einträge:</b> <span id="countEntries">0</span></p>
       </div>
     </section>
