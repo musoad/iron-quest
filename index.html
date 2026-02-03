@@ -21,6 +21,7 @@
 
     <nav class="tabs" aria-label="Navigation">
       <button type="button" class="tab active" data-tab="dash">Dashboard</button>
+      <button type="button" class="tab" data-tab="plan">Weekly Plan</button>
       <button type="button" class="tab" data-tab="log">Log</button>
       <button type="button" class="tab" data-tab="skills">Skilltrees</button>
       <button type="button" class="tab" data-tab="boss">Bossfights</button>
@@ -77,6 +78,29 @@
       </div>
     </section>
 
+    <!-- WEEKLY PLAN -->
+    <section id="tab-plan" class="panel">
+      <div class="card">
+        <h2>Weekly Plan</h2>
+        <p class="hint">
+          Zeigt dir Tag 1–5 inkl. Sets & Reps-Empfehlung (abhängig von der aktuellen Woche), plus Boss/Quest Hinweise.
+        </p>
+
+        <div class="row2">
+          <div class="pill"><b>Aktuelle Woche:</b> <span id="planWeek">—</span></div>
+          <div class="pill"><b>Block:</b> <span id="planBlock">—</span></div>
+        </div>
+
+        <div class="divider"></div>
+        <div id="planContent"></div>
+
+        <div class="divider"></div>
+        <p class="hint">
+          Tipp: Wenn du wenig Zeit hast → mach pro Übung nur die empfohlenen Sätze (keine Extras) und sammle trotzdem saubere XP.
+        </p>
+      </div>
+    </section>
+
     <!-- LOG -->
     <section id="tab-log" class="panel">
       <div class="card">
@@ -93,6 +117,11 @@
         <div class="row2">
           <div class="pill"><b>Übungstyp:</b> <span id="autoType">—</span></div>
           <div class="pill"><b>Empf. Sätze:</b> <span id="recommendedSets">—</span></div>
+        </div>
+
+        <div class="row2">
+          <div class="pill"><b>Empf. Reps:</b> <span id="recommendedReps">—</span></div>
+          <div class="pill"><b>Block-Hinweis:</b> <span id="blockHintShort">—</span></div>
         </div>
 
         <div id="setsRow">
