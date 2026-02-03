@@ -1,7 +1,7 @@
 /* =========================
-   IRON QUEST – PWA LOGIC
-   - Entries: IndexedDB (unbegrenzt)
-   - Skills/Boss: localStorage (klein & simpel)
+   IRON QUEST – PWA
+   - Entries: IndexedDB
+   - Skills/Boss/Quests/Achievements: localStorage
    ========================= */
 
 // ---------- IndexedDB ----------
@@ -57,11 +57,17 @@ async function idbClear() {
   });
 }
 
-// ---------- Small Storage (skills/boss/start) ----------
-const KEY_SKILLS  = "ironquest_skills_v2";
-const KEY_BOSS    = "ironquest_boss_v2";
-const KEY_START   = "ironquest_startdate_v2";
+// ---------- localStorage keys ----------
+const KEY_SKILLS   = "ironquest_skills_v3";
+const KEY_BOSS     = "ironquest_boss_v3";
+const KEY_BOSSCHK  = "ironquest_boss_checks_v1";
+const KEY_START    = "ironquest_startdate_v3";
+const KEY_QUESTS   = "ironquest_dailyquests_v1";
+const KEY_ACH      = "ironquest_weeklyach_v1";
 
+// ---------- helpers ----------
+function $(id){ return document.getElementById(id); }
+function isoDate(d){ return new Date(d).toISOString().slice(0,10); }
 function loadJSON(key, fallback){
   try { return JSON.parse(localStorage.getItem(key)) ?? fallback; }
   catch { return fallback; }
@@ -69,16 +75,17 @@ function loadJSON(key, fallback){
 function saveJSON(key, value){
   localStorage.setItem(key, JSON.stringify(value));
 }
-
-// ---------- Helpers ----------
-function $(id){ return document.getElementById(id); }
-function isoDate(d){ return new Date(d).toISOString().slice(0,10); }
-
 function getWeekNumber(startDateISO, dateISO){
   const start = new Date(startDateISO);
   const cur = new Date(dateISO);
   const diffDays = Math.floor((cur - start) / (1000*60*60*24));
   return diffDays < 0 ? 0 : Math.floor(diffDays / 7) + 1;
+}
+function sortEntriesDesc(entries){
+  return entries.sort((a,b) => {
+    if (a.date !== b.date) return a.date < b.date ? 1 : -1;
+    return (b.id ?? 0) - (a.id ?? 0);
+  });
 }
 
 // ---------- XP ----------
@@ -92,12 +99,9 @@ const XP_PER_SET = {
 function bonusXP({ rpe9, tech, pause }) {
   return (rpe9 ? 50 : 0) + (tech ? 25 : 0) + (pause ? 25 : 0);
 }
-// Minutenbasiertes Walking: 60 min = 300 XP => 5 XP pro Minute
 function neatXP(minutes) {
-  return Math.max(0, Math.round(minutes * 5));
+  return Math.max(0, Math.round(minutes * 5)); // 60 min -> 300 XP
 }
-
-// XP -> Level
 const LEVELS = [
   { xp: 0, lvl: 1 },
   { xp: 2500, lvl: 5 },
@@ -117,13 +121,53 @@ function getTitle(level) {
   if (level >= 5) return "Krieger";
   return "Anfänger";
 }
-
-// Tagessterne
 function starsForToday(xp){
   if (xp >= 1100) return "⭐⭐⭐";
   if (xp >= 800) return "⭐⭐";
   if (xp >= 500) return "⭐";
   return "—";
+}
+
+// ---------- Wöchentliche Steigerung / empfohlene Sätze ----------
+/*
+  Ziel: Du musst nur Übung wählen. App zeigt und setzt Standard-Sätze.
+  Schema:
+  - Wochen 1–4: Basis (mehr Wiederholungen/Technik)
+  - Wochen 5–8: mehr Sätze (Volumen)
+  - Wochen 9–12: Dichte/Intensität (gleich viele Sätze wie 5–8, aber härter)
+*/
+function recommendedSetsByWeek(type, week){
+  // fallback week
+  const w = Math.max(1, Math.min(12, week || 1));
+  const block = (w <= 4) ? 1 : (w <= 8 ? 2 : 3);
+
+  if (type === "NEAT") return { text:"Minuten statt Sätze", value:null };
+  if (type === "Conditioning") {
+    // Runden: mehr im 2. Block, dann gleich aber härter
+    if (block === 1) return { text:"4–5 Runden", value:4 };
+    if (block === 2) return { text:"5–6 Runden", value:5 };
+    return { text:"5–6 Runden (kürzere Pausen)", value:5 };
+  }
+  if (type === "Core") {
+    if (block === 1) return { text:"3 Sätze", value:3 };
+    if (block === 2) return { text:"4 Sätze", value:4 };
+    return { text:"4 Sätze (langsamer/clean)", value:4 };
+  }
+  if (type === "Komplexe") {
+    if (block === 1) return { text:"4–5 Runden", value:4 };
+    if (block === 2) return { text:"5–6 Runden", value:5 };
+    return { text:"6 Runden (gleiches Gewicht)", value:6 };
+  }
+  // Mehrgelenkig / Unilateral
+  if (block === 1) return { text:"3–4 Sätze", value:4 };
+  if (block === 2) return { text:"4–5 Sätze", value:5 };
+  return { text:"4–5 Sätze (kürzere Pausen/Tempo)", value:5 };
+}
+function weeklyProgressHint(week){
+  const w = Math.max(1, Math.min(12, week || 1));
+  if (w <= 4) return "Block 1: Technik + ROM, saubere Reps, Progress über Wiederholungen.";
+  if (w <= 8) return "Block 2: Volumen erhöhen (mehr Sätze), Progress über Gewicht oder 1–2 Reps mehr.";
+  return "Block 3: Dichte/Intensität (Pausen leicht kürzen, Tempo langsamer, gleiche Gewichte stabil).";
 }
 
 // ---------- Exercises (Auto-Type) ----------
@@ -167,29 +211,22 @@ const EXERCISES = [
 function buildExerciseDropdown(){
   const sel = $("exercise");
   sel.innerHTML = "";
-
-  // group -> exercises
   const groups = {};
   for (const ex of EXERCISES){
     groups[ex.group] ??= [];
     groups[ex.group].push(ex);
   }
-
   Object.keys(groups).forEach(groupName => {
     const og = document.createElement("optgroup");
     og.label = groupName;
-
     groups[groupName].forEach(ex => {
       const opt = document.createElement("option");
       opt.value = ex.name;
-      opt.textContent = ex.name; // <- wichtig für sichtbare Namen
+      opt.textContent = ex.name;
       og.appendChild(opt);
     });
-
     sel.appendChild(og);
   });
-
-  // select first exercise to avoid empty UI
   sel.selectedIndex = 0;
 }
 
@@ -238,10 +275,8 @@ const SKILLTREES = {
     { id:"x5", name:"Iron Flow (Ultimate)", desc:"+1 auf alle Attribute (manuell)" },
   ],
 };
-
 function loadSkills(){ return loadJSON(KEY_SKILLS, defaultSkills()); }
 function saveSkills(s){ saveJSON(KEY_SKILLS, s); }
-
 function renderSkills(){
   const s = loadSkills();
   const map = [
@@ -251,19 +286,16 @@ function renderSkills(){
     ["cond","sp-cond","tree-cond"],
     ["comp","sp-comp","tree-comp"],
   ];
-
   for (const [key, spId, listId] of map){
     $(spId).textContent = s[key].sp;
     const ul = $(listId);
     ul.innerHTML = "";
-
     const unlocked = new Set(s[key].unlocked);
     SKILLTREES[key].forEach((node, idx) => {
       const li = document.createElement("li");
       const isUnlocked = unlocked.has(node.id);
       li.className = isUnlocked ? "" : "locked";
       li.innerHTML = `<b>${idx+1}. ${node.name}</b><br><span class="hint">${node.desc}</span>`;
-
       const canUnlock = (idx < s[key].sp) && !isUnlocked;
       if (canUnlock) {
         const btn = document.createElement("button");
@@ -278,20 +310,157 @@ function renderSkills(){
         };
         li.appendChild(btn);
       }
-
       ul.appendChild(li);
     });
   }
 }
 
-// ---------- Bossfights (gated by week) ----------
+// ---------- Daily Quests ----------
+const QUESTS = [
+  { id:"steps10k", name:"10.000 Schritte", xp:100, note:"NEAT-Boost" },
+  { id:"mobility10", name:"10 Min Mobility", xp:50, note:"Hüfte/Schulter/Wirbelsäule" },
+  { id:"water", name:"2,5–3L Wasser", xp:30, note:"Regeneration" },
+  { id:"sleep", name:"7h+ Schlaf", xp:50, note:"Performance" },
+];
+
+function loadQuestState(){ return loadJSON(KEY_QUESTS, {}); }
+function saveQuestState(s){ saveJSON(KEY_QUESTS, s); }
+
+function isQuestDoneToday(qState, questId, today){
+  return qState?.[today]?.[questId] === true;
+}
+
+async function setQuestDoneToday(questId, done){
+  const today = isoDate(new Date());
+  const qState = loadQuestState();
+  qState[today] ??= {};
+  if (done) qState[today][questId] = true;
+  else delete qState[today][questId];
+  saveQuestState(qState);
+
+  if (done) {
+    // add XP entry once
+    await idbAdd({
+      date: today,
+      week: currentWeekFromStart(today),
+      exercise: `Daily Quest: ${QUESTS.find(q=>q.id===questId)?.name ?? questId}`,
+      type: "Quest",
+      detail: "Completed",
+      xp: QUESTS.find(q=>q.id===questId)?.xp ?? 0
+    });
+  } else {
+    alert("Quest rückgängig: XP-Eintrag bleibt bestehen (einfaches System).");
+  }
+}
+
+function renderQuests(){
+  const today = isoDate(new Date());
+  const qState = loadQuestState();
+  const ul = $("questList");
+  ul.innerHTML = "";
+
+  QUESTS.forEach(q => {
+    const done = isQuestDoneToday(qState, q.id, today);
+    const li = document.createElement("li");
+
+    li.innerHTML = `
+      <input type="checkbox" id="q_${q.id}" ${done ? "checked":""}>
+      <label for="q_${q.id}">
+        <b>${q.name}</b> <span class="small">(+${q.xp} XP)</span><br>
+        <span class="small">${q.note}</span>
+      </label>
+    `;
+
+    ul.appendChild(li);
+
+    li.querySelector(`#q_${q.id}`).addEventListener("change", async (e) => {
+      if (e.target.checked && done) return;
+      if (e.target.checked) {
+        await setQuestDoneToday(q.id, true);
+        await renderAll();
+      } else {
+        await setQuestDoneToday(q.id, false);
+        await renderAll();
+      }
+    });
+  });
+}
+
+// ---------- Bossfights with details + checkboxes + week gating ----------
 const BOSSES = [
-  { week: 2, name: "The Foundation Beast", xp: 500, reward: "1 Joker + Titel: Foundation Slayer" },
-  { week: 4, name: "The Asymmetry Lord", xp: 600, reward: "+1 STA + Unilateral XP +10% (1 Woche)" },
-  { week: 6, name: "The Core Guardian", xp: 700, reward: "Core-Sätze 1 Woche doppelt XP" },
-  { week: 8, name: "The Conditioning Reaper", xp: 800, reward: "+1 END + Conditioning ⭐⭐⭐" },
-  { week: 10, name: "The Iron Champion", xp: 1000, reward: "+1 Attribut deiner Wahl + Titel: Iron Challenger" },
-  { week: 12, name: "FINAL: Iron Overlord", xp: 2000, reward: "Titel: IRON OVERLORD SLAYER + New Game+" },
+  {
+    week: 2,
+    name: "The Foundation Beast",
+    xp: 500,
+    reward: "1 Joker + Titel: Foundation Slayer",
+    workout: [
+      "DB Goblet Squat – 5×10 (3s runter)",
+      "DB Floor Press – 5×8",
+      "DB Row – 5×10 (Pause oben)",
+      "Pause strikt 90s"
+    ]
+  },
+  {
+    week: 4,
+    name: "The Asymmetry Lord",
+    xp: 600,
+    reward: "+1 STA + Unilateral XP +10% (1 Woche)",
+    workout: [
+      "Bulgarian Split Squat – 4×8 je Seite",
+      "1-Arm DB Row – 4×10 je Seite",
+      "Side Plank – 3×45s je Seite",
+      "Regel: schwache Seite beginnt"
+    ]
+  },
+  {
+    week: 6,
+    name: "The Core Guardian",
+    xp: 700,
+    reward: "Core-Sätze 1 Woche doppelt XP",
+    workout: [
+      "Hollow Hold – 4×40s",
+      "Plank Shoulder Taps – 4×30",
+      "Goblet Squat Hold – 3×45s",
+      "Pausen max. 60s"
+    ]
+  },
+  {
+    week: 8,
+    name: "The Conditioning Reaper",
+    xp: 800,
+    reward: "+1 END + Conditioning ⭐⭐⭐",
+    workout: [
+      "5 Runden: 30s Burpees",
+      "30s Mountain Climbers",
+      "30s High Knees",
+      "Pause: 60s (jede Runde gleich stark)"
+    ]
+  },
+  {
+    week: 10,
+    name: "The Iron Champion",
+    xp: 1000,
+    reward: "+1 Attribut deiner Wahl + Titel: Iron Challenger",
+    workout: [
+      "Komplex 6 Runden: (je 6 Wdh)",
+      "Deadlift → Clean → Front Squat → Push Press",
+      "Hanteln nicht absetzen",
+      "Technik vor Tempo"
+    ]
+  },
+  {
+    week: 12,
+    name: "FINAL: Iron Overlord",
+    xp: 2000,
+    reward: "Titel: IRON OVERLORD SLAYER + New Game+",
+    workout: [
+      "Goblet Squat – 4×12",
+      "DB Floor Press – 4×10",
+      "1-Arm DB Row – 4×10",
+      "Bulgarian Split Squat – 3×8",
+      "Plank – 3×60s"
+    ]
+  },
 ];
 
 function defaultBoss(){
@@ -302,11 +471,37 @@ function defaultBoss(){
 function loadBoss(){ return loadJSON(KEY_BOSS, defaultBoss()); }
 function saveBoss(b){ saveJSON(KEY_BOSS, b); }
 
+function loadBossChecks(){ return loadJSON(KEY_BOSSCHK, {}); }
+function saveBossChecks(s){ saveJSON(KEY_BOSSCHK, s); }
+
+function bossCheckKey(week, dateISO){
+  return `${week}|${dateISO}`;
+}
+function getBossChecksFor(week, dateISO){
+  const all = loadBossChecks();
+  return all[bossCheckKey(week, dateISO)] ?? {};
+}
+function setBossCheckFor(week, dateISO, idx, value){
+  const all = loadBossChecks();
+  const k = bossCheckKey(week, dateISO);
+  all[k] ??= {};
+  all[k][idx] = value;
+  saveBossChecks(all);
+}
+function allBossChecksDone(week, dateISO, workoutLen){
+  const checks = getBossChecksFor(week, dateISO);
+  for (let i=0;i<workoutLen;i++){
+    if (!checks[i]) return false;
+  }
+  return true;
+}
+
 function renderBoss(currentWeek){
-  $("bossCurrentWeek").textContent = currentWeek ? `W${currentWeek}` : "—";
   const startDate = localStorage.getItem(KEY_START) || "";
   $("startDate").value = startDate;
+  $("bossCurrentWeek").textContent = currentWeek ? `W${currentWeek}` : "—";
 
+  const today = isoDate(new Date());
   const bossState = loadBoss();
   const ul = $("bossList");
   ul.innerHTML = "";
@@ -314,29 +509,59 @@ function renderBoss(currentWeek){
   for (const b of BOSSES){
     const st = bossState[b.week] ?? { cleared:false, clearedAt:null };
     const isCorrectWeek = (currentWeek === b.week);
-    const locked = !isCorrectWeek;
+    const lockedByWeek = !isCorrectWeek;
+
+    const doneChecks = allBossChecksDone(b.week, today, b.workout.length);
+    const canClear = isCorrectWeek && doneChecks;
 
     const li = document.createElement("li");
     li.innerHTML = `
       <div class="bossrow">
-        <div>
+        <div style="min-width: 240px;">
           <div><b>Woche ${b.week}:</b> ${b.name}</div>
           <div class="hint">Reward: ${b.reward} • +${b.xp} XP</div>
           ${st.clearedAt ? `<div class="hint">Cleared am: ${st.clearedAt}</div>` : ""}
-          ${locked ? `<div class="hint">🔒 Locked – verfügbar nur in Woche ${b.week}</div>` : `<div class="hint">✅ Jetzt verfügbar</div>`}
+          ${lockedByWeek ? `<div class="hint">🔒 Locked – nur in Woche ${b.week}</div>` : `<div class="hint">✅ Woche aktiv</div>`}
         </div>
-        <div class="row" style="margin:0;">
-          <span class="badge ${locked ? "lock" : (st.cleared ? "ok":"no")}">
-            ${locked ? "LOCKED" : (st.cleared ? "CLEARED":"OPEN")}
+
+        <div class="row" style="margin:0; align-items:flex-start;">
+          <span class="badge ${lockedByWeek ? "lock" : (st.cleared ? "ok":"no")}">
+            ${lockedByWeek ? "LOCKED" : (st.cleared ? "CLEARED":"OPEN")}
           </span>
           <button class="secondary" style="width:auto; padding:10px 12px;"
-            data-week="${b.week}" ${locked ? "disabled":""}>
+            data-week="${b.week}" ${(!canClear ? "disabled": "")}>
             Clear
           </button>
         </div>
       </div>
+
+      <div class="hint" style="margin-top:10px;"><b>Boss-Workout Checkliste (heute):</b></div>
+      <ul class="checklist" id="bosschk_${b.week}"></ul>
+      <div class="hint">Clear wird erst aktiv, wenn alle Punkte abgehakt sind.</div>
     `;
     ul.appendChild(li);
+
+    // render checklist
+    const chkUl = li.querySelector(`#bosschk_${b.week}`);
+    const checks = getBossChecksFor(b.week, today);
+
+    b.workout.forEach((line, idx) => {
+      const checked = !!checks[idx];
+      const row = document.createElement("li");
+      row.innerHTML = `
+        <input type="checkbox" id="bc_${b.week}_${idx}" ${checked ? "checked":""} ${lockedByWeek ? "disabled":""}>
+        <label for="bc_${b.week}_${idx}">
+          ${line}
+        </label>
+      `;
+      chkUl.appendChild(row);
+
+      row.querySelector("input").addEventListener("change", async (e) => {
+        setBossCheckFor(b.week, today, idx, e.target.checked);
+        // re-render to update Clear button state
+        await renderAll();
+      });
+    });
   }
 
   ul.querySelectorAll("button[data-week]").forEach(btn => {
@@ -345,14 +570,14 @@ function renderBoss(currentWeek){
       const boss = BOSSES.find(x => x.week === week);
       if (!boss) return;
 
-      // extra safety: week gate
       const start = localStorage.getItem(KEY_START);
       if (!start) return alert("Bitte zuerst Startdatum Woche 1 setzen (Boss Tab).");
       const today = isoDate(new Date());
       const curWeek = getWeekNumber(start, today);
-      if (curWeek !== week) return alert(`LOCKED. Aktuell W${curWeek}. Dieser Boss ist nur in W${week}.`);
 
-      // add boss entry to IndexedDB
+      if (curWeek !== week) return alert(`LOCKED. Aktuell W${curWeek}. Dieser Boss ist nur in W${week}.`);
+      if (!allBossChecksDone(week, today, boss.workout.length)) return alert("Erst alle Boss-Workout-Checkboxen abhaken!");
+
       await idbAdd({
         date: today,
         week: curWeek,
@@ -362,7 +587,6 @@ function renderBoss(currentWeek){
         xp: boss.xp
       });
 
-      // update boss state
       const bs = loadBoss();
       bs[week] = { cleared:true, clearedAt: today };
       saveBoss(bs);
@@ -373,271 +597,7 @@ function renderBoss(currentWeek){
   });
 }
 
-// ---------- UI: Tabs ----------
-function setupTabs(){
-  document.querySelectorAll(".tab").forEach(btn => {
-    btn.onclick = () => {
-      document.querySelectorAll(".tab").forEach(b => b.classList.remove("active"));
-      document.querySelectorAll(".panel").forEach(p => p.classList.remove("active"));
-      btn.classList.add("active");
-      $("tab-" + btn.getAttribute("data-tab")).classList.add("active");
-    };
-  });
-}
-
-// ---------- UI: Walking toggle + auto type ----------
-function updateAutoTypeUI(){
-  const exName = $("exercise").value;
-  const type = typeForExercise(exName);
-  $("autoType").textContent = type;
-
-  const isWalk = (type === "NEAT");
-  $("walkingRow").classList.toggle("hide", !isWalk);
-  $("setsRow").classList.toggle("hide", isWalk);
-
-  // Disable bonus for NEAT
-  const disableBonus = isWalk;
-  for (const id of ["rpe9","tech","pause"]) {
-    $(id).disabled = disableBonus;
-    if (disableBonus) $(id).checked = false;
-  }
-
-  updateCalcPreview();
-}
-
-function updateCalcPreview(){
-  const exName = $("exercise").value;
-  const type = typeForExercise(exName);
-
-  let xp = 0;
-  if (type === "NEAT") {
-    const minutes = Math.max(1, parseInt($("walkMin").value || "0", 10));
-    xp = neatXP(minutes); // no bonus
-  } else {
-    const sets = Math.max(1, parseInt($("sets").value || "1", 10));
-    const flags = { rpe9: $("rpe9").checked, tech: $("tech").checked, pause: $("pause").checked };
-    xp = (XP_PER_SET[type] ?? 0) * sets + bonusXP(flags);
-  }
-  $("calcXp").textContent = xp;
-}
-
-// ---------- Dashboard calculations ----------
-async function computeStats(entries){
-  const startDate = localStorage.getItem(KEY_START);
-  const today = isoDate(new Date());
-  const curWeek = startDate ? getWeekNumber(startDate, today) : 0;
-
-  let todayXp = 0;
-  let weekXp = 0;
-  let totalXp = 0;
-
-  for (const e of entries){
-    totalXp += e.xp;
-    if (e.date === today) todayXp += e.xp;
-    if (curWeek && e.week === curWeek) weekXp += e.xp;
-  }
-
-  return { todayXp, weekXp, totalXp, curWeek };
-}
-
-function sortEntriesDesc(entries){
-  // newest first: by date then id
-  return entries.sort((a,b) => {
-    if (a.date !== b.date) return a.date < b.date ? 1 : -1;
-    return (b.id ?? 0) - (a.id ?? 0);
-  });
-}
-
-async function renderAll(){
-  const entriesRaw = await idbGetAll();
-  const entries = sortEntriesDesc(entriesRaw);
-  const { todayXp, weekXp, totalXp, curWeek } = await computeStats(entries);
-
-  $("todayXp").textContent = todayXp;
-  $("todayStars").textContent = starsForToday(todayXp);
-
-  $("weekNumber").textContent = curWeek ? `W${curWeek}` : "— (Startdatum setzen)";
-  $("bossCurrentWeek").textContent = curWeek ? `W${curWeek}` : "—";
-  $("weekXp").textContent = weekXp;
-  $("totalXp").textContent = totalXp;
-
-  const lvl = xpToLevel(totalXp);
-  $("level").textContent = lvl;
-  $("title").textContent = getTitle(lvl);
-
-  $("countEntries").textContent = entries.length;
-
-  // recent list
-  const recent = entries.slice(0, 6);
-  $("recentList").innerHTML = recent.length ? "" : "<li>Noch keine Einträge.</li>";
-  for (const e of recent){
-    const li = document.createElement("li");
-    li.textContent = `${e.date} • ${e.exercise} • ${e.type} • ${e.detail} • ${e.xp} XP`;
-    $("recentList").appendChild(li);
-  }
-
-  // full list
-  $("list").innerHTML = entries.length ? "" : "<li>Noch keine Einträge.</li>";
-  for (const e of entries){
-    const li = document.createElement("li");
-    li.textContent = `${e.date} (W${e.week}) • ${e.exercise} • ${e.type} • ${e.detail} • ${e.xp} XP`;
-    $("list").appendChild(li);
-  }
-
-  renderSkills();
-  renderBoss(curWeek);
-  updateAutoTypeUI();
-}
-
-// ---------- CSV Export ----------
-function csvSafe(v){
-  const s = String(v ?? "");
-  if (s.includes(",") || s.includes('"') || s.includes("\n")) return `"${s.replaceAll('"','""')}"`;
-  return s;
-}
-function toCSV(entries){
-  const header = ["date","week","exercise","type","detail","xp"];
-  const rows = [header.join(",")];
-  for (const e of entries){
-    rows.push([
-      e.date,
-      e.week,
-      csvSafe(e.exercise),
-      e.type,
-      csvSafe(e.detail),
-      e.xp
-    ].join(","));
-  }
-  return rows.join("\n");
-}
-function downloadCSV(filename, content){
-  const blob = new Blob([content], { type: "text/csv;charset=utf-8;" });
-  const url = URL.createObjectURL(blob);
-  const a = document.createElement("a");
-  a.href = url;
-  a.download = filename;
-  document.body.appendChild(a);
-  a.click();
-  a.remove();
-  setTimeout(() => URL.revokeObjectURL(url), 1000);
-}
-
-// ---------- Init ----------
-async function init(){
-  // default date
-  $("date").value = isoDate(new Date());
-
-  // build dropdown
-  buildExerciseDropdown();
-
-  // bind exercise change
-  $("exercise").addEventListener("change", updateAutoTypeUI);
-
-  // bind calc preview inputs
-  ["sets","walkMin","rpe9","tech","pause"].forEach(id => {
-    $(id).addEventListener("input", updateCalcPreview);
-    $(id).addEventListener("change", updateCalcPreview);
-  });
-
-  // add entry (auto type)
-  $("add").addEventListener("click", async () => {
-    const date = $("date").value || isoDate(new Date());
-    const exercise = $("exercise").value;
-    const type = typeForExercise(exercise);
-
-    // start date handling
-    let start = localStorage.getItem(KEY_START);
-    if (!start) {
-      // first entry sets start date automatically (kannst du später im Boss-Tab überschreiben)
-      start = date;
-      localStorage.setItem(KEY_START, start);
-    }
-    const week = getWeekNumber(start, date);
-
-    let xp = 0;
-    let detail = "";
-
-    if (type === "NEAT") {
-      const minutes = Math.max(1, parseInt($("walkMin").value || "0", 10));
-      xp = neatXP(minutes);
-      detail = `${minutes} min`;
-    } else {
-      const sets = Math.max(1, parseInt($("sets").value || "1", 10));
-      const flags = { rpe9: $("rpe9").checked, tech: $("tech").checked, pause: $("pause").checked };
-      xp = (XP_PER_SET[type] ?? 0) * sets + bonusXP(flags);
-      detail = `${sets} sets`;
-      if (flags.rpe9 || flags.tech || flags.pause) detail += " +bonus";
-    }
-
-    await idbAdd({ date, week, exercise, type, detail, xp });
-
-    // reset bonuses
-    $("rpe9").checked = false; $("tech").checked = false; $("pause").checked = false;
-
-    await renderAll();
-    alert(`Gespeichert: +${xp} XP`);
-  });
-
-  // clear entries
-  $("clear").addEventListener("click", async () => {
-    if (confirm("Wirklich ALLE Einträge löschen?")) {
-      await idbClear();
-      await renderAll();
-    }
-  });
-
-  // skills: add SP
-  document.querySelectorAll("button[data-sp]").forEach(btn => {
-    btn.addEventListener("click", () => {
-      const key = btn.getAttribute("data-sp");
-      const s = loadSkills();
-      s[key].sp += 1;
-      saveSkills(s);
-      renderSkills();
-    });
-  });
-
-  // reset skills
-  $("resetSkills").addEventListener("click", () => {
-    if (confirm("Skilltrees wirklich zurücksetzen?")) {
-      localStorage.removeItem(KEY_SKILLS);
-      renderSkills();
-    }
-  });
-
-  // save start date
-  $("saveStart").addEventListener("click", async () => {
-    const d = $("startDate").value;
-    if (!d) return alert("Bitte Startdatum wählen.");
-    localStorage.setItem(KEY_START, d);
-    await renderAll();
-    alert("Startdatum gespeichert.");
-  });
-
-  // reset boss
-  $("resetBoss").addEventListener("click", async () => {
-    if (confirm("Boss-Fight Status zurücksetzen?")) {
-      localStorage.removeItem(KEY_BOSS);
-      await renderAll();
-    }
-  });
-
-  // export csv
-  $("exportCsv").addEventListener("click", async () => {
-    const entries = sortEntriesDesc(await idbGetAll());
-    if (!entries.length) return alert("Keine Einträge zum Exportieren.");
-    const csv = toCSV(entries);
-    downloadCSV("ironquest_export.csv", csv);
-  });
-
-  // tabs
-  setupTabs();
-
-  // SW
-  if ("serviceWorker" in navigator) navigator.serviceWorker.register("sw.js");
-
-  // initial render
-  await renderAll();
-}
-
-init();
+// ---------- Achievements (weekly auto) ----------
+/*
+  Wir vergeben XP als Eintrag, aber nur 1x pro Woche pro Achievement.
+  Ach
