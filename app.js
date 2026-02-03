@@ -1,13 +1,14 @@
 /* =========================
-   IRON QUEST – PWA
+   IRON QUEST – PWA (FIXED)
    - IndexedDB entries
    - Startdate used everywhere
    - Attributes STR/STA/END/MOB
-   - Adaptive difficulty (based on previous week)
-   - Weekly RNG Mutations (fixed per week)
-   - ✅ Weak-point muscles integrated officially:
-     calves, tibialis, lateral delts, hamstring knee-flexion, grip
+   - Adaptive difficulty
+   - Weekly RNG Mutations
+   - Weak-point muscles integrated officially
    ========================= */
+
+console.log("IRON QUEST loaded ✅");
 
 // ---------- IndexedDB ----------
 const DB_NAME = "ironquest_db";
@@ -72,7 +73,7 @@ const KEY_BOSSCHK  = "ironquest_boss_checks_v5";
 const KEY_START    = "ironquest_startdate_v7";
 const KEY_QUESTS   = "ironquest_dailyquests_v6";
 const KEY_ACH      = "ironquest_weeklyach_v5";
-const KEY_MUT      = "ironquest_mutations_v1"; // week -> mutationId
+const KEY_MUT      = "ironquest_mutations_v1";
 
 // ---------- Helpers ----------
 function $(id){ return document.getElementById(id); }
@@ -98,7 +99,7 @@ function sortEntriesDesc(entries){
 }
 function clampWeek(w){ return Math.max(1, Math.min(12, w || 1)); }
 
-// ✅ Startdate is the anchor for everything
+// ✅ Startdate is the anchor
 function ensureStartDate(){
   let start = localStorage.getItem(KEY_START);
   if (!start) {
@@ -115,7 +116,7 @@ function currentWeekToday(){
   return getWeekNumber(start, today);
 }
 
-// ---------- Tabs ----------
+// ---------- Tabs (FIXED) ----------
 function setupTabs(){
   const tabs = document.querySelectorAll(".tab");
   const panels = document.querySelectorAll(".panel");
@@ -124,7 +125,10 @@ function setupTabs(){
       e.preventDefault();
       const target = btn.getAttribute("data-tab");
       const panel = document.getElementById("tab-" + target);
-      if (!panel) return;
+      if (!panel) {
+        console.warn("Panel missing:", target);
+        return;
+      }
       tabs.forEach(b => b.classList.remove("active"));
       panels.forEach(p => p.classList.remove("active"));
       btn.classList.add("active");
@@ -133,7 +137,7 @@ function setupTabs(){
   });
 }
 
-// ---------- Global XP ----------
+// ---------- XP ----------
 const XP_PER_SET = {
   "Mehrgelenkig": 100,
   "Unilateral": 120,
@@ -144,7 +148,7 @@ const XP_PER_SET = {
 function bonusXP({ rpe9, tech, pause }) {
   return (rpe9 ? 50 : 0) + (tech ? 25 : 0) + (pause ? 25 : 0);
 }
-function neatXP(minutes) { return Math.max(0, Math.round(minutes * 5)); } // 60->300
+function neatXP(minutes) { return Math.max(0, Math.round(minutes * 5)); }
 
 const LEVELS = [
   { xp: 0, lvl: 1 },
@@ -191,46 +195,15 @@ function weeklyProgressHint(week){
 
 // ---------- Weekly Mutations ----------
 const MUTATIONS = [
-  {
-    id: "tempo",
-    name: "Tempo Week",
-    desc: "Langsame Exzentrik, saubere ROM. STR/STA XP Bonus.",
-    effect: "STR/STA XP +10%",
-    mult: { STR: 1.10, STA: 1.10 }
-  },
-  {
-    id: "corefocus",
-    name: "Core Focus",
-    desc: "Core & Kontrolle im Zentrum. MOB XP Bonus.",
-    effect: "MOB XP +25%",
-    mult: { MOB: 1.25 }
-  },
-  {
-    id: "engine",
-    name: "Engine Mode",
-    desc: "Konditionierung bekommt den Boost. END XP Bonus.",
-    effect: "END XP +15%",
-    mult: { END: 1.15 }
-  },
-  {
-    id: "neatboost",
-    name: "NEAT Boost",
-    desc: "Alltag zählt mehr. Walking/NEAT XP Bonus.",
-    effect: "NEAT XP +20%",
-    mult: { NEAT: 1.20 }
-  },
-  {
-    id: "unilateral",
-    name: "Unilateral Blessing",
-    desc: "Stabilität und Balance. STA XP Bonus.",
-    effect: "STA XP +15%",
-    mult: { STA: 1.15 }
-  },
+  { id:"tempo", name:"Tempo Week", desc:"Langsame Exzentrik, saubere ROM. STR/STA XP Bonus.", effect:"STR/STA XP +10%", mult:{ STR:1.10, STA:1.10 } },
+  { id:"corefocus", name:"Core Focus", desc:"Core & Kontrolle im Zentrum. MOB XP Bonus.", effect:"MOB XP +25%", mult:{ MOB:1.25 } },
+  { id:"engine", name:"Engine Mode", desc:"Konditionierung bekommt den Boost. END XP Bonus.", effect:"END XP +15%", mult:{ END:1.15 } },
+  { id:"neatboost", name:"NEAT Boost", desc:"Alltag zählt mehr. Walking/NEAT XP Bonus.", effect:"NEAT XP +20%", mult:{ NEAT:1.20 } },
+  { id:"unilateral", name:"Unilateral Blessing", desc:"Stabilität und Balance. STA XP Bonus.", effect:"STA XP +15%", mult:{ STA:1.15 } },
 ];
 
 function loadMutMap(){ return loadJSON(KEY_MUT, {}); }
 function saveMutMap(m){ saveJSON(KEY_MUT, m); }
-
 function getMutationForWeek(week){
   const w = clampWeek(week);
   const map = loadMutMap();
@@ -242,7 +215,7 @@ function getMutationForWeek(week){
   return MUTATIONS.find(m => m.id === map[w]) || MUTATIONS[0];
 }
 
-// ---------- Adaptive difficulty ----------
+// ---------- Adaptive ----------
 function computeWeekDayXP(entries, weekNum){
   const dayXP = {};
   for (const e of entries){
@@ -251,7 +224,6 @@ function computeWeekDayXP(entries, weekNum){
   }
   return dayXP;
 }
-
 function getAdaptiveModifiers(entries, curWeek){
   const prev = curWeek - 1;
   if (prev < 1) return { setDelta: 0, repDelta: 0, note: "Startwoche: neutral." };
@@ -262,193 +234,95 @@ function getAdaptiveModifiers(entries, curWeek){
   const twoStarDays = days.filter(d => dayXP[d] >= 800).length;
   const threeStarDays = days.filter(d => dayXP[d] >= 1100).length;
 
-  if (trainDays >= 5 && threeStarDays >= 2) {
-    return { setDelta: +1, repDelta: +2, note: `Elite Woche (W${prev}) → +1 Satz & +2 Reps Empfehlung.` };
-  }
-  if (trainDays >= 4 && (twoStarDays >= 2 || threeStarDays >= 1)) {
-    return { setDelta: +1, repDelta: +1, note: `Starke Woche (W${prev}) → +1 Satz & +1 Rep Empfehlung.` };
-  }
-  if (trainDays <= 2) {
-    return { setDelta: -1, repDelta: -1, note: `Schwache Woche (W${prev}) → Deload: -1 Satz & -1 Rep Empfehlung.` };
-  }
-
-  return { setDelta: 0, repDelta: 0, note: `Stabil (W${prev}) → neutral.` };
+  if (trainDays >= 5 && threeStarDays >= 2) return { setDelta:+1, repDelta:+2, note:`Elite Woche (W${prev}) → +1 Satz & +2 Reps.` };
+  if (trainDays >= 4 && (twoStarDays >= 2 || threeStarDays >= 1)) return { setDelta:+1, repDelta:+1, note:`Starke Woche (W${prev}) → +1 Satz & +1 Rep.` };
+  if (trainDays <= 2) return { setDelta:-1, repDelta:-1, note:`Schwache Woche (W${prev}) → Deload -1 Satz & -1 Rep.` };
+  return { setDelta:0, repDelta:0, note:`Stabil (W${prev}) → neutral.` };
 }
 
-// ---------- Recommendations (now exercise-aware) ----------
+// ---------- Recommendations helpers ----------
 function applySetDeltaText(text, delta){
   const nums = text.match(/\d+/g)?.map(n => parseInt(n,10));
   if (!nums || nums.length === 0) return text;
   const newNums = nums.map(n => Math.max(1, n + delta));
-  let out = text;
   let i = 0;
-  out = out.replace(/\d+/g, () => String(newNums[i++]));
-  return out;
-}
-function adjustRepRange(str, delta){
-  const nums = str.match(/\d+/g)?.map(n => parseInt(n,10));
-  if (!nums || nums.length === 0) return str;
-  const newNums = nums.map(n => Math.max(1, n + delta));
-  let i = 0;
-  return str.replace(/\d+/g, () => String(newNums[i++]));
+  return text.replace(/\d+/g, () => String(newNums[i++]));
 }
 
+// Base by type
 function baseRecommendedSets(type, week){
   const b = weekBlock(week);
   if (type === "NEAT") return { text:"Minuten statt Sätze", value:null };
-  if (type === "Conditioning") {
-    if (b === 1) return { text:"4–5 Runden", value:4 };
-    if (b === 2) return { text:"5–6 Runden", value:5 };
-    return { text:"5–6 Runden (kürzere Pausen)", value:5 };
-  }
-  if (type === "Core") {
-    if (b === 1) return { text:"3 Sätze", value:3 };
-    if (b === 2) return { text:"4 Sätze", value:4 };
-    return { text:"4 Sätze (langsamer/clean)", value:4 };
-  }
-  if (type === "Komplexe") {
-    if (b === 1) return { text:"4–5 Runden", value:4 };
-    if (b === 2) return { text:"5–6 Runden", value:5 };
-    return { text:"6 Runden (gleiches Gewicht)", value:6 };
-  }
-  if (b === 1) return { text:"3–4 Sätze", value:4 };
-  if (b === 2) return { text:"4–5 Sätze", value:5 };
-  return { text:"4–5 Sätze (Tempo/Pausen härter)", value:5 };
+  if (type === "Conditioning") return b === 1 ? { text:"4–5 Runden", value:4 } : (b === 2 ? { text:"5–6 Runden", value:5 } : { text:"5–6 Runden (kürzere Pausen)", value:5 });
+  if (type === "Core") return b === 1 ? { text:"3 Sätze", value:3 } : { text:"4 Sätze", value:4 };
+  if (type === "Komplexe") return b === 1 ? { text:"4–5 Runden", value:4 } : (b === 2 ? { text:"5–6 Runden", value:5 } : { text:"6 Runden", value:6 });
+  return b === 1 ? { text:"3–4 Sätze", value:4 } : (b === 2 ? { text:"4–5 Sätze", value:5 } : { text:"4–5 Sätze (Tempo/Pausen härter)", value:5 });
 }
-
 function baseRecommendedReps(type, week){
   const b = weekBlock(week);
   if (type === "NEAT") return "Minuten (z. B. 30–60)";
-  if (type === "Core") {
-    if (b === 1) return "30–45s pro Satz";
-    if (b === 2) return "40–60s pro Satz";
-    return "45–60s (sauber, ohne Ausweichen)";
-  }
-  if (type === "Conditioning") {
-    if (b === 1) return "30–40s Arbeit / 60s Pause";
-    if (b === 2) return "35–45s Arbeit / 45–60s Pause";
-    return "40–45s Arbeit / 30–45s Pause";
-  }
-  if (type === "Komplexe") {
-    if (b === 1) return "6–8 Wdh pro Movement";
-    if (b === 2) return "6 Wdh pro Movement";
-    return "6 Wdh pro Movement (stabil)";
-  }
-  if (b === 1) return "10–12 Wdh/Satz";
-  if (b === 2) return "8–10 Wdh/Satz";
-  return "6–8 Wdh/Satz (Tempo kontrolliert)";
+  if (type === "Core") return b === 1 ? "30–45s pro Satz" : "40–60s pro Satz";
+  if (type === "Conditioning") return b === 1 ? "30–40s Arbeit / 60s Pause" : (b === 2 ? "35–45s / 45–60s Pause" : "40–45s / 30–45s Pause");
+  if (type === "Komplexe") return b === 1 ? "6–8 Wdh pro Movement" : "6 Wdh pro Movement";
+  return b === 1 ? "10–12 Wdh/Satz" : (b === 2 ? "8–10 Wdh/Satz" : "6–8 Wdh/Satz");
 }
 
-// ✅ Exercise-specific overrides (weak points)
+// Weak point overrides (exercise-specific)
 function overridesForExercise(exName){
   if (!exName) return null;
-
-  // Grip
-  if (exName.includes("Farmer")) {
-    return {
-      setsText: "2–3 Runden",
-      setsValue: 3,
-      repsText: "30–60s pro Runde (aufrecht, feste Körperspannung)"
-    };
-  }
-
-  // Lateral delts
-  if (exName.includes("Lateral")) {
-    return {
-      setsText: "3 Sätze",
-      setsValue: 3,
-      repsText: "12–20 Wdh (2–3s runter, kein Schwung)"
-    };
-  }
-
-  // Knee flexion hamstrings substitute
-  if (exName.includes("Hamstring Walkouts")) {
-    return {
-      setsText: "3 Sätze",
-      setsValue: 3,
-      repsText: "8–12 Wdh (kontrolliert, lange Schritte)"
-    };
-  }
-
-  // Calves
-  if (exName.includes("Calf")) {
-    return {
-      setsText: "3–4 Sätze",
-      setsValue: 4,
-      repsText: "15–25 Wdh (oben 1s halten, volle ROM)"
-    };
-  }
-
-  // Tibialis
-  if (exName.includes("Tibialis")) {
-    return {
-      setsText: "2–3 Sätze",
-      setsValue: 2,
-      repsText: "15–30 Wdh (kurze Pausen, brennend ok)"
-    };
-  }
-
+  if (exName.includes("Farmer")) return { setsText:"2–3 Runden", setsValue:3, repsText:"30–60s pro Runde (aufrecht, Core fest)" };
+  if (exName.includes("Lateral")) return { setsText:"3 Sätze", setsValue:3, repsText:"12–20 Wdh (2–3s runter, kein Schwung)" };
+  if (exName.includes("Hamstring Walkouts")) return { setsText:"3 Sätze", setsValue:3, repsText:"8–12 Wdh (kontrolliert, lange Schritte)" };
+  if (exName.includes("Calf")) return { setsText:"3–4 Sätze", setsValue:4, repsText:"15–25 Wdh (oben 1s halten, volle ROM)" };
+  if (exName.includes("Tibialis")) return { setsText:"2–3 Sätze", setsValue:2, repsText:"15–30 Wdh (kurze Pausen ok)" };
   return null;
 }
 
 function recommendedSetsForExercise(exName, type, week, adaptive){
   const ov = overridesForExercise(exName);
-  const base = ov
-    ? { text: ov.setsText, value: ov.setsValue }
-    : baseRecommendedSets(type, week);
-
+  const base = ov ? { text: ov.setsText, value: ov.setsValue } : baseRecommendedSets(type, week);
   if (type === "NEAT") return base;
 
   const d = adaptive?.setDelta ?? 0;
   if (!d) return base;
-
-  const newText = applySetDeltaText(base.text, d);
-  const newVal = base.value == null ? null : Math.max(1, base.value + d);
-  return { text: newText + " (adaptive)", value: newVal };
+  return { text: applySetDeltaText(base.text, d) + " (adaptive)", value: base.value == null ? null : Math.max(1, base.value + d) };
 }
-
 function recommendedRepsForExercise(exName, type, week, adaptive){
   const ov = overridesForExercise(exName);
-  const base = ov ? ov.repsText : baseRecommendedReps(type, week);
-
+  // keep weak-point cues stable
+  if (ov) return ov.repsText;
+  const base = baseRecommendedReps(type, week);
   const d = adaptive?.repDelta ?? 0;
-  if (!d) return base;
-  if (type === "NEAT") return base;
-
-  // Only adjust numeric-only patterns; keep descriptive overrides mostly stable
-  if (ov) return base; // keep weak-point cues stable (safer)
-  return adjustRepRange(base, d) + " (adaptive)";
+  if (!d || type === "NEAT") return base;
+  // light numeric shift
+  const nums = base.match(/\d+/g)?.map(n => parseInt(n,10));
+  if (!nums) return base;
+  let i = 0;
+  const shifted = base.replace(/\d+/g, () => String(Math.max(1, nums[i++] + d)));
+  return shifted + " (adaptive)";
 }
 
-// ---------- Exercises (now includes weak points officially) ----------
+// ---------- Exercises (with weak points) ----------
 const EXERCISES = [
-  // Tag 1 – Push
   { name: "DB Floor Press (neutral)", type: "Mehrgelenkig", group: "Tag 1 – Push" },
   { name: "Arnold Press", type: "Mehrgelenkig", group: "Tag 1 – Push" },
   { name: "Deficit Push-Ups", type: "Mehrgelenkig", group: "Tag 1 – Push" },
   { name: "Overhead Trizeps Extension", type: "Mehrgelenkig", group: "Tag 1 – Push" },
-  // ✅ Weak point: side delts
   { name: "DB Lateral Raises", type: "Mehrgelenkig", group: "Tag 1 – Push" },
 
-  // Tag 2 – Pull
   { name: "1-Arm DB Row (Pause oben)", type: "Unilateral", group: "Tag 2 – Pull" },
   { name: "Renegade Rows", type: "Unilateral", group: "Tag 2 – Pull" },
   { name: "Reverse Flys (langsam)", type: "Mehrgelenkig", group: "Tag 2 – Pull" },
   { name: "Cross-Body Hammer Curl", type: "Mehrgelenkig", group: "Tag 2 – Pull" },
-  // ✅ Weak point: grip/forearms
   { name: "Farmer’s Carry (DB)", type: "Unilateral", group: "Tag 2 – Pull" },
 
-  // Tag 3 – Beine & Core
   { name: "Bulgarian Split Squats", type: "Unilateral", group: "Tag 3 – Beine & Core" },
   { name: "DB Romanian Deadlift", type: "Mehrgelenkig", group: "Tag 3 – Beine & Core" },
   { name: "Cossack Squats", type: "Unilateral", group: "Tag 3 – Beine & Core" },
   { name: "Side Plank + Leg Raise", type: "Core", group: "Tag 3 – Beine & Core" },
-  // ✅ Weak point: hamstrings knee-flexion substitute
   { name: "Hamstring Walkouts", type: "Core", group: "Tag 3 – Beine & Core" },
-  // ✅ Weak point: calves
   { name: "Standing DB Calf Raises", type: "Core", group: "Tag 3 – Beine & Core" },
 
-  // Tag 4 – Ganzkörper
   { name: "Komplex: Deadlift", type: "Komplexe", group: "Tag 4 – Ganzkörper" },
   { name: "Komplex: Clean", type: "Komplexe", group: "Tag 4 – Ganzkörper" },
   { name: "Komplex: Front Squat", type: "Komplexe", group: "Tag 4 – Ganzkörper" },
@@ -456,15 +330,12 @@ const EXERCISES = [
   { name: "Goblet Squat Hold", type: "Core", group: "Tag 4 – Ganzkörper" },
   { name: "Plank Shoulder Taps", type: "Core", group: "Tag 4 – Ganzkörper" },
 
-  // Tag 5 – Conditioning & Core
   { name: "Burpees", type: "Conditioning", group: "Tag 5 – Conditioning & Core" },
   { name: "Mountain Climbers", type: "Conditioning", group: "Tag 5 – Conditioning & Core" },
   { name: "Russian Twists (DB)", type: "Core", group: "Tag 5 – Conditioning & Core" },
   { name: "Hollow Body Hold", type: "Core", group: "Tag 5 – Conditioning & Core" },
-  // ✅ Weak point: tibialis
   { name: "Tibialis Raises", type: "Core", group: "Tag 5 – Conditioning & Core" },
 
-  // NEAT / Alltag
   { name: "Walking Desk (Laufband 3 km/h)", type: "NEAT", group: "NEAT / Alltag" },
 ];
 
@@ -490,70 +361,37 @@ function buildExerciseDropdown(){
   });
   sel.selectedIndex = 0;
 }
+
 function typeForExercise(exName){
   return EXERCISES.find(e => e.name === exName)?.type ?? "Mehrgelenkig";
 }
 
-// ---------- Attributes (computed from entries) ----------
+// ---------- Attribute mapping ----------
 function baseAttrFromEntry(e){
   const out = { STR:0, STA:0, END:0, MOB:0 };
   const xp = e.xp || 0;
   const t = e.type || "";
   const name = e.exercise || "";
 
-  // Standard mapping
   if (t === "Mehrgelenkig") out.STR += xp;
   else if (t === "Unilateral") out.STA += xp;
   else if (t === "Conditioning") out.END += xp;
   else if (t === "Core") out.MOB += xp;
   else if (t === "Komplexe") {
-    out.STR += xp * 0.4;
-    out.STA += xp * 0.2;
-    out.END += xp * 0.2;
-    out.MOB += xp * 0.2;
-  }
-  else if (t === "NEAT") {
-    out.END += xp * 0.7;
-    out.MOB += xp * 0.3;
-  }
-  else if (t === "Boss-Workout") {
-    out.STR += xp * 0.25;
-    out.STA += xp * 0.25;
-    out.END += xp * 0.25;
-    out.MOB += xp * 0.25;
-  }
-  else {
-    out.END += xp * 0.25;
-    out.MOB += xp * 0.25;
-    out.STR += xp * 0.25;
-    out.STA += xp * 0.25;
+    out.STR += xp * 0.4; out.STA += xp * 0.2; out.END += xp * 0.2; out.MOB += xp * 0.2;
+  } else if (t === "NEAT") {
+    out.END += xp * 0.7; out.MOB += xp * 0.3;
+  } else if (t === "Boss-Workout") {
+    out.STR += xp * 0.25; out.STA += xp * 0.25; out.END += xp * 0.25; out.MOB += xp * 0.25;
+  } else {
+    out.STR += xp * 0.25; out.STA += xp * 0.25; out.END += xp * 0.25; out.MOB += xp * 0.25;
   }
 
-  // ✅ Weak-point overrides (more realistic splits)
-  if (name.includes("Lateral")) {
-    out.STR = xp * 0.7;
-    out.MOB = xp * 0.3;
-    out.STA = 0;
-    out.END = 0;
-  }
-  if (name.includes("Calf") || name.includes("Tibialis")) {
-    out.MOB = xp * 0.8;
-    out.END = xp * 0.2;
-    out.STR = 0;
-    out.STA = 0;
-  }
-  if (name.includes("Hamstring Walkouts")) {
-    out.MOB = xp * 0.6;
-    out.STA = xp * 0.4;
-    out.STR = 0;
-    out.END = 0;
-  }
-  if (name.includes("Farmer")) {
-    out.STR = xp * 0.5;
-    out.STA = xp * 0.5;
-    out.END = 0;
-    out.MOB = 0;
-  }
+  // Weak-point overrides
+  if (name.includes("Lateral")) { out.STR = xp*0.7; out.MOB = xp*0.3; out.STA=0; out.END=0; }
+  if (name.includes("Calf") || name.includes("Tibialis")) { out.MOB=xp*0.8; out.END=xp*0.2; out.STR=0; out.STA=0; }
+  if (name.includes("Hamstring Walkouts")) { out.MOB=xp*0.6; out.STA=xp*0.4; out.STR=0; out.END=0; }
+  if (name.includes("Farmer")) { out.STR=xp*0.5; out.STA=xp*0.5; out.END=0; out.MOB=0; }
 
   return out;
 }
@@ -573,7 +411,6 @@ function mutationXpMultiplierForType(type, mutation){
   if (type === "Unilateral" && mutation?.mult?.STA) return mutation.mult.STA;
   if (type === "Conditioning" && mutation?.mult?.END) return mutation.mult.END;
   if (type === "Core" && mutation?.mult?.MOB) return mutation.mult.MOB;
-
   if (type === "Komplexe") {
     const ms = [mutation?.mult?.STR, mutation?.mult?.STA, mutation?.mult?.END, mutation?.mult?.MOB].filter(Boolean);
     if (!ms.length) return 1;
@@ -583,9 +420,7 @@ function mutationXpMultiplierForType(type, mutation){
 }
 
 // Attribute leveling
-function attrReqForLevel(level){
-  return 800 + (level - 1) * 120;
-}
+function attrReqForLevel(level){ return 800 + (level - 1) * 120; }
 function attrLevelFromXp(totalXp){
   let lvl = 1;
   let xp = totalXp;
@@ -597,14 +432,12 @@ function attrLevelFromXp(totalXp){
   return { lvl, into: xp, need: attrReqForLevel(lvl) };
 }
 
-// ---------- Daily Quests (extended with weak points) ----------
+// ---------- Quests ----------
 const QUESTS = [
   { id:"steps10k", name:"10.000 Schritte", xp:100, note:"NEAT-Boost" },
   { id:"mobility10", name:"10 Min Mobility", xp:50, note:"Hüfte/Schulter/Wirbelsäule" },
   { id:"water", name:"2,5–3L Wasser", xp:30, note:"Regeneration" },
   { id:"sleep", name:"7h+ Schlaf", xp:50, note:"Performance" },
-
-  // ✅ Weak-point mini-quests
   { id:"calves", name:"Waden erledigt (Calf Raises)", xp:30, note:"Achilles/Knie & Optik" },
   { id:"laterals", name:"Seitliche Schulter (Lateral Raises)", xp:30, note:"Schulterbreite & Stabilität" },
   { id:"hamknee", name:"Hamstrings (Walkouts)", xp:40, note:"Knee-Flexion Ersatz, Balance" },
@@ -613,10 +446,7 @@ const QUESTS = [
 
 function loadQuestState(){ return loadJSON(KEY_QUESTS, {}); }
 function saveQuestState(s){ saveJSON(KEY_QUESTS, s); }
-
-function isQuestDoneToday(qState, questId, today){
-  return qState?.[today]?.[questId] === true;
-}
+function isQuestDoneToday(qState, questId, today){ return qState?.[today]?.[questId] === true; }
 
 async function setQuestDoneToday(questId, done){
   const today = isoDate(new Date());
@@ -624,23 +454,14 @@ async function setQuestDoneToday(questId, done){
   qState[today] ??= {};
   const already = qState[today][questId] === true;
   if (done && already) return;
-
   if (done) qState[today][questId] = true;
   else delete qState[today][questId];
-
   saveQuestState(qState);
 
   if (done) {
     const q = QUESTS.find(x => x.id === questId);
     const week = currentWeekToday();
-    await idbAdd({
-      date: today,
-      week,
-      exercise: `Daily Quest: ${q?.name ?? questId}`,
-      type: "Quest",
-      detail: "Completed",
-      xp: q?.xp ?? 0
-    });
+    await idbAdd({ date: today, week, exercise:`Daily Quest: ${q?.name ?? questId}`, type:"Quest", detail:"Completed", xp:q?.xp ?? 0 });
   }
 }
 
@@ -656,7 +477,7 @@ function renderQuests(){
     const li = document.createElement("li");
     li.innerHTML = `
       <div class="checkItem">
-        <input type="checkbox" id="q_${q.id}" ${done ? "checked":""}>
+        <input type="checkbox" ${done ? "checked":""}>
         <div class="checkMain">
           <div class="checkTitle">${q.name}</div>
           <div class="checkSub">${q.note}</div>
@@ -665,19 +486,15 @@ function renderQuests(){
       </div>
     `;
     ul.appendChild(li);
-
     li.querySelector("input").addEventListener("change", async (e) => {
-      if (e.target.checked) {
-        await setQuestDoneToday(q.id, true);
-      } else {
-        alert("Quest deaktiviert – XP-Eintrag bleibt bestehen (einfaches System).");
-      }
+      if (e.target.checked) await setQuestDoneToday(q.id, true);
+      else alert("Quest deaktiviert – XP-Eintrag bleibt bestehen (einfaches System).");
       await renderAll();
     });
   });
 }
 
-// ---------- Bossfights ----------
+// ---------- Boss (unchanged core) ----------
 const BOSSES = [
   { week: 2, name: "The Foundation Beast", xp: 500, reward: "1 Joker + Titel: Foundation Slayer",
     workout: ["DB Goblet Squat – 5×10 (3s runter)","DB Floor Press – 5×8","DB Row – 5×10 (Pause oben)","Pause strikt 90s"]},
@@ -732,11 +549,9 @@ function splitXP(total, n){
 }
 
 function renderBoss(curWeek){
-  const start = ensureStartDate();
   const today = isoDate(new Date());
   const bossState = loadBoss();
-
-  if ($("bossStartDisplay")) $("bossStartDisplay").textContent = start;
+  if ($("bossStartDisplay")) $("bossStartDisplay").textContent = ensureStartDate();
   if ($("bossCurrentWeek")) $("bossCurrentWeek").textContent = `W${curWeek}`;
 
   const ul = $("bossList");
@@ -780,7 +595,7 @@ function renderBoss(curWeek){
       const row = document.createElement("li");
       row.innerHTML = `
         <div class="checkItem">
-          <input type="checkbox" id="bc_${b.week}_${idx}" ${checked ? "checked":""} ${locked ? "disabled":""}>
+          <input type="checkbox" ${checked ? "checked":""} ${locked ? "disabled":""}>
           <div class="checkMain">
             <div class="checkTitle">${line}</div>
             <div class="checkSub">${b.name}</div>
@@ -841,13 +656,14 @@ function renderBoss(curWeek){
   });
 }
 
-// ---------- Achievements ----------
+// ---------- Achievements (FIXED!) ----------
 const ACHIEVEMENTS = [
   { id:"noskip", name:"No Skip Week", xp:500, rule:"5 Trainingstage (≥500 XP)" },
   { id:"perfect", name:"Perfect Run", xp:600, rule:"5 Tage ⭐⭐ oder ⭐⭐⭐" },
   { id:"threestar", name:"3-Star Hunter", xp:400, rule:"mind. 2× ⭐⭐⭐" },
   { id:"questmaster", name:"Quest Master", xp:300, rule:"mind. 3 Daily Quests" },
 ];
+
 function loadWeeklyAch(){ return loadJSON(KEY_ACH, {}); }
 function saveWeeklyAch(s){ saveJSON(KEY_ACH, s); }
 
@@ -868,7 +684,7 @@ async function evaluateWeeklyAchievements(entries, weekNum){
   const dayXP = {};
   for (const e of entries){
     if (e.week !== weekNum) continue;
-    dayXP[e.date] = (dayXP[e.date] || 0) + e.xp;
+    dayXP[e.date] = (dayXP[e.date] || 0) + (e.xp || 0);
   }
   const dates = Object.keys(dayXP);
   const trainDays = dates.filter(d => dayXP[d] >= 500).length;
@@ -885,8 +701,9 @@ async function evaluateWeeklyAchievements(entries, weekNum){
   const achState = loadWeeklyAch();
   achState[weekNum] ??= {};
   const newlyEarned = [];
+
   for (const id of shouldEarn){
-    if (!achState[weekNum][ids(id)){
+    if (!achState[weekNum][id]) {     // ✅ FIXED
       achState[weekNum][id] = true;
       newlyEarned.push(id);
     }
@@ -897,6 +714,7 @@ async function evaluateWeeklyAchievements(entries, weekNum){
     const today = isoDate(new Date());
     for (const id of newlyEarned){
       const a = ACHIEVEMENTS.find(x => x.id === id);
+      if (!a) continue;
       await idbAdd({
         date: today,
         week: weekNum,
@@ -910,9 +728,6 @@ async function evaluateWeeklyAchievements(entries, weekNum){
 
   return { earned: shouldEarn, newlyEarned, trainDays, threeStarDays };
 }
-
-// Fix: safe id key
-function Rids(id){ return id; } // compatibility placeholder
 
 // ---------- Weekly Plan ----------
 function groupExercisesByDay(){
@@ -937,7 +752,6 @@ function renderWeeklyPlan(curWeek, entries){
   const b = weekBlock(w);
   const dayMap = groupExercisesByDay();
   const boss = getBossForWeek(w);
-
   const mutation = getMutationForWeek(w);
   const adaptive = getAdaptiveModifiers(entries, w);
 
@@ -958,11 +772,7 @@ function renderWeeklyPlan(curWeek, entries){
   html += `<div class="divider"></div>`;
 
   if (boss) {
-    html += `
-      <div class="pill"><b>Boss diese Woche:</b> ${boss.name} (W${boss.week}) • +${boss.xp} XP<br>
-      <span class="small">Clear nur in W${boss.week} + Checkboxen im Boss-Tab.</span></div>
-      <div class="divider"></div>
-    `;
+    html += `<div class="pill"><b>Boss diese Woche:</b> ${boss.name} (W${boss.week}) • +${boss.xp} XP<br><span class="small">Clear nur in W${boss.week} + Checkboxen im Boss-Tab.</span></div><div class="divider"></div>`;
   } else {
     html += `<div class="pill"><b>Boss diese Woche:</b> keiner (Boss-Wochen: 2/4/6/8/10/12)</div><div class="divider"></div>`;
   }
@@ -992,8 +802,7 @@ function renderWeeklyPlan(curWeek, entries){
 
 // ---------- Log UI ----------
 async function updateLogUI(entries){
-  const start = ensureStartDate();
-  if ($("logStart")) $("logStart").textContent = start;
+  if ($("logStart")) $("logStart").textContent = ensureStartDate();
 
   const curWeek = currentWeekToday();
   const mutation = getMutationForWeek(curWeek);
@@ -1172,7 +981,7 @@ async function renderAll(){
   await updateLogUI(finalEntries);
 }
 
-// ---------- CSV export ----------
+// ---------- CSV ----------
 function csvSafe(v){
   const s = String(v ?? "");
   if (s.includes(",") || s.includes('"') || s.includes("\n")) return `"${s.replaceAll('"','""')}"`;
