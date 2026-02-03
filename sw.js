@@ -1,4 +1,4 @@
-const CACHE = "ironquest-cache-v5";
+const CACHE = "ironquest-cache-v12";
 const ASSETS = [
   "./",
   "./index.html",
