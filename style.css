@@ -57,7 +57,7 @@ li { padding: 10px; border-top: 1px solid #242424; font-size: 13px; }
 .badge.no { background:#6b1d1d; }
 .badge.lock { background:#6a5b1a; }
 
-/* ✅ schöner: Checklisten (Daily Quest + Boss) */
+/* ✅ Checklisten (Daily Quest + Boss) */
 .checklist li { border-top: 1px solid #242424; padding: 12px 0; }
 .checkItem {
   display: grid;
@@ -89,5 +89,21 @@ li { padding: 10px; border-top: 1px solid #242424; font-size: 13px; }
 .planList li { border-top: 1px dashed #2a2a2a; padding: 10px 0; }
 
 .small { font-size: 12px; opacity: .8; }
+
+/* ✅ Attributes UI */
+.attrGrid { display:grid; grid-template-columns: 1fr 1fr; gap: 10px; margin-top: 10px; }
+@media (max-width: 520px){ .attrGrid { grid-template-columns: 1fr; } }
+
+.attrCard { background:#0f0f10; border:1px solid #2a2a2a; border-radius: 14px; padding: 12px; }
+.attrTop { display:flex; justify-content: space-between; align-items:center; margin-bottom: 8px; }
+.bar { width: 100%; height: 10px; background:#171718; border:1px solid #2a2a2a; border-radius: 999px; overflow:hidden; }
+.fill { height: 100%; width: 0%; background:#ffffff; }
+.attrSub { margin-top: 8px; font-size: 12px; opacity: .8; }
+
+/* ✅ Mutation UI */
+.mutationBox { background:#0f0f10; border:1px solid #2a2a2a; border-radius: 14px; padding: 12px; }
+.mutationTitle { font-weight: 900; font-size: 14px; }
+.mutationDesc { margin-top: 6px; opacity: .85; font-size: 12px; line-height: 1.35; }
+.mutationHint { margin-top: 8px; opacity: .75; font-size: 12px; }
 
 footer { padding: 18px; text-align:center; opacity:.6; }
