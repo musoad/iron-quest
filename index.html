@@ -41,13 +41,18 @@
         </div>
 
         <div class="row2">
+          <div class="pill"><b>Startdatum:</b> <span id="startDisplay">—</span></div>
           <div class="pill"><b>Aktuelle Woche:</b> <span id="weekNumber">—</span></div>
-          <div class="pill"><b>Woche XP:</b> <span id="weekXp">0</span></div>
         </div>
 
         <div class="row2">
+          <div class="pill"><b>Woche XP:</b> <span id="weekXp">0</span></div>
           <div class="pill"><b>Gesamt XP:</b> <span id="totalXp">0</span></div>
+        </div>
+
+        <div class="row2">
           <div class="pill"><b>Level:</b> <span id="level">1</span> – <span id="title">Anfänger</span></div>
+          <div class="pill"><b>Block:</b> <span id="blockNow">—</span></div>
         </div>
 
         <p class="hint">Sterne: 500–799 ⭐ • 800–1099 ⭐⭐ • 1100+ ⭐⭐⭐</p>
@@ -55,7 +60,7 @@
 
       <div class="card">
         <h2>Daily Quests</h2>
-        <p class="hint">Jede Quest gibt XP (nur 1× pro Tag). Wird automatisch als Entry gespeichert.</p>
+        <p class="hint">Checkbox links, XP rechts. Jede Quest 1× pro Tag → Entry wird gespeichert.</p>
         <ul id="questList" class="checklist"></ul>
       </div>
 
@@ -69,7 +74,6 @@
           <div class="pill"><b>Achievements (diese Woche):</b><br><span id="wkAchievements">—</span></div>
           <div class="pill"><b>Empfohlene Steigerung:</b><br><span id="wkProgressHint">—</span></div>
         </div>
-        <p class="hint">Achievements werden automatisch als XP-Eintrag gutgeschrieben (nur 1× pro Woche).</p>
       </div>
 
       <div class="card">
@@ -82,22 +86,20 @@
     <section id="tab-plan" class="panel">
       <div class="card">
         <h2>Weekly Plan</h2>
-        <p class="hint">
-          Zeigt dir Tag 1–5 inkl. Sets & Reps-Empfehlung (abhängig von der aktuellen Woche), plus Boss/Quest Hinweise.
-        </p>
+        <p class="hint">Tag 1–5 inkl. Sets & Reps (abhängig von Startdatum/Woche), plus Boss/Quest Hinweise.</p>
 
         <div class="row2">
+          <div class="pill"><b>Startdatum:</b> <span id="planStart">—</span></div>
           <div class="pill"><b>Aktuelle Woche:</b> <span id="planWeek">—</span></div>
+        </div>
+
+        <div class="row2">
           <div class="pill"><b>Block:</b> <span id="planBlock">—</span></div>
+          <div class="pill"><b>Block-Hinweis:</b> <span id="planHint">—</span></div>
         </div>
 
         <div class="divider"></div>
         <div id="planContent"></div>
-
-        <div class="divider"></div>
-        <p class="hint">
-          Tipp: Wenn du wenig Zeit hast → mach pro Übung nur die empfohlenen Sätze (keine Extras) und sammle trotzdem saubere XP.
-        </p>
       </div>
     </section>
 
@@ -145,7 +147,7 @@
 
         <div class="row2">
           <div class="pill"><b>Berechnete XP:</b> <span id="calcXp">0</span></div>
-          <div class="pill"><b>Hinweis:</b> Walking hat keine Bonus-XP</div>
+          <div class="pill"><b>Startdatum:</b> <span id="logStart">—</span></div>
         </div>
 
         <button id="add" type="button">Eintrag speichern</button>
@@ -218,7 +220,10 @@
         <button id="saveStart" type="button" class="secondary">Startdatum speichern</button>
 
         <div class="divider"></div>
-        <div class="pill"><b>Aktuelle Woche:</b> <span id="bossCurrentWeek">—</span></div>
+        <div class="row2">
+          <div class="pill"><b>Aktuelle Woche:</b> <span id="bossCurrentWeek">—</span></div>
+          <div class="pill"><b>Startdatum:</b> <span id="bossStartDisplay">—</span></div>
+        </div>
 
         <ul id="bossList" class="bosslist"></ul>
 
