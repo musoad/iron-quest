@@ -40,7 +40,7 @@
         </div>
 
         <div class="row2">
-          <div class="pill"><b>Woche:</b> <span id="weekNumber">—</span></div>
+          <div class="pill"><b>Aktuelle Woche:</b> <span id="weekNumber">—</span></div>
           <div class="pill"><b>Woche XP:</b> <span id="weekXp">0</span></div>
         </div>
 
@@ -50,8 +50,27 @@
         </div>
 
         <p class="hint">
-          Sterne-Regel: 500–799 ⭐ • 800–1099 ⭐⭐ • 1100+ ⭐⭐⭐ (unter 500 = —)
+          Sterne: 500–799 ⭐ • 800–1099 ⭐⭐ • 1100+ ⭐⭐⭐
         </p>
+      </div>
+
+      <div class="card">
+        <h2>Daily Quests</h2>
+        <p class="hint">Jede Quest gibt XP (nur 1× pro Tag). Wird automatisch als Entry gespeichert.</p>
+        <ul id="questList" class="checklist"></ul>
+      </div>
+
+      <div class="card">
+        <h2>Wochenauswertung</h2>
+        <div class="row2">
+          <div class="pill"><b>Trainingstage (≥500 XP):</b> <span id="wkTrainDays">0</span></div>
+          <div class="pill"><b>⭐⭐⭐-Tage:</b> <span id="wkThreeStarDays">0</span></div>
+        </div>
+        <div class="row2">
+          <div class="pill"><b>Achievements (diese Woche):</b><br><span id="wkAchievements">—</span></div>
+          <div class="pill"><b>Empfohlene Steigerung:</b><br><span id="wkProgressHint">—</span></div>
+        </div>
+        <p class="hint">Achievements werden automatisch als XP-Eintrag gutgeschrieben (nur 1× pro Woche).</p>
       </div>
 
       <div class="card">
@@ -73,6 +92,11 @@
           <select id="exercise"></select>
         </label>
 
+        <div class="row2">
+          <div class="pill"><b>Übungstyp:</b> <span id="autoType">—</span></div>
+          <div class="pill"><b>Empf. Sätze:</b> <span id="recommendedSets">—</span></div>
+        </div>
+
         <div id="setsRow">
           <label>Sätze / Runden
             <input id="sets" type="number" min="1" value="1">
@@ -93,8 +117,8 @@
         </div>
 
         <div class="row2">
-          <div class="pill"><b>Übungstyp:</b> <span id="autoType">—</span></div>
           <div class="pill"><b>Berechnete XP:</b> <span id="calcXp">0</span></div>
+          <div class="pill"><b>Hinweis:</b> Walking hat keine Bonus-XP</div>
         </div>
 
         <button id="add">Eintrag speichern</button>
@@ -111,7 +135,7 @@
     <section id="tab-skills" class="panel">
       <div class="card">
         <h2>Skilltrees</h2>
-        <p class="hint">Du vergibst Skillpunkte manuell (Game-Feeling). Speicherung lokal.</p>
+        <p class="hint">Skillpunkte manuell (Motivation). Speicherung lokal.</p>
 
         <div class="grid2">
           <div class="skillbox">
@@ -159,7 +183,7 @@
     <section id="tab-boss" class="panel">
       <div class="card">
         <h2>Boss-Fight-Kalender</h2>
-        <p class="hint">Boss „Clear“ ist nur in der <b>richtigen Woche</b> möglich.</p>
+        <p class="hint">Clear ist nur in der richtigen Woche möglich UND wenn du die Boss-Checks abhakt.</p>
 
         <label>Startdatum Woche 1
           <input id="startDate" type="date">
