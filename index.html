@@ -58,6 +58,49 @@
         <p class="hint">Sterne: 500–799 ⭐ • 800–1099 ⭐⭐ • 1100+ ⭐⭐⭐</p>
       </div>
 
+      <!-- ✅ Mutation -->
+      <div class="card">
+        <h2>Weekly Mutation</h2>
+        <div class="mutationBox">
+          <div class="mutationTitle" id="mutationName">—</div>
+          <div class="mutationDesc" id="mutationDesc">—</div>
+          <div class="mutationHint" id="mutationEffect">—</div>
+        </div>
+        <p class="hint">Mutation ist fix für die Woche (RNG), beeinflusst XP & ggf. Empfehlungen.</p>
+      </div>
+
+      <!-- ✅ Attributes -->
+      <div class="card">
+        <h2>Attribute</h2>
+        <p class="hint">Übungstypen geben Attribut-XP: STR/STA/END/MOB. Level-Up automatisch.</p>
+
+        <div class="attrGrid">
+          <div class="attrCard">
+            <div class="attrTop"><b>STR</b><span>Lv <span id="lvSTR">1</span></span></div>
+            <div class="bar"><div id="barSTR" class="fill"></div></div>
+            <div class="attrSub"><span id="xpSTR">0</span> XP • <span id="needSTR">0</span> bis nächstes Lv</div>
+          </div>
+
+          <div class="attrCard">
+            <div class="attrTop"><b>STA</b><span>Lv <span id="lvSTA">1</span></span></div>
+            <div class="bar"><div id="barSTA" class="fill"></div></div>
+            <div class="attrSub"><span id="xpSTA">0</span> XP • <span id="needSTA">0</span> bis nächstes Lv</div>
+          </div>
+
+          <div class="attrCard">
+            <div class="attrTop"><b>END</b><span>Lv <span id="lvEND">1</span></span></div>
+            <div class="bar"><div id="barEND" class="fill"></div></div>
+            <div class="attrSub"><span id="xpEND">0</span> XP • <span id="needEND">0</span> bis nächstes Lv</div>
+          </div>
+
+          <div class="attrCard">
+            <div class="attrTop"><b>MOB</b><span>Lv <span id="lvMOB">1</span></span></div>
+            <div class="bar"><div id="barMOB" class="fill"></div></div>
+            <div class="attrSub"><span id="xpMOB">0</span> XP • <span id="needMOB">0</span> bis nächstes Lv</div>
+          </div>
+        </div>
+      </div>
+
       <div class="card">
         <h2>Daily Quests</h2>
         <p class="hint">Checkbox links, XP rechts. Jede Quest 1× pro Tag → Entry wird gespeichert.</p>
@@ -72,7 +115,11 @@
         </div>
         <div class="row2">
           <div class="pill"><b>Achievements (diese Woche):</b><br><span id="wkAchievements">—</span></div>
+          <div class="pill"><b>Adaptive Difficulty:</b><br><span id="adaptiveHint">—</span></div>
+        </div>
+        <div class="row2">
           <div class="pill"><b>Empfohlene Steigerung:</b><br><span id="wkProgressHint">—</span></div>
+          <div class="pill"><b>Mutation Bonus:</b><br><span id="mutationShort">—</span></div>
         </div>
       </div>
 
@@ -86,7 +133,7 @@
     <section id="tab-plan" class="panel">
       <div class="card">
         <h2>Weekly Plan</h2>
-        <p class="hint">Tag 1–5 inkl. Sets & Reps (abhängig von Startdatum/Woche), plus Boss/Quest Hinweise.</p>
+        <p class="hint">Tag 1–5 inkl. Sets & Reps (abhängig von Startdatum/Woche), plus Boss/Quest & Mutation.</p>
 
         <div class="row2">
           <div class="pill"><b>Startdatum:</b> <span id="planStart">—</span></div>
@@ -96,6 +143,11 @@
         <div class="row2">
           <div class="pill"><b>Block:</b> <span id="planBlock">—</span></div>
           <div class="pill"><b>Block-Hinweis:</b> <span id="planHint">—</span></div>
+        </div>
+
+        <div class="row2">
+          <div class="pill"><b>Mutation:</b> <span id="planMutation">—</span></div>
+          <div class="pill"><b>Adaptive:</b> <span id="planAdaptive">—</span></div>
         </div>
 
         <div class="divider"></div>
@@ -123,7 +175,7 @@
 
         <div class="row2">
           <div class="pill"><b>Empf. Reps:</b> <span id="recommendedReps">—</span></div>
-          <div class="pill"><b>Block-Hinweis:</b> <span id="blockHintShort">—</span></div>
+          <div class="pill"><b>Adaptive/Mutation:</b> <span id="logAdaptive">—</span></div>
         </div>
 
         <div id="setsRow">
@@ -136,7 +188,7 @@
           <label>Walking Minuten (3 km/h)
             <input id="walkMin" type="number" min="1" value="60">
           </label>
-          <p class="hint">XP = Minuten × 5 (60 min = 300 XP)</p>
+          <p class="hint">XP = Minuten × 5 (60 min = 300 XP) + Mutation Bonus (falls aktiv)</p>
         </div>
 
         <div class="row">
