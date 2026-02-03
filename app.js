@@ -307,4 +307,298 @@ function renderSkills(){
     const unlocked = new Set(s[key].unlocked);
 
     nodes.forEach((node, idx) => {
-      con
+      const li = document.createElement("li");
+      const isUnlocked = unlocked.has(node.id);
+      const canUnlock = (idx < s[key].sp) && !isUnlocked;
+
+      li.className = isUnlocked ? "done" : "locked";
+      li.innerHTML = `<b>${idx+1}. ${node.name}</b><br><span class="hint">${node.desc}</span>`;
+
+      if (canUnlock) {
+        const btn = document.createElement("button");
+        btn.className = "secondary";
+        btn.style.marginTop = "8px";
+        btn.textContent = "Freischalten";
+        btn.addEventListener("click", () => {
+          const s2 = loadSkills();
+          if (!s2[key].unlocked.includes(node.id)) s2[key].unlocked.push(node.id);
+          saveSkills(s2);
+          renderSkills();
+        });
+        li.appendChild(btn);
+      } else if (!isUnlocked && idx < s[key].sp) {
+        // already used sp on other nodes – keep locked until chosen
+        // (we keep it simple: you can unlock any node up to your SP count)
+        const btn = document.createElement("button");
+        btn.className = "secondary";
+        btn.style.marginTop = "8px";
+        btn.textContent = "Freischalten";
+        btn.addEventListener("click", () => {
+          const s2 = loadSkills();
+          if (!s2[key].unlocked.includes(node.id)) s2[key].unlocked.push(node.id);
+          saveSkills(s2);
+          renderSkills();
+        });
+        li.appendChild(btn);
+      }
+
+      ul.appendChild(li);
+    });
+  }
+}
+
+// --- Boss render ---
+function renderBoss(){
+  const startDate = localStorage.getItem(KEY_START) || "";
+  $("startDate").value = startDate;
+
+  const bossState = loadBoss();
+  const ul = $("bossList");
+  ul.innerHTML = "";
+
+  for (const b of BOSSES){
+    const st = bossState[b.week] ?? { cleared:false, clearedAt:null };
+
+    const li = document.createElement("li");
+    li.innerHTML = `
+      <div class="bossrow">
+        <div>
+          <div><b>Woche ${b.week}:</b> ${b.name}</div>
+          <div class="hint">Reward: ${b.reward} • +${b.xp} XP</div>
+          ${st.clearedAt ? `<div class="hint">Cleared am: ${st.clearedAt}</div>` : ""}
+        </div>
+        <div class="row" style="margin:0;">
+          <span class="badge ${st.cleared ? "ok" : "no"}">${st.cleared ? "CLEARED" : "OPEN"}</span>
+          <button class="secondary" style="width:auto; padding:10px 12px;" data-clear="${b.week}">
+            ${st.cleared ? "Revanche (+XP nochmal)" : "Clear"}
+          </button>
+        </div>
+      </div>
+    `;
+    ul.appendChild(li);
+  }
+
+  // bind buttons
+  ul.querySelectorAll("button[data-clear]").forEach(btn => {
+    btn.addEventListener("click", () => {
+      const week = parseInt(btn.getAttribute("data-clear"), 10);
+      const boss = BOSSES.find(x => x.week === week);
+      if (!boss) return;
+
+      // Add XP entry for boss clear
+      const start = localStorage.getItem(KEY_START) || isoDate(new Date());
+      const today = isoDate(new Date());
+      const w = getWeekNumber(start, today) || week; // if start unknown
+
+      const entries = loadEntries();
+      entries.unshift({
+        date: today,
+        week: w,
+        exercise: `Bossfight: ${boss.name}`,
+        type: "Boss",
+        detail: `W${week} Clear`,
+        xp: boss.xp
+      });
+      saveEntries(entries);
+
+      // update boss state
+      const bs = loadBoss();
+      bs[week] = { cleared:true, clearedAt: today };
+      saveBoss(bs);
+
+      renderBoss();
+      renderLists();
+      alert(`Bossfight cleared! +${boss.xp} XP\nReward: ${boss.reward}`);
+    });
+  });
+}
+
+// --- CSV Export ---
+function toCSV(entries){
+  // header
+  const header = ["date","week","exercise","type","detail","xp"];
+  const rows = [header.join(",")];
+
+  for (const e of entries){
+    const row = [
+      e.date,
+      e.week,
+      csvSafe(e.exercise),
+      e.type,
+      csvSafe(e.detail),
+      e.xp
+    ];
+    rows.push(row.join(","));
+  }
+  return rows.join("\n");
+}
+function csvSafe(v){
+  const s = String(v ?? "");
+  if (s.includes(",") || s.includes('"') || s.includes("\n")) {
+    return `"${s.replaceAll('"','""')}"`;
+  }
+  return s;
+}
+
+function downloadCSV(filename, content){
+  const blob = new Blob([content], { type: "text/csv;charset=utf-8;" });
+  const url = URL.createObjectURL(blob);
+
+  const a = document.createElement("a");
+  a.href = url;
+  a.download = filename;
+  document.body.appendChild(a);
+  a.click();
+  a.remove();
+
+  setTimeout(() => URL.revokeObjectURL(url), 1000);
+}
+
+// --- Tabs ---
+function setupTabs(){
+  document.querySelectorAll(".tab").forEach(btn => {
+    btn.addEventListener("click", () => {
+      document.querySelectorAll(".tab").forEach(b => b.classList.remove("active"));
+      document.querySelectorAll(".panel").forEach(p => p.classList.remove("active"));
+
+      btn.classList.add("active");
+      const target = btn.getAttribute("data-tab");
+      $("tab-" + target).classList.add("active");
+    });
+  });
+}
+
+// --- Init ---
+function init(){
+  // default date: today
+  $("date").value = isoDate(new Date());
+
+  // build exercises
+  buildExerciseDropdown();
+
+  // set auto type on exercise change
+  $("exercise").addEventListener("change", () => {
+    const t = autoTypeForExercise($("exercise").value);
+    $("type").value = t;
+    updateWalkingUI();
+  });
+
+  // type change affects UI
+  $("type").addEventListener("change", updateWalkingUI);
+
+  // calc preview bindings
+  ["sets","walkMin","rpe9","tech","pause"].forEach(id => {
+    $(id).addEventListener("input", updateCalcPreview);
+    $(id).addEventListener("change", updateCalcPreview);
+  });
+
+  // initial auto type
+  $("type").value = autoTypeForExercise($("exercise").value);
+  updateWalkingUI();
+
+  // Add entry
+  $("add").addEventListener("click", () => {
+    const date = $("date").value || isoDate(new Date());
+    const exercise = $("exercise").value;
+    const type = $("type").value;
+
+    let xp = 0;
+    let detail = "";
+    if (type === "NEAT") {
+      const minutes = Math.max(1, parseInt($("walkMin").value || "0", 10));
+      xp = neatXP(minutes);
+      detail = `${minutes} min`;
+    } else {
+      const sets = Math.max(1, parseInt($("sets").value || "1", 10));
+      const flags = { rpe9: $("rpe9").checked, tech: $("tech").checked, pause: $("pause").checked };
+      const base = (XP_PER_SET[type] ?? 0) * sets;
+      xp = base + bonusXP(flags);
+      detail = `${sets} sets`;
+      if (flags.rpe9 || flags.tech || flags.pause) {
+        detail += ` +bonus`;
+      }
+    }
+
+    const start = localStorage.getItem(KEY_START) || date; // first entry sets start
+    if (!localStorage.getItem(KEY_START)) localStorage.setItem(KEY_START, start);
+    const week = getWeekNumber(start, date);
+
+    const entries = loadEntries();
+    entries.unshift({ date, week, exercise, type, detail, xp });
+    saveEntries(entries);
+
+    // reset non-walking bonuses
+    $("rpe9").checked = false; $("tech").checked = false; $("pause").checked = false;
+
+    renderLists();
+    updateCalcPreview();
+    alert(`Gespeichert: +${xp} XP`);
+  });
+
+  // Clear
+  $("clear").addEventListener("click", () => {
+    if (confirm("Wirklich ALLE Einträge löschen?")) {
+      localStorage.removeItem(KEY_ENTRIES);
+      renderLists();
+    }
+  });
+
+  // Skillpoints +1
+  document.querySelectorAll("button[data-sp]").forEach(btn => {
+    btn.addEventListener("click", () => {
+      const key = btn.getAttribute("data-sp");
+      const s = loadSkills();
+      s[key].sp += 1;
+      saveSkills(s);
+      renderSkills();
+    });
+  });
+
+  // Reset skills
+  $("resetSkills").addEventListener("click", () => {
+    if (confirm("Skilltrees wirklich zurücksetzen?")) {
+      localStorage.removeItem(KEY_SKILLS);
+      renderSkills();
+    }
+  });
+
+  // Boss start date save
+  $("saveStart").addEventListener("click", () => {
+    const d = $("startDate").value;
+    if (!d) return alert("Bitte Startdatum wählen.");
+    localStorage.setItem(KEY_START, d);
+    renderBoss();
+    renderLists();
+    alert("Startdatum gespeichert.");
+  });
+
+  // Reset boss
+  $("resetBoss").addEventListener("click", () => {
+    if (confirm("Boss-Fight Status zurücksetzen?")) {
+      localStorage.removeItem(KEY_BOSS);
+      renderBoss();
+    }
+  });
+
+  // CSV export
+  $("exportCsv").addEventListener("click", () => {
+    const entries = loadEntries();
+    if (!entries.length) return alert("Keine Einträge zum Exportieren.");
+    const csv = toCSV(entries);
+    downloadCSV("ironquest_export.csv", csv);
+  });
+
+  // Tabs
+  setupTabs();
+
+  // Service Worker
+  if ("serviceWorker" in navigator) navigator.serviceWorker.register("sw.js");
+
+  // initial renders
+  renderLists();
+  renderSkills();
+  renderBoss();
+  updateCalcPreview();
+}
+
+init();
