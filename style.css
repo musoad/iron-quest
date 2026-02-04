@@ -1,332 +1,88 @@
-<!doctype html>
-<html lang="de">
-<head>
-  <meta charset="utf-8" />
-  <meta name="viewport" content="width=device-width, initial-scale=1" />
-  <title>IRON QUEST</title>
+:root { font-family: -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, Arial, sans-serif; }
+* { box-sizing: border-box; }
+body { margin: 0; background:#0f0f10; color:#f3f3f3; }
 
-  <link rel="manifest" href="manifest.json">
-  <link rel="stylesheet" href="style.css">
+.topbar { padding: 14px 14px 10px; border-bottom: 1px solid #242424; display: grid; gap: 10px; }
+h1 { margin: 0; font-size: 22px; }
+.sub { margin: 6px 0 0; opacity:.75; font-size: 13px; }
 
-  <meta name="theme-color" content="#111111" />
-  <meta name="apple-mobile-web-app-capable" content="yes">
-  <meta name="apple-mobile-web-app-status-bar-style" content="black-translucent">
-</head>
+.tabs { display: flex; gap: 8px; overflow-x: auto; padding-bottom: 6px; }
+.tab { padding: 10px 12px; border-radius: 12px; border: 1px solid #2a2a2a; background:#171718; color:#fff; cursor:pointer; white-space: nowrap; }
+.tab.active { background:#ffffff; color:#111; border-color:#fff; font-weight: 800; }
 
-<body>
-  <header class="topbar">
-    <div>
-      <h1>IRON QUEST</h1>
-      <p class="sub">XP Tracker • Offline • IndexedDB</p>
-    </div>
+main { padding: 14px; display: grid; gap: 14px; max-width: 980px; margin: 0 auto; }
+.panel { display: none; }
+.panel.active { display: block; }
 
-    <nav class="tabs" aria-label="Navigation">
-      <button type="button" class="tab active" data-tab="dash">Dashboard</button>
-      <button type="button" class="tab" data-tab="plan">Weekly Plan</button>
-      <button type="button" class="tab" data-tab="log">Log</button>
-      <button type="button" class="tab" data-tab="skills">Skilltrees</button>
-      <button type="button" class="tab" data-tab="boss">Bossfights</button>
-      <button type="button" class="tab" data-tab="export">Export</button>
-    </nav>
-  </header>
+.card { background:#171718; border:1px solid #242424; border-radius: 14px; padding: 14px; }
+.card h2 { margin: 0 0 10px; font-size: 16px; }
 
-  <main>
-    <!-- DASHBOARD -->
-    <section id="tab-dash" class="panel active">
-      <div class="card">
-        <h2>Challenge-Setup</h2>
-        <p class="hint">Startdatum ist die Referenz für Woche 1. Du kannst es jederzeit rückwirkend ändern (Einträge werden automatisch neu in Wochen einsortiert).</p>
+label { display:block; margin: 10px 0; font-size: 13px; opacity:.95; }
+input, select { width: 100%; padding: 10px; border-radius: 10px; border:1px solid #303030; background:#0f0f10; color:#fff; }
+select option, select optgroup { color:#111; background:#fff; }
 
-        <label>Startdatum Woche 1
-          <input id="startDateDash" type="date">
-        </label>
-        <button id="saveStartDash" type="button" class="secondary">Startdatum speichern (rückwirkend)</button>
+.row { display:flex; gap: 10px; flex-wrap: wrap; margin: 10px 0; }
+.row2 { display:flex; gap: 10px; flex-wrap: wrap; margin: 10px 0; }
+.check { display:flex; gap: 8px; align-items:center; }
 
-        <div class="row2">
-          <div class="pill"><b>Aktuelles Startdatum:</b> <span id="startDisplay">—</span></div>
-          <div class="pill"><b>Aktuelle Woche (heute):</b> <span id="weekNumber">—</span></div>
-        </div>
+.pill { background:#0f0f10; border:1px solid #2a2a2a; padding: 10px; border-radius: 12px; flex: 1; min-width: 170px; }
 
-        <div class="row2">
-          <div class="pill"><b>Block:</b> <span id="blockNow">—</span></div>
-          <div class="pill"><b>Hinweis:</b> <span id="blockHint">—</span></div>
-        </div>
-      </div>
+button { width: 100%; padding: 12px; border: 0; border-radius: 12px; background:#ffffff; color:#111; font-weight: 800; cursor:pointer; }
+button.secondary { background:#2a2a2a; color:#fff; }
+button.danger { background:#8b1e1e; color:#fff; }
+button:disabled { opacity: .5; cursor: not-allowed; }
 
-      <div class="card">
-        <h2>Heute</h2>
-        <div class="row2">
-          <div class="pill"><b>Heute XP:</b> <span id="todayXp">0</span></div>
-          <div class="pill"><b>Tagessterne:</b> <span id="todayStars">—</span></div>
-        </div>
-        <div class="row2">
-          <div class="pill"><b>Woche XP:</b> <span id="weekXp">0</span></div>
-          <div class="pill"><b>Gesamt XP:</b> <span id="totalXp">0</span></div>
-        </div>
-        <div class="row2">
-          <div class="pill"><b>Level:</b> <span id="level">1</span> – <span id="title">Anfänger</span></div>
-          <div class="pill"><b>App Status:</b> <span id="appStatus">OK</span></div>
-        </div>
-        <p class="hint">Sterne: 500–799 ⭐ • 800–1099 ⭐⭐ • 1100+ ⭐⭐⭐</p>
-      </div>
+.hint { opacity:.7; font-size: 12px; margin-top: 10px; }
+.divider { height: 1px; background:#242424; margin: 14px 0; }
 
-      <div class="card">
-        <h2>Weekly Mutation</h2>
-        <div class="mutationBox">
-          <div class="mutationTitle" id="mutationName">—</div>
-          <div class="mutationDesc" id="mutationDesc">—</div>
-          <div class="mutationHint" id="mutationEffect">—</div>
-        </div>
-        <p class="hint">Mutation ist fix pro Woche (RNG), beeinflusst XP & ggf. Empfehlungen.</p>
-      </div>
+ul { list-style: none; padding: 0; margin: 0; }
+li { padding: 10px; border-top: 1px solid #242424; font-size: 13px; }
 
-      <div class="card">
-        <h2>Attribute</h2>
-        <p class="hint">Übungstypen geben Attribut-XP: STR/STA/END/MOB.</p>
+.grid2 { display: grid; grid-template-columns: 1fr 1fr; gap: 10px; }
+@media (max-width: 520px){ .grid2 { grid-template-columns: 1fr; } }
 
-        <div class="attrGrid">
-          <div class="attrCard">
-            <div class="attrTop"><b>STR</b><span>Lv <span id="lvSTR">1</span></span></div>
-            <div class="bar"><div id="barSTR" class="fill"></div></div>
-            <div class="attrSub"><span id="xpSTR">0</span> XP • <span id="needSTR">0</span> bis nächstes Lv</div>
-          </div>
-          <div class="attrCard">
-            <div class="attrTop"><b>STA</b><span>Lv <span id="lvSTA">1</span></span></div>
-            <div class="bar"><div id="barSTA" class="fill"></div></div>
-            <div class="attrSub"><span id="xpSTA">0</span> XP • <span id="needSTA">0</span> bis nächstes Lv</div>
-          </div>
-          <div class="attrCard">
-            <div class="attrTop"><b>END</b><span>Lv <span id="lvEND">1</span></span></div>
-            <div class="bar"><div id="barEND" class="fill"></div></div>
-            <div class="attrSub"><span id="xpEND">0</span> XP • <span id="needEND">0</span> bis nächstes Lv</div>
-          </div>
-          <div class="attrCard">
-            <div class="attrTop"><b>MOB</b><span>Lv <span id="lvMOB">1</span></span></div>
-            <div class="bar"><div id="barMOB" class="fill"></div></div>
-            <div class="attrSub"><span id="xpMOB">0</span> XP • <span id="needMOB">0</span> bis nächstes Lv</div>
-          </div>
-        </div>
-      </div>
+.hide { display: none; }
 
-      <div class="card">
-        <h2>Daily Quests</h2>
-        <p class="hint">1× pro Tag. Checkbox links, XP rechts.</p>
-        <ul id="questList" class="checklist"></ul>
-      </div>
+.skillbox { background:#0f0f10; border:1px solid #2a2a2a; border-radius: 14px; padding: 12px; }
+.skillbox h3 { margin: 0 0 8px; font-size: 14px; }
+.skilllist li { border-top: 1px dashed #2a2a2a; }
+.skilllist li.locked { opacity: .6; }
 
-      <div class="card">
-        <h2>Wochenauswertung</h2>
-        <div class="row2">
-          <div class="pill"><b>Trainingstage (≥500 XP):</b> <span id="wkTrainDays">0</span></div>
-          <div class="pill"><b>⭐⭐⭐-Tage:</b> <span id="wkThreeStarDays">0</span></div>
-        </div>
-        <div class="row2">
-          <div class="pill"><b>Achievements (Woche):</b><br><span id="wkAchievements">—</span></div>
-          <div class="pill"><b>Adaptive:</b><br><span id="adaptiveHint">—</span></div>
-        </div>
-      </div>
+.bosslist li { border-top: 1px solid #242424; padding: 12px 0; }
+.bossrow { display:flex; justify-content: space-between; gap: 10px; align-items: flex-start; flex-wrap: wrap; }
+.badge { padding: 6px 10px; border-radius: 999px; background:#2a2a2a; font-size: 12px; }
+.badge.ok { background:#1d6b2a; }
+.badge.no { background:#6b1d1d; }
+.badge.lock { background:#6a5b1a; }
 
-      <div class="card">
-        <h2>Letzte Einträge</h2>
-        <ul id="recentList"></ul>
-      </div>
-    </section>
+/* Checklists */
+.checklist li { border-top: 1px solid #242424; padding: 12px 0; }
+.checkItem { display: grid; grid-template-columns: 28px 1fr auto; gap: 10px; align-items: start; }
+.checkItem input[type="checkbox"]{ width: 22px; height: 22px; margin-top: 2px; }
+.checkMain { min-width: 0; }
+.checkTitle { font-weight: 800; line-height: 1.25; }
+.checkSub { opacity: .75; font-size: 12px; margin-top: 2px; }
+.xpBadge{ align-self: start; padding: 6px 10px; border-radius: 999px; border: 1px solid #2a2a2a; background: #0f0f10; font-size: 12px; white-space: nowrap; }
 
-    <!-- WEEKLY PLAN -->
-    <section id="tab-plan" class="panel">
-      <div class="card">
-        <h2>Weekly Plan</h2>
-        <p class="hint">Tag 1–5 inkl. Sets/Reps abhängig von Startdatum/Woche. Boss/Quest/Mutation integriert.</p>
+/* Weekly Plan */
+.planDay { background:#0f0f10; border:1px solid #2a2a2a; border-radius: 14px; padding: 12px; margin: 10px 0; }
+.planDay h3 { margin: 0 0 8px; font-size: 14px; }
+.planList li { border-top: 1px dashed #2a2a2a; padding: 10px 0; }
+.small { font-size: 12px; opacity: .8; }
 
-        <div class="row2">
-          <div class="pill"><b>Startdatum:</b> <span id="planStart">—</span></div>
-          <div class="pill"><b>Woche (heute):</b> <span id="planWeek">—</span></div>
-        </div>
+/* Attributes */
+.attrGrid { display:grid; grid-template-columns: 1fr 1fr; gap: 10px; margin-top: 10px; }
+@media (max-width: 520px){ .attrGrid { grid-template-columns: 1fr; } }
+.attrCard { background:#0f0f10; border:1px solid #2a2a2a; border-radius: 14px; padding: 12px; }
+.attrTop { display:flex; justify-content: space-between; align-items:center; margin-bottom: 8px; }
+.bar { width: 100%; height: 10px; background:#171718; border:1px solid #2a2a2a; border-radius: 999px; overflow:hidden; }
+.fill { height: 100%; width: 0%; background:#ffffff; }
+.attrSub { margin-top: 8px; font-size: 12px; opacity: .8; }
 
-        <div class="row2">
-          <div class="pill"><b>Block:</b> <span id="planBlock">—</span></div>
-          <div class="pill"><b>Mutation:</b> <span id="planMutation">—</span></div>
-        </div>
+/* Mutation */
+.mutationBox { background:#0f0f10; border:1px solid #2a2a2a; border-radius: 14px; padding: 12px; }
+.mutationTitle { font-weight: 900; font-size: 14px; }
+.mutationDesc { margin-top: 6px; opacity: .85; font-size: 12px; line-height: 1.35; }
+.mutationHint { margin-top: 8px; opacity: .75; font-size: 12px; }
 
-        <div class="row2">
-          <div class="pill"><b>Adaptive:</b> <span id="planAdaptive">—</span></div>
-          <div class="pill"><b>Hinweis:</b> <span id="planHint">—</span></div>
-        </div>
-
-        <div class="divider"></div>
-        <div id="planContent"></div>
-      </div>
-    </section>
-
-    <!-- LOG -->
-    <section id="tab-log" class="panel">
-      <div class="card">
-        <h2>Neuer Eintrag (rückwirkend möglich)</h2>
-
-        <label>Datum
-          <input id="date" type="date">
-        </label>
-
-        <div class="row2">
-          <div class="pill"><b>Woche (aus Startdatum):</b> <span id="logWeek">—</span></div>
-          <div class="pill"><b>Startdatum:</b> <span id="logStart">—</span></div>
-        </div>
-
-        <label>Übung
-          <select id="exercise"></select>
-        </label>
-
-        <div class="row2">
-          <div class="pill"><b>Übungstyp:</b> <span id="autoType">—</span></div>
-          <div class="pill"><b>Empf. Sätze:</b> <span id="recommendedSets">—</span></div>
-        </div>
-
-        <div class="row2">
-          <div class="pill"><b>Empf. Reps:</b> <span id="recommendedReps">—</span></div>
-          <div class="pill"><b>Adaptive/Mutation:</b> <span id="logAdaptive">—</span></div>
-        </div>
-
-        <div id="setsRow">
-          <label>Sätze / Runden
-            <input id="sets" type="number" min="1" value="1">
-          </label>
-        </div>
-
-        <div id="walkingRow" class="hide">
-          <label>Walking Minuten (3 km/h)
-            <input id="walkMin" type="number" min="1" value="60">
-          </label>
-          <p class="hint">XP = Minuten × 5 (60 min = 300 XP) + Mutation Bonus (falls aktiv)</p>
-        </div>
-
-        <div class="row">
-          <label class="check"><input id="rpe9" type="checkbox"> RPE9 (+50)</label>
-          <label class="check"><input id="tech" type="checkbox"> Technik (+25)</label>
-          <label class="check"><input id="pause" type="checkbox"> Pausen (+25)</label>
-        </div>
-
-        <div class="row2">
-          <div class="pill"><b>Berechnete XP:</b> <span id="calcXp">0</span></div>
-          <div class="pill"><b>Info:</b> <span id="calcInfo">—</span></div>
-        </div>
-
-        <button id="add" type="button">Eintrag speichern</button>
-
-        <div class="divider"></div>
-
-        <h2>Alle Einträge</h2>
-        <ul id="list"></ul>
-        <button id="clear" type="button" class="secondary">Alle Einträge löschen</button>
-      </div>
-    </section>
-
-    <!-- SKILLTREES -->
-    <section id="tab-skills" class="panel">
-      <div class="card">
-        <h2>Skilltrees</h2>
-        <p class="hint">Skillpunkte manuell (Motivation).</p>
-
-        <div class="grid2">
-          <div class="skillbox">
-            <h3>Mehrgelenkig (STR)</h3>
-            <p>Skillpunkte: <b><span id="sp-multi">0</span></b></p>
-            <button type="button" class="secondary" data-sp="multi">+1 Skillpunkt</button>
-            <ul class="skilllist" id="tree-multi"></ul>
-          </div>
-
-          <div class="skillbox">
-            <h3>Unilateral (STA)</h3>
-            <p>Skillpunkte: <b><span id="sp-uni">0</span></b></p>
-            <button type="button" class="secondary" data-sp="uni">+1 Skillpunkt</button>
-            <ul class="skilllist" id="tree-uni"></ul>
-          </div>
-
-          <div class="skillbox">
-            <h3>Core (MOB/STA)</h3>
-            <p>Skillpunkte: <b><span id="sp-core">0</span></b></p>
-            <button type="button" class="secondary" data-sp="core">+1 Skillpunkt</button>
-            <ul class="skilllist" id="tree-core"></ul>
-          </div>
-
-          <div class="skillbox">
-            <h3>Conditioning (END)</h3>
-            <p>Skillpunkte: <b><span id="sp-cond">0</span></b></p>
-            <button type="button" class="secondary" data-sp="cond">+1 Skillpunkt</button>
-            <ul class="skilllist" id="tree-cond"></ul>
-          </div>
-
-          <div class="skillbox">
-            <h3>Komplexe (ELITE)</h3>
-            <p>Skillpunkte: <b><span id="sp-comp">0</span></b></p>
-            <button type="button" class="secondary" data-sp="comp">+1 Skillpunkt</button>
-            <ul class="skilllist" id="tree-comp"></ul>
-          </div>
-        </div>
-
-        <div class="divider"></div>
-        <button id="resetSkills" type="button" class="danger">Skilltrees zurücksetzen</button>
-      </div>
-    </section>
-
-    <!-- BOSSFIGHTS -->
-    <section id="tab-boss" class="panel">
-      <div class="card">
-        <h2>Boss-Fight-Kalender</h2>
-        <p class="hint">Clear ist nur in der richtigen Woche möglich UND wenn du die Boss-Checks abhakt.</p>
-
-        <div class="row2">
-          <div class="pill"><b>Aktuelle Woche (heute):</b> <span id="bossCurrentWeek">—</span></div>
-          <div class="pill"><b>Startdatum:</b> <span id="bossStartDisplay">—</span></div>
-        </div>
-
-        <ul id="bossList" class="bosslist"></ul>
-
-        <div class="divider"></div>
-        <button id="resetBoss" type="button" class="danger">Boss-Fights zurücksetzen</button>
-      </div>
-    </section>
-
-    <!-- EXPORT -->
-    <section id="tab-export" class="panel">
-      <div class="card">
-        <h2>Export</h2>
-        <p class="hint">CSV Export für Excel/Google Sheets.</p>
-        <button id="exportCsv" type="button">CSV herunterladen</button>
-
-        <div class="divider"></div>
-        <h2>Status</h2>
-        <p><b>Anzahl Einträge:</b> <span id="countEntries">0</span></p>
-      </div>
-    </section>
-  </main>
-
-  <footer>
-    <small>IRON QUEST – PWA • Offline via Service Worker</small>
-  </footer>
-
-  <script src="app.js"></script>
-
-  <!-- ✅ Fallback Tab Navigation: Tabs funktionieren auch wenn app.js crasht -->
-  <script>
-    (function () {
-      function activate(tabId) {
-        document.querySelectorAll(".tab").forEach(b => b.classList.remove("active"));
-        document.querySelectorAll(".panel").forEach(p => p.classList.remove("active"));
-        const btn = document.querySelector(`.tab[data-tab="${tabId}"]`);
-        const panel = document.getElementById("tab-" + tabId);
-        if (btn) btn.classList.add("active");
-        if (panel) panel.classList.add("active");
-        if (tabId) location.hash = tabId;
-      }
-      document.addEventListener("click", (e) => {
-        const btn = e.target.closest(".tab");
-        if (!btn) return;
-        e.preventDefault();
-        activate(btn.getAttribute("data-tab"));
-      });
-      const initial = (location.hash || "#dash").replace("#", "");
-      activate(initial);
-    })();
-  </script>
-</body>
-</html>
+footer { padding: 18px; text-align:center; opacity:.6; }
