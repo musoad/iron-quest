@@ -1,4 +1,4 @@
-const CACHE = "ironquest-cache-v99"; // ✅ Version hochsetzen bei jedem Update
+const CACHE = "ironquest-cache-v220";
 const ASSETS = [
   "./",
   "./index.html",
@@ -10,31 +10,31 @@ const ASSETS = [
 ];
 
 self.addEventListener("install", (event) => {
-  self.skipWaiting(); // ✅ sofort aktivieren
-  event.waitUntil(
-    caches.open(CACHE).then((cache) => cache.addAll(ASSETS))
-  );
+  self.skipWaiting();
+  event.waitUntil(caches.open(CACHE).then((cache) => cache.addAll(ASSETS)));
 });
 
 self.addEventListener("activate", (event) => {
   event.waitUntil((async () => {
     const keys = await caches.keys();
     await Promise.all(keys.map(k => (k !== CACHE ? caches.delete(k) : null)));
-    await self.clients.claim(); // ✅ sofort für offene Tabs übernehmen
+    await self.clients.claim();
   })());
 });
 
-// ✅ Network-first für HTML/JS (damit du Updates bekommst)
+// network-first for critical files
 self.addEventListener("fetch", (event) => {
   const req = event.request;
   const url = new URL(req.url);
 
-  const isCritical =
+  const critical =
     url.pathname.endsWith("/index.html") ||
     url.pathname.endsWith("/app.js") ||
-    url.pathname.endsWith("/style.css");
+    url.pathname.endsWith("/style.css") ||
+    url.pathname === "/" ||
+    url.pathname.endsWith("/");
 
-  if (isCritical) {
+  if (critical) {
     event.respondWith((async () => {
       try {
         const fresh = await fetch(req);
@@ -43,14 +43,11 @@ self.addEventListener("fetch", (event) => {
         return fresh;
       } catch {
         const cached = await caches.match(req);
-        return cached || caches.match("./");
+        return cached || caches.match("./index.html");
       }
     })());
     return;
   }
 
-  // Standard: cache-first
-  event.respondWith(
-    caches.match(req).then((cached) => cached || fetch(req))
-  );
+  event.respondWith(caches.match(req).then((cached) => cached || fetch(req)));
 });
