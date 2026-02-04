@@ -35,10 +35,7 @@
     <section id="tab-dash" class="panel active">
       <div class="card">
         <h2>Challenge-Setup</h2>
-        <p class="hint">
-          Startdatum ist die Referenz für Woche 1. Du kannst es jederzeit rückwirkend ändern
-          (Einträge werden automatisch neu in Wochen einsortiert).
-        </p>
+        <p class="hint">Startdatum ist die Referenz für Woche 1. Du kannst es rückwirkend ändern (Einträge werden neu in Wochen einsortiert).</p>
 
         <label>Startdatum Woche 1
           <input id="startDateDash" type="date">
@@ -93,19 +90,16 @@
             <div class="bar"><div id="barSTR" class="fill"></div></div>
             <div class="attrSub"><span id="xpSTR">0</span> XP • <span id="needSTR">0</span> bis nächstes Lv</div>
           </div>
-
           <div class="attrCard">
             <div class="attrTop"><b>STA</b><span>Lv <span id="lvSTA">1</span></span></div>
             <div class="bar"><div id="barSTA" class="fill"></div></div>
             <div class="attrSub"><span id="xpSTA">0</span> XP • <span id="needSTA">0</span> bis nächstes Lv</div>
           </div>
-
           <div class="attrCard">
             <div class="attrTop"><b>END</b><span>Lv <span id="lvEND">1</span></span></div>
             <div class="bar"><div id="barEND" class="fill"></div></div>
             <div class="attrSub"><span id="xpEND">0</span> XP • <span id="needEND">0</span> bis nächstes Lv</div>
           </div>
-
           <div class="attrCard">
             <div class="attrTop"><b>MOB</b><span>Lv <span id="lvMOB">1</span></span></div>
             <div class="bar"><div id="barMOB" class="fill"></div></div>
@@ -167,7 +161,33 @@
     <!-- LOG -->
     <section id="tab-log" class="panel">
       <div class="card">
-        <h2>Neuer Eintrag (rückwirkend möglich)</h2>
+        <h2>Wochenkalender</h2>
+        <p class="hint">Tippe auf einen Tag → Einträge dieses Tages. „Heute“ folgt automatisch deinem Startdatum/Wochenlogik.</p>
+
+        <div class="calHeader">
+          <button id="calPrev" type="button" class="secondary calBtn">◀</button>
+          <div class="calTitle">
+            <div><b id="calWeekTitle">Woche</b></div>
+            <div class="small" id="calRange">—</div>
+          </div>
+          <button id="calNext" type="button" class="secondary calBtn">▶</button>
+        </div>
+
+        <div id="calGrid" class="calGrid"></div>
+
+        <div class="divider"></div>
+
+        <h2 id="dayTitle">Tages-Einträge</h2>
+        <div class="row2">
+          <div class="pill"><b>Tages-XP:</b> <span id="dayXp">0</span></div>
+          <div class="pill"><b>Sterne:</b> <span id="dayStars">—</span></div>
+        </div>
+        <ul id="dayEntries"></ul>
+      </div>
+
+      <div class="card">
+        <h2 id="logFormTitle">Neuer Eintrag (rückwirkend möglich)</h2>
+        <input id="editId" type="hidden" value="">
 
         <label>Datum
           <input id="date" type="date">
@@ -194,13 +214,13 @@
 
         <div id="setsRow">
           <label>Sätze / Runden
-            <input id="sets" type="number" min="1" step="1" inputmode="numeric" placeholder="z. B. 4">
+            <input id="sets" type="number" min="0" step="1" inputmode="numeric" placeholder="z. B. 4">
           </label>
         </div>
 
         <div id="walkingRow" class="hide">
           <label>Walking Minuten (3 km/h)
-            <input id="walkMin" type="number" min="1" value="60">
+            <input id="walkMin" type="number" min="1" step="1" inputmode="numeric" value="60">
           </label>
           <p class="hint">XP = Minuten × 5 (60 min = 300 XP) + Mutation Bonus (falls aktiv)</p>
         </div>
@@ -211,12 +231,19 @@
           <label class="check"><input id="pause" type="checkbox"> Pausen (+25)</label>
         </div>
 
+        <label>Zusatz XP (optional)
+          <input id="extraXp" type="number" step="1" inputmode="numeric" value="0">
+        </label>
+
         <div class="row2">
           <div class="pill"><b>Berechnete XP:</b> <span id="calcXp">0</span></div>
           <div class="pill"><b>Info:</b> <span id="calcInfo">—</span></div>
         </div>
 
-        <button id="add" type="button">Eintrag speichern</button>
+        <div class="row2">
+          <button id="add" type="button">Eintrag speichern</button>
+          <button id="cancelEdit" type="button" class="secondary">Bearbeiten abbrechen</button>
+        </div>
 
         <div class="divider"></div>
 
@@ -230,7 +257,7 @@
     <section id="tab-skills" class="panel">
       <div class="card">
         <h2>Skilltrees</h2>
-        <p class="hint">Skillpunkte manuell (Motivation). Wenn dein app.js Skilltrees füllt, funktionieren die IDs hier.</p>
+        <p class="hint">Skillpunkte manuell (Motivation).</p>
 
         <div class="grid2">
           <div class="skillbox">
@@ -312,7 +339,7 @@
 
   <script src="app.js"></script>
 
-  <!-- ✅ Tabs funktionieren IMMER (auch wenn app.js crasht) -->
+  <!-- ✅ Tabs funktionieren IMMER -->
   <script>
     (function () {
       function activate(tabId) {
