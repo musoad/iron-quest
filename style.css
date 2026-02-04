@@ -85,4 +85,25 @@ li { padding: 10px; border-top: 1px solid #242424; font-size: 13px; }
 .mutationDesc { margin-top: 6px; opacity: .85; font-size: 12px; line-height: 1.35; }
 .mutationHint { margin-top: 8px; opacity: .75; font-size: 12px; }
 
-footer { padding: 18px; text-align:center; opacity:.6; }
+/* Calendar */
+.calHeader { display:flex; gap:10px; align-items:center; justify-content: space-between; margin: 8px 0 10px; }
+.calBtn { width: auto; padding: 10px 12px; border-radius: 12px; }
+.calTitle { flex: 1; text-align: center; }
+.calGrid { display:grid; grid-template-columns: repeat(7, 1fr); gap: 8px; }
+.calCell {
+  background:#0f0f10; border:1px solid #2a2a2a; border-radius: 14px; padding: 10px;
+  cursor:pointer; user-select:none;
+  display:flex; flex-direction: column; gap: 6px;
+  min-height: 84px;
+}
+.calCell.active { border-color:#fff; }
+.calTop { display:flex; justify-content: space-between; gap: 8px; align-items:center; }
+.calDow { opacity:.8; font-size: 11px; }
+.calDate { font-weight: 900; font-size: 12px; }
+.calXP { opacity:.85; font-size: 12px; }
+.calStars { font-size: 12px; opacity:.9; }
+
+.entryRow {
+  display:flex; justify-content: space-between; gap: 10px; align-items: flex-start; flex-wrap: wrap;
+}
+.entry
