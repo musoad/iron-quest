@@ -813,15 +813,8 @@ function computeThreeStarXPForWeek(week, entries){
   return Math.round(total);
 }
 
-function getStarThresholdsForWeek(week, entries){
-  const three = computeThreeStarXPForWeek(week, entries);
-
-  // proportional scaling:
-  // 2⭐ = 75% of full-day, 1⭐ = 50% of full-day (rounded)
-  const two = Math.round(three * 0.75);
-  const one = Math.round(three * 0.50);
-
-  return { one, two, three };
+function getStarThresholdsForWeek(_week, _entries){
+  return { one: 1200, two: 1600, three: 2000 };
 }
 
 function starsForDay(xp, thresholds){
