@@ -107,3 +107,30 @@ li { padding: 10px; border-top: 1px solid #242424; font-size: 13px; }
   display:flex; justify-content: space-between; gap: 10px; align-items: flex-start; flex-wrap: wrap;
 }
 .entry
+
+/* ===== LOG SCREEN FIX (mobile) ===== */
+#tab-log .card { overflow: hidden; }
+#tab-log .entryRow { gap: 8px; }
+#tab-log .entryRow > div { min-width: 0 !important; }
+#tab-log .badge { white-space: nowrap; }
+
+.entryTitle { font-size: 14px; line-height: 1.25; }
+#tab-log select, #tab-log input { font-size: 16px; } /* iOS zoom prevention */
+#tab-log .calGrid { grid-template-columns: repeat(4, 1fr); } /* weniger gequetscht */
+@media (min-width: 520px){
+  #tab-log .calGrid { grid-template-columns: repeat(7, 1fr); }
+}
+
+/* Quest buttons nicer */
+.qbtn{
+  width: 28px; height: 28px;
+  border-radius: 10px;
+  border: 1px solid #2a2a2a;
+  background:#0f0f10; color:#fff;
+  font-weight: 900;
+}
+.qbtn.done{
+  background:#ffffff; color:#111;
+  border-color:#fff;
+}
+
