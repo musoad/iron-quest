@@ -1,18 +1,10 @@
 /* =========================
    IRON QUEST – app.js (FULL)
-   Requested changes (rest unchanged):
-   ✅ Skilltrees influence XP
-   ✅ Rest days possible; fixed Rest Wed + Sun in Weekly Plan
-   ✅ Supplements added to Daily Quests (AM: D3, Creatine; PM: Magnesium, Omega-3)
-   ✅ More exercises, categorized; XP per exercise-type
-   ✅ Plans more balanced + user-adjustable (swap exercises, saved per week)
-   ✅ Reward next week if 5 training days completed
-   ✅ Level system slower (more XP needed per level)
-   ✅ Log design improvements handled via CSS patch (provided separately)
-   ✅ XP calculated per exercise (NOT per sets); sets/reps are user-chosen (logged only)
-
-   NEW:
-   ✅ PR-System (Bestleistung/Last/Trend) pro Übung (inkl. Walking-Minuten)
+   Includes requested additions:
+   ✅ Weekly Plan icons 🟢/⚪/🔴 next to each exercise
+   ✅ PR Pop-Up on save (NEW PR + optional bonus XP)
+   ✅ PR Top 10 list card on Dashboard
+   ✅ Fixes: removed broken `await ;` / broken wrappers so tabs/render keep working
    ========================= */
 
 console.log("IRON QUEST loaded ✅");
@@ -33,238 +25,89 @@ function saveJSON(key, value) {
 }
 
 /* =========================
-   PR SYSTEM (Personal Records)
-   - PR per exercise (Sets×Reps or Minutes for NEAT)
-   - Last performance per exercise
-   - Trend vs last (↗ / → / ↘)
+   PR + Weekly Plan Status Icons (🟢/⚪/🔴) + Top10
 ========================= */
 const KEY_PR = "ironquest_pr_v1";
+const PR_BONUS_XP = 120; // optional Bonus-XP bei NEW PR (Boss XP bleibt unberührt)
 
-function loadPR() { return loadJSON(KEY_PR, {}); }
-function savePR(obj) { saveJSON(KEY_PR, obj); }
+function loadPRMap(){ return loadJSON(KEY_PR, {}); }
+function savePRMap(m){ saveJSON(KEY_PR, m); }
 
-function isExerciseTrackable(type){
-  return type !== "Rest" && type !== "Quest" && type !== "Boss" && type !== "Reward" && type !== "Achievement";
+// Score-Logik: Kraftübungen = Sets*Reps, NEAT = Minuten
+function prScoreForEntry(type, sets, reps, minutes){
+  if (type === "NEAT") return Math.max(0, parseInt(minutes || 0, 10));
+  if (type === "Rest" || type === "Quest" || type === "Boss" || type === "Boss-Workout") return 0;
+  const s = Math.max(0, parseInt(sets || 0, 10));
+  const r = Math.max(0, parseInt(reps || 0, 10));
+  return s * r;
 }
 
-// Parse sets/reps/min from entry.detail (your format: "Sets: x • Reps: y • Min: z • ...")
-function parsePerfFromDetail(type, detail){
-  const d = String(detail || "");
-  const mSets = d.match(/Sets:\s*(\d+)/i);
-  const mReps = d.match(/Reps:\s*(\d+)/i);
-  const mMin  = d.match(/Min:\s*(\d+)/i);
+// NEW PR prüfen + optional Bonus-Log
+async function handlePROnSave({ exName, type, score, dateISO, week }) {
+  if (!exName || !type) return { isNew: false };
+  if (type === "Rest" || type === "Quest" || type === "Boss" || type === "Boss-Workout") return { isNew:false };
+  if (score <= 0) return { isNew:false };
 
-  const sets = mSets ? parseInt(mSets[1],10) : null;
-  const reps = mReps ? parseInt(mReps[1],10) : null;
-  const min  = mMin  ? parseInt(mMin[1],10)  : null;
+  const pr = loadPRMap();
+  const prevBest = pr?.[exName]?.bestScore ?? 0;
+  const prevDate = pr?.[exName]?.bestDate ?? null;
 
-  if (type === "NEAT") {
-    return { mode:"minutes", sets:null, reps:null, minutes:(min ?? 0), score:(min ?? 0) };
-  }
-  // Strength/core/conditioning etc. -> score = sets*reps
-  const s = Number.isFinite(sets) ? sets : 0;
-  const r = Number.isFinite(reps) ? reps : 0;
-  const score = s > 0 && r > 0 ? s * r : 0;
-  return { mode:"reps", sets:(sets ?? 0), reps:(reps ?? 0), minutes:null, score };
-}
+  const isNew = score > prevBest;
+  if (!isNew) return { isNew:false, prevBest };
 
-function perfString(perf){
-  if (!perf) return "—";
-  if (perf.mode === "minutes") return `${perf.score} min`;
-  if (!perf.score) return "—";
-  return `${perf.sets}×${perf.reps} (= ${perf.score} reps)`;
-}
+  pr[exName] = { bestScore: score, bestDate: dateISO, type };
+  savePRMap(pr);
 
-function trendSymbol(currScore, lastScore){
-  if (!Number.isFinite(currScore) || !Number.isFinite(lastScore)) return "—";
-  if (currScore > lastScore) return "↗";
-  if (currScore < lastScore) return "↘";
-  return "→";
-}
+  const wantBonus = confirm(
+    `🏆 NEW PR!\n\n` +
+    `${exName}\n` +
+    `Score: ${score} (alt: ${prevBest}${prevDate ? " am "+prevDate : ""})\n\n` +
+    `Bonus XP hinzufügen? (+${PR_BONUS_XP} XP)`
+  );
 
-function getLastEntryForExercise(entries, exName, excludeId){
-  const list = entries.filter(e => e.exercise === exName && e.id !== excludeId);
-  if (!list.length) return null;
-  list.sort((a,b)=>{
-    if (a.date !== b.date) return a.date < b.date ? 1 : -1;
-    return (b.id ?? 0) - (a.id ?? 0);
-  });
-  return list[0];
-}
-
-function updatePRFromEntry(exName, type, dateISO, perf){
-  if (!exName || !isExerciseTrackable(type)) return;
-
-  const store = loadPR();
-  store[exName] ??= {
-    mode: perf.mode,
-    bestScore: 0,
-    bestAt: null,
-    bestSets: null,
-    bestReps: null,
-    bestMinutes: null,
-    lastScore: 0,
-    lastAt: null,
-    lastSets: null,
-    lastReps: null,
-    lastMinutes: null
-  };
-
-  const s = store[exName];
-
-  // update last
-  s.mode = perf.mode;
-  s.lastScore = perf.score || 0;
-  s.lastAt = dateISO || null;
-  if (perf.mode === "minutes") {
-    s.lastMinutes = perf.score || 0;
+  if (wantBonus) {
+    await idbAdd({
+      date: dateISO,
+      week,
+      exercise: `PR Bonus: ${exName}`,
+      type: "PR",
+      detail: `NEW PR • Score ${score} • Bonus`,
+      xp: PR_BONUS_XP
+    });
   } else {
-    s.lastSets = perf.sets || 0;
-    s.lastReps = perf.reps || 0;
+    await idbAdd({
+      date: dateISO,
+      week,
+      exercise: `NEW PR: ${exName}`,
+      type: "PR",
+      detail: `Score ${score}`,
+      xp: 0
+    });
   }
 
-  // update PR
-  if ((perf.score || 0) > (s.bestScore || 0)) {
-    s.bestScore = perf.score || 0;
-    s.bestAt = dateISO || null;
-    if (perf.mode === "minutes") {
-      s.bestMinutes = perf.score || 0;
-    } else {
-      s.bestSets = perf.sets || 0;
-      s.bestReps = perf.reps || 0;
-    }
-  }
-
-  store[exName] = s;
-  savePR(store);
+  return { isNew:true, prevBest };
 }
 
-function recomputePRForExercise(entries, exName){
-  const list = entries.filter(e => e.exercise === exName && isExerciseTrackable(e.type));
-  if (!list.length) {
-    const store = loadPR();
-    delete store[exName];
-    savePR(store);
-    return;
-  }
-
-  list.sort((a,b)=>{
-    if (a.date !== b.date) return a.date < b.date ? 1 : -1;
-    return (b.id ?? 0) - (a.id ?? 0);
-  });
-
-  let best = { score:0, mode:"reps", sets:0, reps:0, minutes:0, date:null };
-  let last = { score:0, mode:"reps", sets:0, reps:0, minutes:0, date:null };
-
-  // last = newest
-  const newest = list[0];
-  const pNewest = parsePerfFromDetail(newest.type, newest.detail);
-  last = { score:pNewest.score||0, mode:pNewest.mode, sets:pNewest.sets||0, reps:pNewest.reps||0, minutes:pNewest.minutes||0, date:newest.date };
-
-  // best = max score
-  for (const e of list){
-    const p = parsePerfFromDetail(e.type, e.detail);
-    if ((p.score||0) > (best.score||0)){
-      best = { score:p.score||0, mode:p.mode, sets:p.sets||0, reps:p.reps||0, minutes:p.minutes||0, date:e.date };
-    }
-  }
-
-  const store = loadPR();
-  store[exName] = {
-    mode: best.mode,
-    bestScore: best.score,
-    bestAt: best.date,
-    bestSets: best.mode==="minutes" ? null : best.sets,
-    bestReps: best.mode==="minutes" ? null : best.reps,
-    bestMinutes: best.mode==="minutes" ? best.score : null,
-    lastScore: last.score,
-    lastAt: last.date,
-    lastSets: last.mode==="minutes" ? null : last.sets,
-    lastReps: last.mode==="minutes" ? null : last.reps,
-    lastMinutes: last.mode==="minutes" ? last.score : null
-  };
-  savePR(store);
+function exerciseDoneOnDate(entries, dateISO, exName){
+  return entries.some(e => e.date === dateISO && e.exercise === exName);
 }
-
-function ensurePRBox(){
-  const logCard = document.querySelector("#tab-log .card");
-  if (!logCard) return;
-  if (document.getElementById("prBox")) return;
-
-  const box = document.createElement("div");
-  box.id = "prBox";
-  box.className = "pill";
-  box.style.marginTop = "10px";
-  box.innerHTML = `
-    <div style="display:flex; justify-content:space-between; gap:10px; flex-wrap:wrap;">
-      <div><b>Progress:</b> <span id="prTrend">—</span></div>
-      <div><b>Last:</b> <span id="prLast">—</span></div>
-      <div><b>PR:</b> <span id="prBest">—</span></div>
-    </div>
-    <div class="hint" id="prHint" style="margin-top:6px;">—</div>
-  `;
-
-  const rec = document.getElementById("recommendedReps")?.closest(".row2") || null;
-  if (rec && rec.parentElement) rec.parentElement.insertBefore(box, rec.nextSibling);
-  else logCard.appendChild(box);
+function statusIconForPlanExercise(entries, dateISO, exName){
+  const today = isoDate(new Date());
+  const done = exerciseDoneOnDate(entries, dateISO, exName);
+  if (done) return "🟢";
+  if (dateISO < today) return "🔴";
+  return "⚪";
 }
-
-function renderPRInLog(entries){
-  ensurePRBox();
-
-  const exName = $("exercise")?.value;
-  if (!exName) return;
-
-  const type = typeForExercise(exName);
-  if (!isExerciseTrackable(type) || type === "Quest") {
-    if ($("prTrend")) $("prTrend").textContent = "—";
-    if ($("prLast")) $("prLast").textContent = "—";
-    if ($("prBest")) $("prBest").textContent = "—";
-    if ($("prHint")) $("prHint").textContent = "—";
-    return;
-  }
-
-  // current perf from inputs
-  let currPerf = null;
-  if (type === "NEAT") {
-    const minutes = Math.max(0, parseInt($("walkMin")?.value || "0", 10));
-    currPerf = { mode:"minutes", score: minutes, minutes };
-  } else {
-    const sets = Math.max(0, parseInt($("sets")?.value || "0", 10));
-    const reps = Math.max(0, parseInt($("reps")?.value || "0", 10));
-    const score = (sets > 0 && reps > 0) ? sets * reps : 0;
-    currPerf = { mode:"reps", score, sets, reps };
-  }
-
-  const pr = loadPR()[exName] || null;
-
-  const excludeId = parseInt(($("editId")?.value ?? "").trim(), 10) || null;
-  const lastEntry = getLastEntryForExercise(entries, exName, excludeId);
-  const lastPerf = lastEntry ? parsePerfFromDetail(lastEntry.type, lastEntry.detail) : null;
-
-  const lastScore = lastPerf?.score ?? pr?.lastScore ?? null;
-  const trend = (currPerf && Number.isFinite(lastScore)) ? trendSymbol(currPerf.score, lastScore) : "—";
-
-  const lastText = lastPerf
-    ? perfString(lastPerf) + (lastEntry?.date ? ` (${lastEntry.date})` : "")
-    : (pr ? (pr.mode==="minutes"
-        ? `${pr.lastScore} min${pr.lastAt ? ` (${pr.lastAt})` : ""}`
-        : `${pr.lastSets}×${pr.lastReps} (= ${pr.lastScore})${pr.lastAt ? ` (${pr.lastAt})` : ""}`) : "—");
-
-  const bestText = pr ? (
-    pr.mode==="minutes"
-      ? `${pr.bestScore} min${pr.bestAt ? ` (${pr.bestAt})` : ""}`
-      : `${pr.bestSets}×${pr.bestReps} (= ${pr.bestScore})${pr.bestAt ? ` (${pr.bestAt})` : ""}`
-  ) : "—";
-
-  if ($("prTrend")) $("prTrend").textContent = trend;
-  if ($("prLast")) $("prLast").textContent = lastText;
-  if ($("prBest")) $("prBest").textContent = bestText;
-
-  let hint = "Track: ";
-  hint += (type === "NEAT") ? "Best Minutes" : "Best Total Reps (Sets×Reps)";
-  hint += " • Trend vergleicht aktuelle Eingabe mit letzter Ausführung.";
-  if ($("prHint")) $("prHint").textContent = hint;
+function top10PRs(){
+  const pr = loadPRMap();
+  const arr = Object.keys(pr).map(name => ({
+    name,
+    bestScore: pr[name]?.bestScore ?? 0,
+    bestDate: pr[name]?.bestDate ?? "",
+    type: pr[name]?.type ?? ""
+  }));
+  arr.sort((a,b) => (b.bestScore - a.bestScore));
+  return arr.slice(0, 10);
 }
 
 /* =========================
@@ -367,7 +210,6 @@ function getWeekNumber(startISO, dateISO) {
   const diff = daysBetween(startISO, dateISO);
   return diff < 0 ? 0 : Math.floor(diff / 7) + 1;
 }
-
 function ensureStartDate() {
   let start = localStorage.getItem(KEY_START);
   if (!start) {
@@ -381,7 +223,6 @@ function setStartDateLocal(newISO) {
   localStorage.setItem(KEY_START, newISO);
   if ($("startDateDash")) $("startDateDash").value = newISO;
 }
-
 function currentWeekFor(dateISO) {
   const start = ensureStartDate();
   return clampWeek(getWeekNumber(start, dateISO));
@@ -389,7 +230,6 @@ function currentWeekFor(dateISO) {
 function currentWeekToday() {
   return currentWeekFor(isoDate(new Date()));
 }
-
 async function recalcAllEntryWeeks() {
   const start = ensureStartDate();
   const all = await idbGetAll();
@@ -401,7 +241,6 @@ async function recalcAllEntryWeeks() {
     }
   }
 }
-
 function resetWeekBoundSystems() {
   localStorage.removeItem(KEY_MUT);
   localStorage.removeItem(KEY_ACH);
@@ -420,7 +259,7 @@ function sortEntriesDesc(entries) {
 }
 
 /* =========================
-   STARS (fixed rule)
+   STARS
    1200–1599 ⭐ • 1600–1999 ⭐⭐ • 2000+ ⭐⭐⭐
 ========================= */
 function getStarThresholdsForWeek(_week, _entries){
@@ -490,10 +329,8 @@ const MUTATIONS = [
   { id:"neatboost", name:"NEAT Boost", desc:"Alltag zählt mehr.", effect:"NEAT XP +20%", mult:{ NEAT:1.20 } },
   { id:"unilateral", name:"Unilateral Blessing", desc:"Stabilität und Balance.", effect:"STA XP +15%", mult:{ STA:1.15 } },
 ];
-
 function loadMutMap(){ return loadJSON(KEY_MUT, {}); }
 function saveMutMap(m){ saveJSON(KEY_MUT, m); }
-
 function getMutationForWeek(week) {
   const w = clampWeek(week);
   const map = loadMutMap();
@@ -504,7 +341,6 @@ function getMutationForWeek(week) {
   }
   return MUTATIONS.find(m => m.id === map[w]) || MUTATIONS[0];
 }
-
 function mutationXpMultiplierForType(type, mutation) {
   if (type === "NEAT" && mutation?.mult?.NEAT) return mutation.mult.NEAT;
   if (type === "Mehrgelenkig" && mutation?.mult?.STR) return mutation.mult.STR;
@@ -520,7 +356,7 @@ function mutationXpMultiplierForType(type, mutation) {
 }
 
 /* =========================
-   ADAPTIVE
+   ADAPTIVE (recommendations only)
 ========================= */
 function computeWeekDayXP(entries, weekNum) {
   const dayXP = {};
@@ -659,7 +495,7 @@ function buildExerciseDropdown() {
 }
 
 /* =========================
-   RECOMMENDATIONS
+   RECOMMENDATIONS (XP not based on sets)
 ========================= */
 function overridesForExercise(exName) {
   if (!exName) return null;
@@ -727,7 +563,7 @@ function neatXP(minutes) {
 }
 
 /* =========================
-   QUESTS
+   QUESTS (with supplements AM/PM) + retroactive
 ========================= */
 const QUESTS = [
   { id:"steps10k",   name:"10.000 Schritte", xp:70, note:"NEAT-Boost", slot:"any" },
@@ -740,7 +576,6 @@ const QUESTS = [
   { id:"supp_mag",     name:"Magnesium",  xp:10, note:"abends",  slot:"pm" },
   { id:"supp_omega3",  name:"Omega-3",    xp:10, note:"abends",  slot:"pm" },
 ];
-
 function loadQuestState(){ return loadJSON(KEY_QUESTS, {}); }
 function saveQuestState(s){ saveJSON(KEY_QUESTS, s); }
 function isQuestDoneForDay(qState, questId, dayISO){ return qState?.[dayISO]?.[questId] === true; }
@@ -995,7 +830,6 @@ const ACHIEVEMENTS = [
   { id:"threestar", name:"3-Star Hunter", xp:550, rule:"mind. 2× ⭐⭐⭐" },
   { id:"questmaster", name:"Quest Master", xp:450, rule:"mind. 6 Quests (inkl. Supplements)" },
 ];
-
 function loadWeeklyAch(){ return loadJSON(KEY_ACH, {}); }
 function saveWeeklyAch(s){ saveJSON(KEY_ACH, s); }
 
@@ -1018,15 +852,12 @@ function countTrainingDaysInWeek(entries, weekNum){
   }
   return days.size;
 }
-
 function loadWeekRewards(){ return loadJSON(KEY_WKREW, {}); }
 function saveWeekRewards(s){ saveJSON(KEY_WKREW, s); }
-
 function rewardActiveForWeek(week){
   const map = loadWeekRewards();
   return map?.[week] === true;
 }
-
 async function updateWeeklyReward(entries, weekNum){
   if (!weekNum || weekNum < 1) return;
   const map = loadWeekRewards();
@@ -1042,7 +873,6 @@ async function updateWeeklyReward(entries, weekNum){
     }
   }
 }
-
 async function evaluateWeeklyAchievements(entries, weekNum){
   if (!weekNum) return { earned:[], newlyEarned:[], trainDays:0, threeStarDays:0 };
 
@@ -1097,7 +927,6 @@ const TREES = [
   { key:"cond",  name:"Conditioning (END)", gateType:"Conditioning", domList:"tree-cond" },
   { key:"comp",  name:"Komplexe (ELITE)",   gateType:"Komplexe",     domList:"tree-comp" },
 ];
-
 function defaultNodesForTree(treeKey){
   return [
     { id:`${treeKey}_t1a`, tier:1, cost:1, name:"Tier 1: Foundation I", unlocked:false },
@@ -1109,7 +938,6 @@ function defaultNodesForTree(treeKey){
     { id:`${treeKey}_cap`, tier:4, cost:5, name:"Capstone: Ascension", unlocked:false },
   ];
 }
-
 function loadSkillState(){
   const fallback = {
     spent: 0,
@@ -1123,7 +951,6 @@ function loadSkillState(){
   return st;
 }
 function saveSkillState(st){ saveJSON(KEY_SKILL, st); }
-
 function countUnlocked(nodes, tier){
   return nodes.filter(n => n.tier === tier && n.unlocked).length;
 }
@@ -1135,7 +962,6 @@ function isNodeAvailable(nodes, node){
   if (node.tier === 4) return countUnlocked(nodes, 3) >= 1;
   return false;
 }
-
 function computeSkillPointsEarned(entries){
   const start = ensureStartDate();
   const dayXP = {};
@@ -1164,12 +990,10 @@ function computeSkillPointsAvailable(entries){
   const spent = st.spent || 0;
   return { earned, spent, available: Math.max(0, earned - spent) };
 }
-
 function getActiveTreeGates(entries, currentWeek){
   const typesThisWeek = new Set(entries.filter(e => e.week === currentWeek).map(e => e.type));
   return Object.fromEntries(TREES.map(t => [t.key, typesThisWeek.has(t.gateType)]));
 }
-
 function skillMultiplierForType(type){
   const st = loadSkillState();
   const mapKey =
@@ -1191,7 +1015,6 @@ function skillMultiplierForType(type){
 
   return mult;
 }
-
 function ensureDashboardSkillPill(){
   const todayCard = document.querySelector("#tab-dash .card:nth-of-type(2)");
   if (!todayCard) return;
@@ -1204,7 +1027,6 @@ function ensureDashboardSkillPill(){
   if (row) row.appendChild(pill);
   else todayCard.appendChild(pill);
 }
-
 function renderSkillTrees(entries, curWeek){
   const st = loadSkillState();
   const sp = computeSkillPointsAvailable(entries);
@@ -1306,7 +1128,6 @@ function groupForPlanDayKey(dayKey){
   if (dayKey === "Sat") return "Tag 5 – Conditioning & Core";
   return "Ruhetag";
 }
-
 function getWeekPlan(week){
   const ovr = loadPlanOverrides();
   const w = String(week);
@@ -1314,6 +1135,43 @@ function getWeekPlan(week){
   if (!ovr[w]) return base;
   for (const k of Object.keys(ovr[w])) base[k] = ovr[w][k];
   return base;
+}
+
+/* =========================
+   CALENDAR helpers
+========================= */
+function startOfWeekMonday(dateISO){
+  const d = new Date(dateISO);
+  const day = d.getDay();
+  const diffToMon = (day === 0 ? -6 : 1 - day);
+  d.setDate(d.getDate() + diffToMon);
+  return isoDate(d);
+}
+function addDays(dateISO, n){
+  const d = new Date(dateISO);
+  d.setDate(d.getDate() + n);
+  return isoDate(d);
+}
+function rangeLabel(mondayISO){
+  const sunISO = addDays(mondayISO, 6);
+  return `${mondayISO} – ${sunISO}`;
+}
+const DOW = ["Mo","Di","Mi","Do","Fr","Sa","So"];
+
+/* =========================
+   Weekly Plan (with 🟢/⚪/🔴 icons)
+========================= */
+function planDateForKey(startISO, weekNum, key){
+  const dayIndex =
+    key === "Mon" ? 0 :
+    key === "Tue" ? 1 :
+    key === "Wed" ? 2 :
+    key === "Thu" ? 3 :
+    key === "Fri" ? 4 :
+    key === "Sat" ? 5 : 6;
+
+  const weekStartISO = addDays(startISO, (weekNum - 1) * 7);
+  return addDays(weekStartISO, dayIndex);
 }
 
 function renderWeeklyPlan(curWeek, entries){
@@ -1370,6 +1228,7 @@ function renderWeeklyPlan(curWeek, entries){
 
     const group = groupForPlanDayKey(key);
     const options = exercisesForGroup(group);
+    const dayISO = planDateForKey(start, w, key);
 
     exList.forEach((exName, idx)=>{
       const type = typeForExercise(exName);
@@ -1382,9 +1241,14 @@ function renderWeeklyPlan(curWeek, entries){
       });
       sel += `</select>`;
 
+      const icon = statusIconForPlanExercise(entries, dayISO, exName);
+
       html += `<li>
         <div style="display:grid; gap:8px;">
-          <div><b>${exName}</b></div>
+          <div style="display:flex; align-items:center; gap:10px;">
+            <span style="font-size:18px;">${icon}</span>
+            <b style="font-size:16px;">${exName}</b>
+          </div>
           <div class="small">${type} • ${setRec} • ${repRec}</div>
           <div class="small">Swap: ${sel}</div>
         </div>
@@ -1423,24 +1287,6 @@ function renderWeeklyPlan(curWeek, entries){
 /* =========================
    CALENDAR (weekly view)
 ========================= */
-function startOfWeekMonday(dateISO){
-  const d = new Date(dateISO);
-  const day = d.getDay();
-  const diffToMon = (day === 0 ? -6 : 1 - day);
-  d.setDate(d.getDate() + diffToMon);
-  return isoDate(d);
-}
-function addDays(dateISO, n){
-  const d = new Date(dateISO);
-  d.setDate(d.getDate() + n);
-  return isoDate(d);
-}
-function rangeLabel(mondayISO){
-  const sunISO = addDays(mondayISO, 6);
-  return `${mondayISO} – ${sunISO}`;
-}
-const DOW = ["Mo","Di","Mi","Do","Fr","Sa","So"];
-
 function renderCalendar(entries){
   const grid = $("calGrid");
   if (!grid) return;
@@ -1584,21 +1430,12 @@ async function startEditEntry(id){
   location.hash = "log";
   await renderAll();
 }
-
 async function deleteEntryById(id){
   const ok = confirm("Diesen Eintrag wirklich löschen?");
   if (!ok) return;
-
   await idbDelete(id);
-
-  // ✅ PR recompute after delete (safe)
-  const allNow = sortEntriesDesc(await idbGetAll());
-  const pr = loadPR();
-  Object.keys(pr).forEach(ex => recomputePRForExercise(allNow, ex));
-
   await renderAll();
 }
-
 function resetEditMode(){
   if ($("editId")) $("editId").value = "";
   if ($("logFormTitle")) $("logFormTitle").textContent = "Neuer Eintrag (rückwirkend möglich)";
@@ -1618,13 +1455,10 @@ function removeBonusCheckboxes(){
     else el.remove();
   });
 }
-
 function ensureRepsInput(){
   if ($("reps")) return;
-
   const setsRow = $("setsRow");
   if (!setsRow) return;
-
   const wrap = document.createElement("div");
   wrap.innerHTML = `
     <label>Wiederholungen pro Satz
@@ -1633,7 +1467,6 @@ function ensureRepsInput(){
   `;
   setsRow.appendChild(wrap);
 }
-
 async function updateLogUI(entries){
   ensureRepsInput();
 
@@ -1689,11 +1522,7 @@ async function updateLogUI(entries){
   }
 
   updateCalcPreview(week, mutation);
-
-  // ✅ PR UI
-  renderPRInLog(entries);
 }
-
 function updateCalcPreview(week, mutation){
   const exName = $("exercise")?.value;
   const type = typeForExercise(exName);
@@ -1733,7 +1562,6 @@ function attrLevelFromXp(totalXp){
   }
   return { lvl, into: xp, need: attrReqForLevel(lvl) };
 }
-
 function baseAttrFromEntry(e) {
   const out = { STR:0, STA:0, END:0, MOB:0 };
   const xp = e.xp || 0;
@@ -1746,10 +1574,10 @@ function baseAttrFromEntry(e) {
   else if (t === "Komplexe") { out.STR += xp*0.4; out.STA += xp*0.2; out.END += xp*0.2; out.MOB += xp*0.2; }
   else if (t === "NEAT") { out.END += xp*0.7; out.MOB += xp*0.3; }
   else if (t === "Boss-Workout") { out.STR += xp*0.25; out.STA += xp*0.25; out.END += xp*0.25; out.MOB += xp*0.25; }
+  else return out;
 
   return out;
 }
-
 function applyMutationToAttr(attr, mutation){
   const out = { ...attr };
   if (mutation?.mult?.STR) out.STR *= mutation.mult.STR;
@@ -1783,7 +1611,6 @@ async function computeStats(entries){
 
   return { todayXp, weekXp, totalXp, curWeek, startDate, attr };
 }
-
 function renderAttributes(attr){
   const keys = ["STR","STA","END","MOB"];
   keys.forEach(k => {
@@ -1797,7 +1624,6 @@ function renderAttributes(attr){
     if ($("bar"+k)) $("bar"+k).style.width = pct + "%";
   });
 }
-
 function renderMutationUI(curWeek){
   const m = getMutationForWeek(curWeek);
   if ($("mutationName")) $("mutationName").textContent = `W${curWeek}: ${m.name}`;
@@ -1877,7 +1703,7 @@ function renderAllEntriesList(entries){
 }
 
 /* =========================
-   SAVE / UPDATE ENTRY
+   SAVE / UPDATE ENTRY (XP per exercise) + PR Pop-Up
 ========================= */
 async function saveOrUpdateEntry(){
   const dateISO2 = $("date")?.value || isoDate(new Date());
@@ -1912,6 +1738,10 @@ async function saveOrUpdateEntry(){
 
   const xp = Math.round(base * mutMult * skillMult * rewardMult);
 
+  // PR Score
+  const minutesForPR = type === "NEAT" ? Math.max(0, parseInt($("walkMin")?.value || "0", 10)) : 0;
+  const prScore = prScoreForEntry(type, sets, reps, minutesForPR);
+
   let detail = `Empf: ${setRec} / ${repRec}`;
   if (type === "NEAT") {
     const minutes = Math.max(1, parseInt($("walkMin")?.value || "0", 10));
@@ -1935,16 +1765,16 @@ async function saveOrUpdateEntry(){
     alert(`Gespeichert: ${dateISO2} • +${xp} XP ✅`);
   }
 
-  // ✅ PR update
-  const perf = parsePerfFromDetail(type, detail);
-  if (editId) {
-    const allNow = sortEntriesDesc(await idbGetAll());
-    recomputePRForExercise(allNow, exName);
-  } else {
-    updatePRFromEntry(exName, type, dateISO2, perf);
-  }
+  // PR Pop-Up + optional Bonus XP
+  await handlePROnSave({
+    exName,
+    type,
+    score: prScore,
+    dateISO: dateISO2,
+    week
+  });
 
-  // ✅ HIER: Draft für dieses Datum löschen
+  // Draft für dieses Datum löschen
   clearLogDraft(dateISO2);
 
   await renderAll();
@@ -2001,6 +1831,30 @@ async function renderAll(){
       const li2 = document.createElement("li");
       li2.textContent = `${e.date} (W${e.week}) • ${e.exercise} • ${e.xp} XP`;
       recentList.appendChild(li2);
+    });
+  }
+
+  // PR Top 10 card on Dashboard (auto-inject, no HTML changes)
+  const dash = document.querySelector("#tab-dash");
+  if (dash && !document.getElementById("prTop10Box")) {
+    const card = document.createElement("div");
+    card.className = "card";
+    card.id = "prTop10Box";
+    card.innerHTML = `
+      <h2>🏆 Top 10 PRs</h2>
+      <div class="hint">Score: Sets×Reps (NEAT=Minuten)</div>
+      <ul id="prTop10List" class="list"></ul>
+    `;
+    dash.appendChild(card);
+  }
+  const prList = document.getElementById("prTop10List");
+  if (prList) {
+    const top = top10PRs();
+    prList.innerHTML = top.length ? "" : "<li>Noch keine PRs.</li>";
+    top.forEach((p, i) => {
+      const li = document.createElement("li");
+      li.innerHTML = `<b>#${i+1}</b> ${p.name} • <b>${p.bestScore}</b> • ${p.bestDate ? p.bestDate : ""} <span class="hint">(${p.type})</span>`;
+      prList.appendChild(li);
     });
   }
 
@@ -2078,6 +1932,7 @@ async function init(){
       saveCalendarState(st);
       await renderAll();
     });
+
     $("exercise")?.addEventListener("change", async () => { await renderAll(); });
 
     ["sets","reps","walkMin"].forEach(id=>{
@@ -2100,13 +1955,7 @@ async function init(){
       el.addEventListener("change", autosaveLogDraft);
     });
 
-    // Restore Draft nach jedem Render
-    const __origUpdateLogUI = updateLogUI;
-    updateLogUI = async function(entries){
-      await __origUpdateLogUI(entries);
-      restoreLogDraft();
-    };
-
+    // Save / update
     $("add")?.addEventListener("click", saveOrUpdateEntry);
 
     $("cancelEdit")?.addEventListener("click", async ()=>{
@@ -2145,7 +1994,9 @@ async function init(){
       }
     });
 
-    if ("serviceWorker" in navigator) navigator.serviceWorker.register("sw.js");
+    if ("serviceWorker" in navigator) {
+      try { await navigator.serviceWorker.register("sw.js"); } catch(e){ console.warn("SW register failed", e); }
+    }
 
     await recalcAllEntryWeeks();
     await renderAll();
@@ -2180,7 +2031,6 @@ function autosaveLogDraft(){
   if (!dateISO) return;
 
   const draft = loadLogDraft();
-
   draft[dateISO] = {
     date: dateISO,
     exercise: $("exercise")?.value || "",
@@ -2189,7 +2039,6 @@ function autosaveLogDraft(){
     walkMin: $("walkMin")?.value || "",
     planDay: document.getElementById("planDaySelect")?.value || ""
   };
-
   saveLogDraft(draft);
 }
 function restoreLogDraft(){
@@ -2209,12 +2058,9 @@ function restoreLogDraft(){
   if (planSel && d.planDay) planSel.value = d.planDay;
 }
 
-init();
-
 /* =========================
    ADD-ON: Auto-Balance + Plan-Day Quick Log (Batch)
 ========================= */
-// ---------- Helpers ----------
 function deepClone(obj){ return JSON.parse(JSON.stringify(obj)); }
 
 function computeXpForExerciseOnDate(exName, dateISO){
@@ -2308,9 +2154,7 @@ function applyAutoBalancePreset(week, presetId){
     const glute = pickByNameFallback(legsPool, ["hip thrust"], "Hip Thrust (Floor)");
     const uni = pickByNameFallback(legsPool, ["bulgarian"], "Bulgarian Split Squats");
     const calf = pickByNameFallback(legsPool, ["calf"], "Standing DB Calf Raises");
-
     newPlan.Thu = [uni, squat, hinge, glute, calf];
-
     if (Array.isArray(newPlan.Fri) && newPlan.Fri.length >= 5){
       newPlan.Fri[4] = "Goblet Squat Hold";
     }
@@ -2457,31 +2301,30 @@ function injectQuickLogUI(){
     }
 
     await idbAddMany(entriesToAdd);
-
-    // ✅ PR update for batch
-    const allNow = sortEntriesDesc(await idbGetAll());
-    const uniqueExercises = [...new Set(list)];
-    uniqueExercises.forEach(ex => recomputePRForExercise(allNow, ex));
-
     await renderAll();
     alert(`Auto-Log 완료 ✅ ${list.length} Übungen • +${total} XP`);
   });
 }
 
-// Hook weekly plan to inject auto-balance UI
-const __origRenderWeeklyPlan = typeof renderWeeklyPlan === "function" ? renderWeeklyPlan : null;
-if (__origRenderWeeklyPlan){
-  renderWeeklyPlan = function(curWeek, entries){
-    __origRenderWeeklyPlan(curWeek, entries);
-    try { injectAutoBalanceUI(curWeek); } catch(e){ console.warn(e); }
-  };
-}
+// Wrap renderWeeklyPlan to inject Auto-Balance UI every time
+const __origRenderWeeklyPlan = renderWeeklyPlan;
+renderWeeklyPlan = function(curWeek, entries){
+  __origRenderWeeklyPlan(curWeek, entries);
+  try { injectAutoBalanceUI(curWeek); } catch(e){ console.warn(e); }
+};
 
-// Hook renderAll to ensure Quick Log UI exists
-const __origRenderAll = typeof renderAll === "function" ? renderAll : null;
-if (__origRenderAll){
-  renderAll = async function(){
-    await __origRenderAll();
-    try { injectQuickLogUI(); } catch(e){ console.warn(e); }
-  };
-}
+// Wrap updateLogUI to restore draft after rendering recommendations
+const __origUpdateLogUI = updateLogUI;
+updateLogUI = async function(entries){
+  await __origUpdateLogUI(entries);
+  restoreLogDraft();
+};
+
+// Wrap renderAll to ensure QuickLog UI stays injected
+const __origRenderAll = renderAll;
+renderAll = async function(){
+  await __origRenderAll();
+  try { injectQuickLogUI(); } catch(e){ console.warn(e); }
+};
+
+init();
