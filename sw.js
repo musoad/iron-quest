@@ -1,13 +1,14 @@
 /* =========================
    IRON QUEST – sw.js (AUTO UPDATE PWA)
-   - Cache busting via CACHE_VERSION
+   - iOS/HomeScreen friendly caching
    - skipWaiting + clients.claim
-   - Broadcast "SW_UPDATED" to open clients
+   - broadcasts SW_UPDATED to app.js
 ========================= */
 
-const CACHE_VERSION = "v1.0.2"; // <-- bei JEDEM Update hochzählen!
+const CACHE_VERSION = "v2.0.0"; // <-- bei JEDEM Update erhöhen!
 const CACHE_NAME = `ironquest-cache-${CACHE_VERSION}`;
 
+// Passe die Asset-Liste an, wenn du andere Dateinamen nutzt
 const ASSETS = [
   "./",
   "./index.html",
@@ -15,13 +16,12 @@ const ASSETS = [
   "./app.js",
   "./manifest.webmanifest",
   "./manifest.json",
-  "./icon-192.png",
-  "./icon-512.png",
   "./icons/icon-192.png",
-  "./icons/icon-512.png"
+  "./icons/icon-512.png",
+  "./icon-192.png",
+  "./icon-512.png"
 ].filter(Boolean);
 
-// INSTALL: precache + sofort warten überspringen
 self.addEventListener("install", (event) => {
   event.waitUntil(
     caches.open(CACHE_NAME)
@@ -30,32 +30,30 @@ self.addEventListener("install", (event) => {
   );
 });
 
-// ACTIVATE: alte caches löschen + clients.claim
 self.addEventListener("activate", (event) => {
   event.waitUntil((async () => {
     const keys = await caches.keys();
     await Promise.all(keys.map((k) => (k !== CACHE_NAME ? caches.delete(k) : Promise.resolve())));
     await self.clients.claim();
 
-    // Clients über Update informieren
+    // Inform all clients about update
     const clients = await self.clients.matchAll({ type: "window", includeUncontrolled: true });
-    for (const c of clients) {
-      c.postMessage({ type: "SW_UPDATED", version: CACHE_VERSION });
-    }
+    for (const c of clients) c.postMessage({ type: "SW_UPDATED", version: CACHE_VERSION });
   })());
 });
 
-// FETCH STRATEGY
-// - Navigations: network-first (HTML aktuell)
-// - Assets: stale-while-revalidate (schnell + updatefähig)
+/**
+ * Strategy:
+ * - Navigation (HTML): network-first (so updates arrive)
+ * - Others: stale-while-revalidate (fast + updates)
+ */
 self.addEventListener("fetch", (event) => {
   const req = event.request;
   const url = new URL(req.url);
 
-  // Nur same-origin
   if (url.origin !== self.location.origin) return;
 
-  // HTML Navigation: network-first
+  // Network-first for page navigations
   if (req.mode === "navigate") {
     event.respondWith((async () => {
       try {
@@ -71,7 +69,7 @@ self.addEventListener("fetch", (event) => {
     return;
   }
 
-  // stale-while-revalidate für alles andere
+  // Stale-while-revalidate for other requests
   event.respondWith((async () => {
     const cached = await caches.match(req);
     const fetchPromise = fetch(req).then((res) => {
