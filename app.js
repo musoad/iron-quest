@@ -10,7 +10,9 @@
    ✅ Level system slower (more XP needed per level)
    ✅ Log design improvements handled via CSS patch (provided separately)
    ✅ XP calculated per exercise (NOT per sets); sets/reps are user-chosen (logged only)
-   ✅ Draft autosave (LocalStorage) – safe, non-destructive
+
+   NEW:
+   ✅ PR-System (Bestleistung/Last/Trend) pro Übung (inkl. Walking-Minuten)
    ========================= */
 
 console.log("IRON QUEST loaded ✅");
@@ -31,8 +33,242 @@ function saveJSON(key, value) {
 }
 
 /* =========================
+   PR SYSTEM (Personal Records)
+   - PR per exercise (Sets×Reps or Minutes for NEAT)
+   - Last performance per exercise
+   - Trend vs last (↗ / → / ↘)
+========================= */
+const KEY_PR = "ironquest_pr_v1";
+
+function loadPR() { return loadJSON(KEY_PR, {}); }
+function savePR(obj) { saveJSON(KEY_PR, obj); }
+
+function isExerciseTrackable(type){
+  return type !== "Rest" && type !== "Quest" && type !== "Boss" && type !== "Reward" && type !== "Achievement";
+}
+
+// Parse sets/reps/min from entry.detail (your format: "Sets: x • Reps: y • Min: z • ...")
+function parsePerfFromDetail(type, detail){
+  const d = String(detail || "");
+  const mSets = d.match(/Sets:\s*(\d+)/i);
+  const mReps = d.match(/Reps:\s*(\d+)/i);
+  const mMin  = d.match(/Min:\s*(\d+)/i);
+
+  const sets = mSets ? parseInt(mSets[1],10) : null;
+  const reps = mReps ? parseInt(mReps[1],10) : null;
+  const min  = mMin  ? parseInt(mMin[1],10)  : null;
+
+  if (type === "NEAT") {
+    return { mode:"minutes", sets:null, reps:null, minutes:(min ?? 0), score:(min ?? 0) };
+  }
+  // Strength/core/conditioning etc. -> score = sets*reps
+  const s = Number.isFinite(sets) ? sets : 0;
+  const r = Number.isFinite(reps) ? reps : 0;
+  const score = s > 0 && r > 0 ? s * r : 0;
+  return { mode:"reps", sets:(sets ?? 0), reps:(reps ?? 0), minutes:null, score };
+}
+
+function perfString(perf){
+  if (!perf) return "—";
+  if (perf.mode === "minutes") return `${perf.score} min`;
+  if (!perf.score) return "—";
+  return `${perf.sets}×${perf.reps} (= ${perf.score} reps)`;
+}
+
+function trendSymbol(currScore, lastScore){
+  if (!Number.isFinite(currScore) || !Number.isFinite(lastScore)) return "—";
+  if (currScore > lastScore) return "↗";
+  if (currScore < lastScore) return "↘";
+  return "→";
+}
+
+function getLastEntryForExercise(entries, exName, excludeId){
+  const list = entries.filter(e => e.exercise === exName && e.id !== excludeId);
+  if (!list.length) return null;
+  list.sort((a,b)=>{
+    if (a.date !== b.date) return a.date < b.date ? 1 : -1;
+    return (b.id ?? 0) - (a.id ?? 0);
+  });
+  return list[0];
+}
+
+function updatePRFromEntry(exName, type, dateISO, perf){
+  if (!exName || !isExerciseTrackable(type)) return;
+
+  const store = loadPR();
+  store[exName] ??= {
+    mode: perf.mode,
+    bestScore: 0,
+    bestAt: null,
+    bestSets: null,
+    bestReps: null,
+    bestMinutes: null,
+    lastScore: 0,
+    lastAt: null,
+    lastSets: null,
+    lastReps: null,
+    lastMinutes: null
+  };
+
+  const s = store[exName];
+
+  // update last
+  s.mode = perf.mode;
+  s.lastScore = perf.score || 0;
+  s.lastAt = dateISO || null;
+  if (perf.mode === "minutes") {
+    s.lastMinutes = perf.score || 0;
+  } else {
+    s.lastSets = perf.sets || 0;
+    s.lastReps = perf.reps || 0;
+  }
+
+  // update PR
+  if ((perf.score || 0) > (s.bestScore || 0)) {
+    s.bestScore = perf.score || 0;
+    s.bestAt = dateISO || null;
+    if (perf.mode === "minutes") {
+      s.bestMinutes = perf.score || 0;
+    } else {
+      s.bestSets = perf.sets || 0;
+      s.bestReps = perf.reps || 0;
+    }
+  }
+
+  store[exName] = s;
+  savePR(store);
+}
+
+function recomputePRForExercise(entries, exName){
+  const list = entries.filter(e => e.exercise === exName && isExerciseTrackable(e.type));
+  if (!list.length) {
+    const store = loadPR();
+    delete store[exName];
+    savePR(store);
+    return;
+  }
+
+  list.sort((a,b)=>{
+    if (a.date !== b.date) return a.date < b.date ? 1 : -1;
+    return (b.id ?? 0) - (a.id ?? 0);
+  });
+
+  let best = { score:0, mode:"reps", sets:0, reps:0, minutes:0, date:null };
+  let last = { score:0, mode:"reps", sets:0, reps:0, minutes:0, date:null };
+
+  // last = newest
+  const newest = list[0];
+  const pNewest = parsePerfFromDetail(newest.type, newest.detail);
+  last = { score:pNewest.score||0, mode:pNewest.mode, sets:pNewest.sets||0, reps:pNewest.reps||0, minutes:pNewest.minutes||0, date:newest.date };
+
+  // best = max score
+  for (const e of list){
+    const p = parsePerfFromDetail(e.type, e.detail);
+    if ((p.score||0) > (best.score||0)){
+      best = { score:p.score||0, mode:p.mode, sets:p.sets||0, reps:p.reps||0, minutes:p.minutes||0, date:e.date };
+    }
+  }
+
+  const store = loadPR();
+  store[exName] = {
+    mode: best.mode,
+    bestScore: best.score,
+    bestAt: best.date,
+    bestSets: best.mode==="minutes" ? null : best.sets,
+    bestReps: best.mode==="minutes" ? null : best.reps,
+    bestMinutes: best.mode==="minutes" ? best.score : null,
+    lastScore: last.score,
+    lastAt: last.date,
+    lastSets: last.mode==="minutes" ? null : last.sets,
+    lastReps: last.mode==="minutes" ? null : last.reps,
+    lastMinutes: last.mode==="minutes" ? last.score : null
+  };
+  savePR(store);
+}
+
+function ensurePRBox(){
+  const logCard = document.querySelector("#tab-log .card");
+  if (!logCard) return;
+  if (document.getElementById("prBox")) return;
+
+  const box = document.createElement("div");
+  box.id = "prBox";
+  box.className = "pill";
+  box.style.marginTop = "10px";
+  box.innerHTML = `
+    <div style="display:flex; justify-content:space-between; gap:10px; flex-wrap:wrap;">
+      <div><b>Progress:</b> <span id="prTrend">—</span></div>
+      <div><b>Last:</b> <span id="prLast">—</span></div>
+      <div><b>PR:</b> <span id="prBest">—</span></div>
+    </div>
+    <div class="hint" id="prHint" style="margin-top:6px;">—</div>
+  `;
+
+  const rec = document.getElementById("recommendedReps")?.closest(".row2") || null;
+  if (rec && rec.parentElement) rec.parentElement.insertBefore(box, rec.nextSibling);
+  else logCard.appendChild(box);
+}
+
+function renderPRInLog(entries){
+  ensurePRBox();
+
+  const exName = $("exercise")?.value;
+  if (!exName) return;
+
+  const type = typeForExercise(exName);
+  if (!isExerciseTrackable(type) || type === "Quest") {
+    if ($("prTrend")) $("prTrend").textContent = "—";
+    if ($("prLast")) $("prLast").textContent = "—";
+    if ($("prBest")) $("prBest").textContent = "—";
+    if ($("prHint")) $("prHint").textContent = "—";
+    return;
+  }
+
+  // current perf from inputs
+  let currPerf = null;
+  if (type === "NEAT") {
+    const minutes = Math.max(0, parseInt($("walkMin")?.value || "0", 10));
+    currPerf = { mode:"minutes", score: minutes, minutes };
+  } else {
+    const sets = Math.max(0, parseInt($("sets")?.value || "0", 10));
+    const reps = Math.max(0, parseInt($("reps")?.value || "0", 10));
+    const score = (sets > 0 && reps > 0) ? sets * reps : 0;
+    currPerf = { mode:"reps", score, sets, reps };
+  }
+
+  const pr = loadPR()[exName] || null;
+
+  const excludeId = parseInt(($("editId")?.value ?? "").trim(), 10) || null;
+  const lastEntry = getLastEntryForExercise(entries, exName, excludeId);
+  const lastPerf = lastEntry ? parsePerfFromDetail(lastEntry.type, lastEntry.detail) : null;
+
+  const lastScore = lastPerf?.score ?? pr?.lastScore ?? null;
+  const trend = (currPerf && Number.isFinite(lastScore)) ? trendSymbol(currPerf.score, lastScore) : "—";
+
+  const lastText = lastPerf
+    ? perfString(lastPerf) + (lastEntry?.date ? ` (${lastEntry.date})` : "")
+    : (pr ? (pr.mode==="minutes"
+        ? `${pr.lastScore} min${pr.lastAt ? ` (${pr.lastAt})` : ""}`
+        : `${pr.lastSets}×${pr.lastReps} (= ${pr.lastScore})${pr.lastAt ? ` (${pr.lastAt})` : ""}`) : "—");
+
+  const bestText = pr ? (
+    pr.mode==="minutes"
+      ? `${pr.bestScore} min${pr.bestAt ? ` (${pr.bestAt})` : ""}`
+      : `${pr.bestSets}×${pr.bestReps} (= ${pr.bestScore})${pr.bestAt ? ` (${pr.bestAt})` : ""}`
+  ) : "—";
+
+  if ($("prTrend")) $("prTrend").textContent = trend;
+  if ($("prLast")) $("prLast").textContent = lastText;
+  if ($("prBest")) $("prBest").textContent = bestText;
+
+  let hint = "Track: ";
+  hint += (type === "NEAT") ? "Best Minutes" : "Best Total Reps (Sets×Reps)";
+  hint += " • Trend vergleicht aktuelle Eingabe mit letzter Ausführung.";
+  if ($("prHint")) $("prHint").textContent = hint;
+}
+
+/* =========================
    DB (IndexedDB)
-   (UNCHANGED)
 ========================= */
 const DB_NAME = "ironquest_db";
 const DB_VERSION = 2;
@@ -184,7 +420,8 @@ function sortEntriesDesc(entries) {
 }
 
 /* =========================
-   STARS
+   STARS (fixed rule)
+   1200–1599 ⭐ • 1600–1999 ⭐⭐ • 2000+ ⭐⭐⭐
 ========================= */
 function getStarThresholdsForWeek(_week, _entries){
   return { one: 1200, two: 1600, three: 2000 };
@@ -197,7 +434,7 @@ function starsForDay(xp, thr){
 }
 
 /* =========================
-   LEVEL SYSTEM
+   LEVEL SYSTEM (slower)
 ========================= */
 function xpNeededForNextLevel(level) {
   const l = Math.max(1, level);
@@ -474,7 +711,7 @@ function recommendedRepsForExercise(exName, type, week, adaptive) {
 }
 
 /* =========================
-   XP SYSTEM
+   XP SYSTEM (per exercise)
 ========================= */
 const XP_PER_EXERCISE = {
   "Mehrgelenkig": 180,
@@ -490,7 +727,7 @@ function neatXP(minutes) {
 }
 
 /* =========================
-   QUESTS (retroactive via Calendar selected day)
+   QUESTS
 ========================= */
 const QUESTS = [
   { id:"steps10k",   name:"10.000 Schritte", xp:70, note:"NEAT-Boost", slot:"any" },
@@ -595,7 +832,7 @@ function renderQuests(){
 }
 
 /* =========================
-   BOSSES (unchanged)
+   BOSSES
 ========================= */
 const BOSSES = [
   { week: 2, name: "The Foundation Beast", xp: 650, reward: "1 Joker + Titel: Foundation Slayer",
@@ -772,7 +1009,6 @@ function countDailyQuestsInWeek(weekNum){
   }
   return count;
 }
-
 function countTrainingDaysInWeek(entries, weekNum){
   const days = new Set();
   for (const e of entries){
@@ -785,6 +1021,7 @@ function countTrainingDaysInWeek(entries, weekNum){
 
 function loadWeekRewards(){ return loadJSON(KEY_WKREW, {}); }
 function saveWeekRewards(s){ saveJSON(KEY_WKREW, s); }
+
 function rewardActiveForWeek(week){
   const map = loadWeekRewards();
   return map?.[week] === true;
@@ -950,7 +1187,6 @@ function skillMultiplierForType(type){
 
   let mult = 1 + unlockedCount * 0.02;
   if (hasCap) mult += 0.05;
-
   if (mapKey === "comp" && hasCap) mult += 0.03;
 
   return mult;
@@ -1070,6 +1306,7 @@ function groupForPlanDayKey(dayKey){
   if (dayKey === "Sat") return "Tag 5 – Conditioning & Core";
   return "Ruhetag";
 }
+
 function getWeekPlan(week){
   const ovr = loadPlanOverrides();
   const w = String(week);
@@ -1347,12 +1584,21 @@ async function startEditEntry(id){
   location.hash = "log";
   await renderAll();
 }
+
 async function deleteEntryById(id){
   const ok = confirm("Diesen Eintrag wirklich löschen?");
   if (!ok) return;
+
   await idbDelete(id);
+
+  // ✅ PR recompute after delete (safe)
+  const allNow = sortEntriesDesc(await idbGetAll());
+  const pr = loadPR();
+  Object.keys(pr).forEach(ex => recomputePRForExercise(allNow, ex));
+
   await renderAll();
 }
+
 function resetEditMode(){
   if ($("editId")) $("editId").value = "";
   if ($("logFormTitle")) $("logFormTitle").textContent = "Neuer Eintrag (rückwirkend möglich)";
@@ -1443,6 +1689,9 @@ async function updateLogUI(entries){
   }
 
   updateCalcPreview(week, mutation);
+
+  // ✅ PR UI
+  renderPRInLog(entries);
 }
 
 function updateCalcPreview(week, mutation){
@@ -1470,7 +1719,7 @@ function updateCalcPreview(week, mutation){
 }
 
 /* =========================
-   ATTRIBUTES (unchanged)
+   ATTRIBUTES
 ========================= */
 function attrReqForLevel(level){ return 900 + (level - 1) * 150; }
 function attrLevelFromXp(totalXp){
@@ -1497,7 +1746,6 @@ function baseAttrFromEntry(e) {
   else if (t === "Komplexe") { out.STR += xp*0.4; out.STA += xp*0.2; out.END += xp*0.2; out.MOB += xp*0.2; }
   else if (t === "NEAT") { out.END += xp*0.7; out.MOB += xp*0.3; }
   else if (t === "Boss-Workout") { out.STR += xp*0.25; out.STA += xp*0.25; out.END += xp*0.25; out.MOB += xp*0.25; }
-  else return out;
 
   return out;
 }
@@ -1629,80 +1877,6 @@ function renderAllEntriesList(entries){
 }
 
 /* =========================
-   LOG DRAFT AUTOSAVE (SAFE)
-   - LocalStorage only
-   - per date
-   - restore after render (non-destructive)
-========================= */
-const LOG_DRAFT_KEY = "ironquest_log_draft_v1";
-
-function loadLogDraft(){
-  try { return JSON.parse(localStorage.getItem(LOG_DRAFT_KEY)) || {}; }
-  catch { return {}; }
-}
-function saveLogDraft(draft){
-  localStorage.setItem(LOG_DRAFT_KEY, JSON.stringify(draft));
-}
-function clearLogDraft(dateISO){
-  const draft = loadLogDraft();
-  if (draft[dateISO]) {
-    delete draft[dateISO];
-    saveLogDraft(draft);
-  }
-}
-function autosaveLogDraft(){
-  const dateISO = $("date")?.value;
-  if (!dateISO) return;
-
-  const draft = loadLogDraft();
-  draft[dateISO] = {
-    date: dateISO,
-    exercise: $("exercise")?.value || "",
-    sets: $("sets")?.value || "",
-    reps: $("reps")?.value || "",
-    walkMin: $("walkMin")?.value || "",
-    planDay: document.getElementById("planDaySelect")?.value || ""
-  };
-  saveLogDraft(draft);
-}
-
-// Restore: only fills fields if they are empty OR not focused
-function restoreLogDraft(){
-  const dateISO = $("date")?.value;
-  if (!dateISO) return;
-
-  const draft = loadLogDraft();
-  const d = draft[dateISO];
-  if (!d) return;
-
-  const exEl = $("exercise");
-  if (exEl && d.exercise && exEl.value !== d.exercise && document.activeElement !== exEl) {
-    // only restore if current selection is default-ish
-    if (!exEl.value || exEl.selectedIndex === 0) exEl.value = d.exercise;
-  }
-
-  const setsEl = $("sets");
-  if (setsEl && d.sets && document.activeElement !== setsEl) {
-    if (!setsEl.value) setsEl.value = d.sets;
-  }
-
-  const repsEl = $("reps");
-  if (repsEl && d.reps && document.activeElement !== repsEl) {
-    if (!repsEl.value) repsEl.value = d.reps;
-  }
-
-  const walkEl = $("walkMin");
-  if (walkEl && d.walkMin && document.activeElement !== walkEl) {
-    if (!walkEl.value) walkEl.value = d.walkMin;
-  }
-
-  const planSel = document.getElementById("planDaySelect");
-  if (planSel && d.planDay && document.activeElement !== planSel) {
-    planSel.value = d.planDay;
-  }
-}
-
-/* =========================
    SAVE / UPDATE ENTRY
 ========================= */
 async function saveOrUpdateEntry(){
@@ -1761,7 +1935,16 @@ async function saveOrUpdateEntry(){
     alert(`Gespeichert: ${dateISO2} • +${xp} XP ✅`);
   }
 
-  // Draft for that day is now "committed"
+  // ✅ PR update
+  const perf = parsePerfFromDetail(type, detail);
+  if (editId) {
+    const allNow = sortEntriesDesc(await idbGetAll());
+    recomputePRForExercise(allNow, exName);
+  } else {
+    updatePRFromEntry(exName, type, dateISO2, perf);
+  }
+
+  // ✅ HIER: Draft für dieses Datum löschen
   clearLogDraft(dateISO2);
 
   await renderAll();
@@ -1833,10 +2016,6 @@ async function renderAll(){
   renderSkillTrees(finalEntries, stats2.curWeek);
 
   await updateLogUI(finalEntries);
-
-  // restore draft AFTER log UI is present (safe)
-  restoreLogDraft();
-
   renderAllEntriesList(finalEntries);
 
   if ($("countEntries")) $("countEntries").textContent = finalEntries.length;
@@ -1899,10 +2078,8 @@ async function init(){
       saveCalendarState(st);
       await renderAll();
     });
-
     $("exercise")?.addEventListener("change", async () => { await renderAll(); });
 
-    // Inputs update preview
     ["sets","reps","walkMin"].forEach(id=>{
       const el = $(id);
       if (!el) return;
@@ -1915,13 +2092,20 @@ async function init(){
       el.addEventListener("change", async ()=>{ await renderAll(); });
     });
 
-    // Draft autosave listeners (after other listeners)
+    // Auto-save bei jeder Eingabe im Log
     ["exercise","sets","reps","walkMin","date"].forEach(id => {
       const el = $(id);
       if (!el) return;
       el.addEventListener("input", autosaveLogDraft);
       el.addEventListener("change", autosaveLogDraft);
     });
+
+    // Restore Draft nach jedem Render
+    const __origUpdateLogUI = updateLogUI;
+    updateLogUI = async function(entries){
+      await __origUpdateLogUI(entries);
+      restoreLogDraft();
+    };
 
     $("add")?.addEventListener("click", saveOrUpdateEntry);
 
@@ -1973,8 +2157,64 @@ async function init(){
 }
 
 /* =========================
+   LOG DRAFT AUTOSAVE
+========================= */
+const LOG_DRAFT_KEY = "ironquest_log_draft_v1";
+
+function loadLogDraft(){
+  try { return JSON.parse(localStorage.getItem(LOG_DRAFT_KEY)) || {}; }
+  catch { return {}; }
+}
+function saveLogDraft(draft){
+  localStorage.setItem(LOG_DRAFT_KEY, JSON.stringify(draft));
+}
+function clearLogDraft(dateISO){
+  const draft = loadLogDraft();
+  if (draft[dateISO]) {
+    delete draft[dateISO];
+    saveLogDraft(draft);
+  }
+}
+function autosaveLogDraft(){
+  const dateISO = $("date")?.value;
+  if (!dateISO) return;
+
+  const draft = loadLogDraft();
+
+  draft[dateISO] = {
+    date: dateISO,
+    exercise: $("exercise")?.value || "",
+    sets: $("sets")?.value || "",
+    reps: $("reps")?.value || "",
+    walkMin: $("walkMin")?.value || "",
+    planDay: document.getElementById("planDaySelect")?.value || ""
+  };
+
+  saveLogDraft(draft);
+}
+function restoreLogDraft(){
+  const dateISO = $("date")?.value;
+  if (!dateISO) return;
+
+  const draft = loadLogDraft();
+  const d = draft[dateISO];
+  if (!d) return;
+
+  if ($("exercise") && d.exercise) $("exercise").value = d.exercise;
+  if ($("sets") && d.sets) $("sets").value = d.sets;
+  if ($("reps") && d.reps) $("reps").value = d.reps;
+  if ($("walkMin") && d.walkMin) $("walkMin").value = d.walkMin;
+
+  const planSel = document.getElementById("planDaySelect");
+  if (planSel && d.planDay) planSel.value = d.planDay;
+}
+
+init();
+
+/* =========================
    ADD-ON: Auto-Balance + Plan-Day Quick Log (Batch)
 ========================= */
+// ---------- Helpers ----------
 function deepClone(obj){ return JSON.parse(JSON.stringify(obj)); }
 
 function computeXpForExerciseOnDate(exName, dateISO){
@@ -2053,7 +2293,6 @@ function applyAutoBalancePreset(week, presetId){
       newPlan.Mon[3] = back2;
       newPlan.Mon[4] = back1;
     }
-
     const row2 = pickByNameFallback(pullPool, ["1-arm db row (elbow", "1-arm db row", "renegade"], "1-Arm DB Row (Elbow close)");
     const rear = pickByNameFallback(pullPool, ["reverse fly"], "Reverse Flys (langsam)");
     if (Array.isArray(newPlan.Tue) && newPlan.Tue.length >= 5){
@@ -2218,25 +2457,31 @@ function injectQuickLogUI(){
     }
 
     await idbAddMany(entriesToAdd);
+
+    // ✅ PR update for batch
+    const allNow = sortEntriesDesc(await idbGetAll());
+    const uniqueExercises = [...new Set(list)];
+    uniqueExercises.forEach(ex => recomputePRForExercise(allNow, ex));
+
     await renderAll();
     alert(`Auto-Log 완료 ✅ ${list.length} Übungen • +${total} XP`);
   });
 }
 
-/* Hook into render functions (safe) */
-const __origRenderWeeklyPlan = renderWeeklyPlan;
-renderWeeklyPlan = function(curWeek, entries){
-  __origRenderWeeklyPlan(curWeek, entries);
-  try { injectAutoBalanceUI(curWeek); } catch(e){ console.warn(e); }
-};
+// Hook weekly plan to inject auto-balance UI
+const __origRenderWeeklyPlan = typeof renderWeeklyPlan === "function" ? renderWeeklyPlan : null;
+if (__origRenderWeeklyPlan){
+  renderWeeklyPlan = function(curWeek, entries){
+    __origRenderWeeklyPlan(curWeek, entries);
+    try { injectAutoBalanceUI(curWeek); } catch(e){ console.warn(e); }
+  };
+}
 
-const __origRenderAll = renderAll;
-renderAll = async function(){
-  await __origRenderAll();
-  try { injectQuickLogUI(); } catch(e){ console.warn(e); }
-};
-
-/* =========================
-   START
-========================= */
-init();
+// Hook renderAll to ensure Quick Log UI exists
+const __origRenderAll = typeof renderAll === "function" ? renderAll : null;
+if (__origRenderAll){
+  renderAll = async function(){
+    await __origRenderAll();
+    try { injectQuickLogUI(); } catch(e){ console.warn(e); }
+  };
+}
