@@ -2328,3 +2328,13 @@ renderAll = async function(){
 };
 
 init();
+
+// Service Worker Registrierung (PWA / Homescreen)
+if ("serviceWorker" in navigator) {
+  try {
+    await navigator.serviceWorker.register("sw.js");
+    console.log("Service Worker registered ✅");
+  } catch (e) {
+    console.warn("Service Worker registration failed ❌", e);
+  }
+}
