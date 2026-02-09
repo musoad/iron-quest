@@ -1,5 +1,5 @@
 /* IRON QUEST – sw.js (PWA cache fix) */
-const CACHE_VERSION = "v32"; // <-- bei JEDEM Update erhöhen!
+const CACHE_VERSION = "v31"; // <-- bei JEDEM Update erhöhen!
 const CACHE_NAME = `ironquest-${CACHE_VERSION}`;
 
 const ASSETS = [
