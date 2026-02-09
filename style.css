@@ -134,3 +134,5 @@ li { padding: 10px; border-top: 1px solid #242424; font-size: 13px; }
   border-color:#fff;
 }
 
+#autoBalancePanel select, #planQuickPanel select { font-size: 16px; }
+#planPreview { padding-top: 4px; line-height: 1.25; }
