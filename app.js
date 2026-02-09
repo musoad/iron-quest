@@ -1952,3 +1952,316 @@ async function init(){
 }
 
 init();
+
+/* =========================
+   ADD-ON: Auto-Balance + Plan-Day Quick Log (Batch)
+   Paste BELOW init();
+========================= */
+
+// ---------- Helpers ----------
+function deepClone(obj){ return JSON.parse(JSON.stringify(obj)); }
+
+// Compute XP for one exercise on a given date (uses your current systems)
+function computeXpForExerciseOnDate(exName, dateISO){
+  const week = currentWeekFor(dateISO);
+  const type = typeForExercise(exName);
+  const mutation = getMutationForWeek(week);
+
+  // base XP (per exercise) / NEAT / Rest
+  let base = 0;
+  if (type === "NEAT") {
+    const minutes = Math.max(1, parseInt($("walkMin")?.value || "60", 10)); // default 60 if not set
+    base = neatXP(minutes);
+  } else if (type === "Rest") {
+    base = 0;
+  } else {
+    base = XP_PER_EXERCISE[type] ?? 0;
+  }
+
+  const mutMult = mutationXpMultiplierForType(type, mutation);
+  const skillMult = skillMultiplierForType(type);
+  const rewardMult = rewardActiveForWeek(week) ? 1.05 : 1.0;
+
+  return {
+    xp: Math.round(base * mutMult * skillMult * rewardMult),
+    week,
+    type,
+    multInfo: `Mut x${mutMult.toFixed(2)} • Skill x${skillMult.toFixed(2)} • Reward x${rewardMult.toFixed(2)}`
+  };
+}
+
+// Day keys mapping (your plan uses Mon/Tue/Thu/Fri/Sat as Training Day 1–5)
+const PLAN_DAY_KEYS = [
+  { id:"day1", label:"Plan-Day 1 (Push)", key:"Mon" },
+  { id:"day2", label:"Plan-Day 2 (Pull)", key:"Tue" },
+  { id:"day3", label:"Plan-Day 3 (Beine & Core)", key:"Thu" },
+  { id:"day4", label:"Plan-Day 4 (Ganzkörper)", key:"Fri" },
+  { id:"day5", label:"Plan-Day 5 (Conditioning)", key:"Sat" },
+];
+
+// ---------- AUTO-BALANCE ----------
+const BALANCE_PRESETS = [
+  { id:"reset", label:"Reset (Standard Plan)" },
+  { id:"back_less_push", label:"Mehr Rücken / weniger Push" },
+  { id:"more_legs", label:"Mehr Beine (weniger Upper Zubehör)" },
+  { id:"more_core", label:"Mehr Core/Mobility (ohne Extra-Trainingstag)" },
+  { id:"more_engine", label:"Mehr Conditioning (mehr Engine)" },
+];
+
+// Utility: pick exercise by partial name or fallback
+function pickByNameFallback(candidates, includesList, fallbackName){
+  for (const inc of includesList){
+    const found = candidates.find(x => x.name?.toLowerCase().includes(inc.toLowerCase()));
+    if (found) return found.name;
+  }
+  return fallbackName;
+}
+
+// Apply preset by writing plan overrides for the current week
+function applyAutoBalancePreset(week, presetId){
+  const w = clampWeek(week);
+  const overrides = loadPlanOverrides();
+  const wKey = String(w);
+
+  // reset = delete overrides for week
+  if (presetId === "reset"){
+    if (overrides[wKey]) delete overrides[wKey];
+    savePlanOverrides(overrides);
+    return;
+  }
+
+  // start from current resolved week plan
+  const plan = getWeekPlan(w);
+  const newPlan = deepClone(plan);
+
+  // candidate pools by group
+  const pushPool = EXERCISES.filter(e => e.group === "Tag 1 – Push" && e.type !== "Rest");
+  const pullPool = EXERCISES.filter(e => e.group === "Tag 2 – Pull" && e.type !== "Rest");
+  const legsPool = EXERCISES.filter(e => e.group === "Tag 3 – Beine & Core" && e.type !== "Rest");
+  const fullPool = EXERCISES.filter(e => e.group === "Tag 4 – Ganzkörper" && e.type !== "Rest");
+  const condPool = EXERCISES.filter(e => e.group === "Tag 5 – Conditioning & Core" && e.type !== "Rest");
+
+  if (presetId === "back_less_push"){
+    // Make Monday slightly less push-accessory, add rear-delt/back flavor
+    // Replace last 2 exercises on Monday if possible
+    const back1 = pickByNameFallback(pullPool, ["reverse fly", "pullover", "row"], "Reverse Flys (langsam)");
+    const back2 = pickByNameFallback(pullPool, ["pullover", "row"], "DB Pullover (Floor)");
+    if (Array.isArray(newPlan.Mon) && newPlan.Mon.length >= 5){
+      newPlan.Mon[3] = back2; // swap triceps slot
+      newPlan.Mon[4] = back1; // swap lateral slot
+    }
+
+    // Tuesday: ensure at least 2 row-patterns + rear delt
+    const row2 = pickByNameFallback(pullPool, ["1-arm db row (elbow", "1-arm db row", "renegade"], "1-Arm DB Row (Elbow close)");
+    const rear = pickByNameFallback(pullPool, ["reverse fly"], "Reverse Flys (langsam)");
+    if (Array.isArray(newPlan.Tue) && newPlan.Tue.length >= 5){
+      newPlan.Tue[0] = "1-Arm DB Row (Pause oben)";
+      newPlan.Tue[1] = row2;
+      newPlan.Tue[2] = rear;
+    }
+  }
+
+  if (presetId === "more_legs"){
+    // Thursday: make it more posterior chain + squat pattern
+    const squat = pickByNameFallback(legsPool, ["goblet squat"], "Goblet Squat");
+    const hinge = pickByNameFallback(legsPool, ["romanian deadlift", "rdl"], "DB Romanian Deadlift");
+    const glute = pickByNameFallback(legsPool, ["hip thrust"], "Hip Thrust (Floor)");
+    const uni = pickByNameFallback(legsPool, ["bulgarian"], "Bulgarian Split Squats");
+    const calf = pickByNameFallback(legsPool, ["calf"], "Standing DB Calf Raises");
+
+    newPlan.Thu = [uni, squat, hinge, glute, calf];
+
+    // Friday: keep full body but reduce shoulder tap -> add extra leg-ish
+    if (Array.isArray(newPlan.Fri) && newPlan.Fri.length >= 5){
+      newPlan.Fri[4] = "Goblet Squat Hold";
+    }
+  }
+
+  if (presetId === "more_core"){
+    // Add core emphasis by swapping 1 slot on Thu + Sat
+    if (Array.isArray(newPlan.Thu) && newPlan.Thu.length >= 5){
+      newPlan.Thu[3] = "Dead Bug";
+    }
+    if (Array.isArray(newPlan.Sat) && newPlan.Sat.length >= 5){
+      newPlan.Sat[4] = "Plank Shoulder Taps";
+    }
+  }
+
+  if (presetId === "more_engine"){
+    // Saturday: make more conditioning heavy (3–4 engine moves)
+    const eng1 = pickByNameFallback(condPool, ["burpees"], "Burpees");
+    const eng2 = pickByNameFallback(condPool, ["mountain"], "Mountain Climbers");
+    const eng3 = pickByNameFallback(condPool, ["high knees"], "High Knees");
+    const eng4 = pickByNameFallback(condPool, ["jumping jacks"], "Jumping Jacks");
+    const core = "Hollow Body Hold";
+    newPlan.Sat = [eng1, eng2, eng3, eng4, core];
+  }
+
+  // save as overrides for that week
+  overrides[wKey] ??= {};
+  overrides[wKey].Mon = newPlan.Mon;
+  overrides[wKey].Tue = newPlan.Tue;
+  overrides[wKey].Thu = newPlan.Thu;
+  overrides[wKey].Fri = newPlan.Fri;
+  overrides[wKey].Sat = newPlan.Sat;
+  savePlanOverrides(overrides);
+}
+
+// Inject Auto-Balance UI into Weekly Plan (no HTML changes needed)
+function injectAutoBalanceUI(curWeek){
+  const planContent = $("planContent");
+  if (!planContent) return;
+
+  // already injected in current render?
+  if (planContent.querySelector("#autoBalancePanel")) return;
+
+  const panel = document.createElement("div");
+  panel.id = "autoBalancePanel";
+  panel.className = "pill";
+  panel.style.marginBottom = "12px";
+  panel.innerHTML = `
+    <div style="display:flex; gap:10px; align-items:center; flex-wrap:wrap;">
+      <b>Auto-Balance:</b>
+      <select id="balancePreset" style="min-width:220px;">
+        ${BALANCE_PRESETS.map(p => `<option value="${p.id}">${p.label}</option>`).join("")}
+      </select>
+      <button id="applyBalance" class="secondary" style="width:auto; padding:10px 12px;">Apply</button>
+      <button id="resetBalance" class="secondary" style="width:auto; padding:10px 12px;">Reset</button>
+      <span class="hint">Passt den Wochenplan an (Overrides nur für diese Woche).</span>
+    </div>
+  `;
+  // insert at top
+  planContent.prepend(panel);
+
+  panel.querySelector("#applyBalance").addEventListener("click", async ()=>{
+    const preset = panel.querySelector("#balancePreset").value;
+    applyAutoBalancePreset(curWeek, preset);
+    await renderAll();
+  });
+
+  panel.querySelector("#resetBalance").addEventListener("click", async ()=>{
+    applyAutoBalancePreset(curWeek, "reset");
+    await renderAll();
+  });
+}
+
+// ---------- QUICK LOG (Plan-Day 1–5) ----------
+function injectQuickLogUI(){
+  const tab = document.querySelector("#tab-log");
+  if (!tab) return;
+
+  // find a good place: above the Add/Save button row
+  const addBtn = $("add");
+  if (!addBtn) return;
+  const parent = addBtn.closest(".card") || addBtn.parentElement;
+  if (!parent) return;
+
+  if (document.getElementById("planQuickPanel")) return;
+
+  const panel = document.createElement("div");
+  panel.id = "planQuickPanel";
+  panel.className = "pill";
+  panel.style.marginBottom = "12px";
+  panel.innerHTML = `
+    <div style="display:flex; flex-direction:column; gap:10px;">
+      <div style="display:flex; gap:10px; align-items:center; flex-wrap:wrap;">
+        <b>Quick Log:</b>
+        <select id="planDaySelect" style="min-width:240px;">
+          ${PLAN_DAY_KEYS.map(d => `<option value="${d.key}">${d.label}</option>`).join("")}
+        </select>
+        <button id="planFill" class="secondary" style="width:auto; padding:10px 12px;">Auto-Fill</button>
+        <button id="planAutoLog" class="secondary" style="width:auto; padding:10px 12px;">Auto-Log (alle Übungen)</button>
+      </div>
+      <div id="planPreview" class="hint"></div>
+    </div>
+  `;
+
+  // Insert panel near top of card, before other form fields
+  parent.prepend(panel);
+
+  // actions
+  panel.querySelector("#planFill").addEventListener("click", async ()=>{
+    const dateISO = $("date")?.value || isoDate(new Date());
+    const week = currentWeekFor(dateISO);
+    const plan = getWeekPlan(week);
+    const key = panel.querySelector("#planDaySelect").value;
+    const list = (plan[key] || []).filter(Boolean);
+
+    if (!list.length) return alert("Keine Übungen im Plan-Day gefunden.");
+
+    // Set dropdown to first exercise
+    const exSel = $("exercise");
+    if (exSel) exSel.value = list[0];
+
+    // Show preview list
+    $("planPreview").textContent = `W${week} ${key}: ${list.join(" • ")}`;
+    await renderAll();
+  });
+
+  panel.querySelector("#planAutoLog").addEventListener("click", async ()=>{
+    const dateISO = $("date")?.value || isoDate(new Date());
+    const week = currentWeekFor(dateISO);
+    const plan = getWeekPlan(week);
+    const key = panel.querySelector("#planDaySelect").value;
+    const list = (plan[key] || []).filter(Boolean);
+
+    if (!list.length) return alert("Keine Übungen im Plan-Day gefunden.");
+
+    const ok = confirm(
+      `Auto-Log für ${dateISO} (W${week})?\n\n` +
+      `${list.length} Übungen werden gespeichert:\n- ${list.join("\n- ")}\n`
+    );
+    if (!ok) return;
+
+    let total = 0;
+    const entriesToAdd = [];
+
+    // Use your current recommendations (adaptive) for detail (but user can still edit later)
+    const allEntries = sortEntriesDesc(await idbGetAll());
+    const adaptive = getAdaptiveModifiers(allEntries, week);
+
+    for (const exName of list){
+      const { xp, type, multInfo } = computeXpForExerciseOnDate(exName, dateISO);
+      total += xp;
+
+      const setRec = recommendedSetsForExercise(exName, type, week, adaptive).text;
+      const repRec = recommendedRepsForExercise(exName, type, week, adaptive);
+
+      const detail =
+        `Auto-Log • Empf: ${setRec} / ${repRec} • ${multInfo}`;
+
+      entriesToAdd.push({
+        date: dateISO,
+        week,
+        exercise: exName,
+        type,
+        detail,
+        xp
+      });
+    }
+
+    await idbAddMany(entriesToAdd);
+    await renderAll();
+    alert(`Auto-Log 완료 ✅ ${list.length} Übungen • +${total} XP`);
+  });
+}
+
+// ---------- Hook into your render pipeline safely ----------
+const __origRenderWeeklyPlan = typeof renderWeeklyPlan === "function" ? renderWeeklyPlan : null;
+if (__origRenderWeeklyPlan){
+  // Wrap renderWeeklyPlan so auto-balance UI appears every time it re-renders
+  renderWeeklyPlan = function(curWeek, entries){
+    __origRenderWeeklyPlan(curWeek, entries);
+    try { injectAutoBalanceUI(curWeek); } catch(e){ console.warn(e); }
+  };
+}
+
+// Ensure Quick Log UI exists after app loads / re-renders
+const __origRenderAll = typeof renderAll === "function" ? renderAll : null;
+if (__origRenderAll){
+  renderAll = async function(){
+    await __origRenderAll();
+    try { injectQuickLogUI(); } catch(e){ console.warn(e); }
+  };
+}
+
