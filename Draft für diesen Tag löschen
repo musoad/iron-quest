@@ -1728,16 +1728,20 @@ async function saveOrUpdateEntry(){
 
   const editId = parseInt(($("editId")?.value ?? "").trim(), 10);
 
-  if (editId) {
-    await idbPut({ id: editId, date: dateISO2, week, exercise: exName, type, detail, xp });
-    resetEditMode();
-    alert(`Gespeichert (Edit): ${dateISO2} • +${xp} XP ✅`);
-  } else {
-    await idbAdd({ date: dateISO2, week, exercise: exName, type, detail, xp });
-    alert(`Gespeichert: ${dateISO2} • +${xp} XP ✅`);
-  }
+if (editId) {
+  await idbPut({ id: editId, date: dateISO2, week, exercise: exName, type, detail, xp });
+  resetEditMode();
+  alert(`Gespeichert (Edit): ${dateISO2} • +${xp} XP ✅`);
+} else {
+  await idbAdd({ date: dateISO2, week, exercise: exName, type, detail, xp });
+  alert(`Gespeichert: ${dateISO2} • +${xp} XP ✅`);
+}
 
-  await renderAll();
+// ✅ HIER: Draft für dieses Datum löschen
+clearLogDraft(dateISO2);
+
+// ⛔ NICHT darüber, NICHT darunter
+await renderAll();
 }
 
 /* =========================
@@ -1895,6 +1899,21 @@ async function init(){
       el.addEventListener("change", async ()=>{ await renderAll(); });
     });
 
+     // Auto-save bei jeder Eingabe im Log
+["exercise","sets","reps","walkMin","date"].forEach(id => {
+  const el = $(id);
+  if (!el) return;
+  el.addEventListener("input", autosaveLogDraft);
+  el.addEventListener("change", autosaveLogDraft);
+});
+
+// Restore Draft nach jedem Render
+const __origUpdateLogUI = updateLogUI;
+updateLogUI = async function(entries){
+  await __origUpdateLogUI(entries);
+  restoreLogDraft();
+};
+
     // Save / update
     $("add")?.addEventListener("click", saveOrUpdateEntry);
 
@@ -1935,7 +1954,7 @@ async function init(){
         st.spent = 0;
         st.nodes = Object.fromEntries(TREES.map(t => [t.key, defaultNodesForTree(t.key)]));
         saveSkillState(st);
-        await renderAll();
+        await ;
       }
     });
 
@@ -1943,13 +1962,76 @@ async function init(){
     if ("serviceWorker" in navigator) navigator.serviceWorker.register("sw.js");
 
     await recalcAllEntryWeeks();
-    await renderAll();
+    await ;
   } catch (e) {
     console.error(e);
     if ($("appStatus")) $("appStatus").textContent = "ERROR (siehe Konsole)";
     alert("Fehler in app.js. Bitte Screenshot der Konsole schicken.");
   }
 }
+
+/* =========================
+   LOG DRAFT AUTOSAVE
+========================= */
+
+const LOG_DRAFT_KEY = "ironquest_log_draft_v1";
+
+function loadLogDraft(){
+  try {
+    return JSON.parse(localStorage.getItem(LOG_DRAFT_KEY)) || {};
+  } catch {
+    return {};
+  }
+}
+
+function saveLogDraft(draft){
+  localStorage.setItem(LOG_DRAFT_KEY, JSON.stringify(draft));
+}
+
+function clearLogDraft(dateISO){
+  const draft = loadLogDraft();
+  if (draft[dateISO]) {
+    delete draft[dateISO];
+    saveLogDraft(draft);
+  }
+
+}
+function autosaveLogDraft(){
+  const dateISO = $("date")?.value;
+  if (!dateISO) return;
+
+  const draft = loadLogDraft();
+
+  draft[dateISO] = {
+    date: dateISO,
+    exercise: $("exercise")?.value || "",
+    sets: $("sets")?.value || "",
+    reps: $("reps")?.value || "",
+    walkMin: $("walkMin")?.value || "",
+    planDay: document.getElementById("planDaySelect")?.value || ""
+  };
+
+  saveLogDraft(draft);
+}
+
+function restoreLogDraft(){
+  const dateISO = $("date")?.value;
+  if (!dateISO) return;
+
+  const draft = loadLogDraft();
+  const d = draft[dateISO];
+  if (!d) return;
+
+  if ($("exercise") && d.exercise) $("exercise").value = d.exercise;
+  if ($("sets") && d.sets) $("sets").value = d.sets;
+  if ($("reps") && d.reps) $("reps").value = d.reps;
+  if ($("walkMin") && d.walkMin) $("walkMin").value = d.walkMin;
+
+  // Quick-Log Plan-Day
+  const planSel = document.getElementById("planDaySelect");
+  if (planSel && d.planDay) planSel.value = d.planDay;
+}
+
 
 init();
 
@@ -2136,12 +2218,12 @@ function injectAutoBalanceUI(curWeek){
   panel.querySelector("#applyBalance").addEventListener("click", async ()=>{
     const preset = panel.querySelector("#balancePreset").value;
     applyAutoBalancePreset(curWeek, preset);
-    await renderAll();
+    await ;
   });
 
   panel.querySelector("#resetBalance").addEventListener("click", async ()=>{
     applyAutoBalancePreset(curWeek, "reset");
-    await renderAll();
+    await ;
   });
 }
 
@@ -2195,7 +2277,7 @@ function injectQuickLogUI(){
 
     // Show preview list
     $("planPreview").textContent = `W${week} ${key}: ${list.join(" • ")}`;
-    await renderAll();
+    await ;
   });
 
   panel.querySelector("#planAutoLog").addEventListener("click", async ()=>{
@@ -2241,7 +2323,7 @@ function injectQuickLogUI(){
     }
 
     await idbAddMany(entriesToAdd);
-    await renderAll();
+    await ;
     alert(`Auto-Log 완료 ✅ ${list.length} Übungen • +${total} XP`);
   });
 }
@@ -2260,7 +2342,7 @@ if (__origRenderWeeklyPlan){
 const __origRenderAll = typeof renderAll === "function" ? renderAll : null;
 if (__origRenderAll){
   renderAll = async function(){
-    await __origRenderAll();
+    await __orig;
     try { injectQuickLogUI(); } catch(e){ console.warn(e); }
   };
 }
