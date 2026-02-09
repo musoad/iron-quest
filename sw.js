@@ -5,7 +5,7 @@
    - broadcasts SW_UPDATED to app.js
 ========================= */
 
-const CACHE_VERSION = "v2.0.0"; // <-- bei JEDEM Update erhöhen!
+const CACHE_VERSION = "v2.0.1"; // <-- bei JEDEM Update erhöhen!
 const CACHE_NAME = `ironquest-cache-${CACHE_VERSION}`;
 
 // Passe die Asset-Liste an, wenn du andere Dateinamen nutzt
