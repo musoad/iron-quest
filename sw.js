@@ -1,75 +1,76 @@
-/* =========================
-   IRON QUEST – Service Worker
-   Version: v1.4.0
-   ========================= */
+/* IRON QUEST – sw.js (PWA cache fix) */
+const CACHE_VERSION = "v31"; // <-- bei JEDEM Update erhöhen!
+const CACHE_NAME = `ironquest-${CACHE_VERSION}`;
 
-const CACHE_VERSION = "ironquest-cache-v1.4.0"; // ⬅️ VERSION ERHÖHT
 const ASSETS = [
   "./",
   "./index.html",
   "./style.css",
   "./app.js",
-  "./manifest.json"
+  "./manifest.webmanifest",
+  "./icons/icon-192.png",
+  "./icons/icon-512.png"
 ];
 
-/* =========================
-   INSTALL
-========================= */
+// Install: cache assets + sofort aktivieren
 self.addEventListener("install", (event) => {
-  console.log("[SW] Install", CACHE_VERSION);
-  self.skipWaiting();
-
   event.waitUntil(
-    caches.open(CACHE_VERSION).then((cache) => {
-      return cache.addAll(ASSETS);
-    })
+    caches.open(CACHE_NAME).then((cache) => cache.addAll(ASSETS)).then(() => self.skipWaiting())
   );
 });
 
-/* =========================
-   ACTIVATE
-========================= */
+// Activate: alte caches löschen + Kontrolle übernehmen
 self.addEventListener("activate", (event) => {
-  console.log("[SW] Activate", CACHE_VERSION);
-
   event.waitUntil(
-    caches.keys().then((keys) =>
-      Promise.all(
-        keys.map((key) => {
-          if (key !== CACHE_VERSION) {
-            console.log("[SW] Removing old cache:", key);
-            return caches.delete(key);
-          }
-        })
-      )
-    ).then(() => self.clients.claim())
+    (async () => {
+      const keys = await caches.keys();
+      await Promise.all(keys.map((k) => (k !== CACHE_NAME ? caches.delete(k) : Promise.resolve())));
+      await self.clients.claim();
+    })()
   );
 });
 
-/* =========================
-   FETCH
-========================= */
+// Fetch:
+// - Navigation (index.html) immer “network first” (damit Updates ankommen)
+// - Sonst “stale while revalidate”
 self.addEventListener("fetch", (event) => {
-  if (event.request.method !== "GET") return;
+  const req = event.request;
+  const url = new URL(req.url);
 
-  event.respondWith(
-    caches.match(event.request).then((cached) => {
-      if (cached) return cached;
+  // Nur gleicher Origin
+  if (url.origin !== self.location.origin) return;
 
-      return fetch(event.request).then((response) => {
-        // Cache only successful basic responses
-        if (
-          response &&
-          response.status === 200 &&
-          response.type === "basic"
-        ) {
-          const responseClone = response.clone();
-          caches.open(CACHE_VERSION).then((cache) => {
-            cache.put(event.request, responseClone);
-          });
+  // Navigations: network-first (PWA bekommt neue Version)
+  if (req.mode === "navigate") {
+    event.respondWith(
+      (async () => {
+        try {
+          const fresh = await fetch("./index.html", { cache: "no-store" });
+          const cache = await caches.open(CACHE_NAME);
+          cache.put("./index.html", fresh.clone());
+          return fresh;
+        } catch (e) {
+          const cached = await caches.match("./index.html");
+          return cached || new Response("Offline", { status: 503 });
         }
-        return response;
-      });
-    })
+      })()
+    );
+    return;
+  }
+
+  // Stale-while-revalidate für statische Files
+  event.respondWith(
+    (async () => {
+      const cached = await caches.match(req);
+      const fetchPromise = fetch(req)
+        .then((res) => {
+          const copy = res.clone();
+          caches.open(CACHE_NAME).then((cache) => cache.put(req, copy));
+          return res;
+        })
+        .catch(() => cached);
+
+      return cached || fetchPromise;
+    })()
   );
 });
