@@ -1,5 +1,5 @@
 /* IRON QUEST – sw.js */
-const SW_VERSION = "v2.0.2"; // <-- bei jedem Update hochzählen
+const SW_VERSION = "v2.0.3"; // <-- bei jedem Update hochzählen
 const CACHE_NAME = `ironquest-${SW_VERSION}`;
 
 const APP_SHELL = [
