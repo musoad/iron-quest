@@ -1,26 +1,36 @@
-/* IRON QUEST – sw.js */
-const SW_VERSION = "v2.0.3"; // <-- bei jedem Update hochzählen
-const CACHE_NAME = `ironquest-${SW_VERSION}`;
+/* =========================
+   IRON QUEST – sw.js (FULL)
+   ✅ Offline Cache
+   ✅ Auto-Update (skipWaiting + clients.claim)
+   ✅ Cache bust via VERSION
+========================= */
 
-const APP_SHELL = [
+const VERSION = "v25"; // <-- bei jedem Update hochzählen!
+const CACHE_NAME = `ironquest-${VERSION}`;
+
+// Passe die Liste an deine echten Dateien an
+const ASSETS = [
   "./",
   "./index.html",
   "./style.css",
   "./app.js",
-  "./manifest.json"
+  "./manifest.json",
+  "./sw.js"
 ];
 
 self.addEventListener("install", (event) => {
   self.skipWaiting();
   event.waitUntil(
-    caches.open(CACHE_NAME).then((cache) => cache.addAll(APP_SHELL))
+    caches.open(CACHE_NAME).then((cache) => cache.addAll(ASSETS))
   );
 });
 
 self.addEventListener("activate", (event) => {
   event.waitUntil((async () => {
     const keys = await caches.keys();
-    await Promise.all(keys.map((k) => (k !== CACHE_NAME ? caches.delete(k) : null)));
+    await Promise.all(keys.map((k) => {
+      if (k !== CACHE_NAME) return caches.delete(k);
+    }));
     await self.clients.claim();
   })());
 });
@@ -31,15 +41,15 @@ self.addEventListener("message", (event) => {
   }
 });
 
-// Network-first für HTML, cache-first für Assets
+// Network-first for HTML (so updates come through), cache-first for others
 self.addEventListener("fetch", (event) => {
   const req = event.request;
   const url = new URL(req.url);
 
-  // nur same-origin
-  if (url.origin !== location.origin) return;
+  // only handle same-origin
+  if (url.origin !== self.location.origin) return;
 
-  // HTML: Network-first
+  // HTML / navigation: network first
   if (req.mode === "navigate" || (req.headers.get("accept") || "").includes("text/html")) {
     event.respondWith((async () => {
       try {
@@ -48,25 +58,20 @@ self.addEventListener("fetch", (event) => {
         cache.put("./index.html", fresh.clone());
         return fresh;
       } catch {
-        const cache = await caches.open(CACHE_NAME);
-        return (await cache.match("./index.html")) || Response.error();
+        const cached = await caches.match("./index.html");
+        return cached || new Response("Offline", { status: 503, headers: { "Content-Type": "text/plain" } });
       }
     })());
     return;
   }
 
-  // Assets: cache-first
+  // Other assets: cache first
   event.respondWith((async () => {
-    const cache = await caches.open(CACHE_NAME);
-    const cached = await cache.match(req);
+    const cached = await caches.match(req);
     if (cached) return cached;
-
-    try {
-      const fresh = await fetch(req);
-      cache.put(req, fresh.clone());
-      return fresh;
-    } catch {
-      return cached || Response.error();
-    }
+    const fresh = await fetch(req);
+    const cache = await caches.open(CACHE_NAME);
+    cache.put(req, fresh.clone());
+    return fresh;
   })());
 });
