@@ -2,11 +2,11 @@
    IRON QUEST – sw.js (FULL)
    ✅ Offline Cache
    ✅ Auto-Update (skipWaiting + clients.claim)
-   ✅ Cache bust via VERSION
+   ✅ Cache bust via SW_VERSION
 ========================= */
 
-const SW_VERSION = "v2.0.5"; // <-- bei jedem Update hochzählen
-const CACHE_NAME = `ironquest-${VERSION}`;
+const SW_VERSION = "v2.0.6"; // <-- bei JEDEM Update hochzählen
+const CACHE_NAME = `ironquest-${SW_VERSION}`;
 
 // Passe die Liste an deine echten Dateien an
 const ASSETS = [
@@ -57,7 +57,7 @@ self.addEventListener("fetch", (event) => {
         const cache = await caches.open(CACHE_NAME);
         cache.put("./index.html", fresh.clone());
         return fresh;
-      } catch {
+      } catch (e) {
         const cached = await caches.match("./index.html");
         return cached || new Response("Offline", { status: 503, headers: { "Content-Type": "text/plain" } });
       }
