@@ -1,83 +1,72 @@
-/* =========================
-   IRON QUEST – sw.js (AUTO UPDATE PWA)
-   - iOS/HomeScreen friendly caching
-   - skipWaiting + clients.claim
-   - broadcasts SW_UPDATED to app.js
-========================= */
+/* IRON QUEST – sw.js */
+const SW_VERSION = "v2.0.2"; // <-- bei jedem Update hochzählen
+const CACHE_NAME = `ironquest-${SW_VERSION}`;
 
-const CACHE_VERSION = "v2.0.1"; // <-- bei JEDEM Update erhöhen!
-const CACHE_NAME = `ironquest-cache-${CACHE_VERSION}`;
-
-// Passe die Asset-Liste an, wenn du andere Dateinamen nutzt
-const ASSETS = [
+const APP_SHELL = [
   "./",
   "./index.html",
   "./style.css",
   "./app.js",
-  "./manifest.webmanifest",
-  "./manifest.json",
-  "./icons/icon-192.png",
-  "./icons/icon-512.png",
-  "./icon-192.png",
-  "./icon-512.png"
-].filter(Boolean);
+  "./manifest.json"
+];
 
 self.addEventListener("install", (event) => {
+  self.skipWaiting();
   event.waitUntil(
-    caches.open(CACHE_NAME)
-      .then((cache) => cache.addAll(ASSETS))
-      .then(() => self.skipWaiting())
+    caches.open(CACHE_NAME).then((cache) => cache.addAll(APP_SHELL))
   );
 });
 
 self.addEventListener("activate", (event) => {
   event.waitUntil((async () => {
     const keys = await caches.keys();
-    await Promise.all(keys.map((k) => (k !== CACHE_NAME ? caches.delete(k) : Promise.resolve())));
+    await Promise.all(keys.map((k) => (k !== CACHE_NAME ? caches.delete(k) : null)));
     await self.clients.claim();
-
-    // Inform all clients about update
-    const clients = await self.clients.matchAll({ type: "window", includeUncontrolled: true });
-    for (const c of clients) c.postMessage({ type: "SW_UPDATED", version: CACHE_VERSION });
   })());
 });
 
-/**
- * Strategy:
- * - Navigation (HTML): network-first (so updates arrive)
- * - Others: stale-while-revalidate (fast + updates)
- */
+self.addEventListener("message", (event) => {
+  if (event.data && event.data.type === "SKIP_WAITING") {
+    self.skipWaiting();
+  }
+});
+
+// Network-first für HTML, cache-first für Assets
 self.addEventListener("fetch", (event) => {
   const req = event.request;
   const url = new URL(req.url);
 
-  if (url.origin !== self.location.origin) return;
+  // nur same-origin
+  if (url.origin !== location.origin) return;
 
-  // Network-first for page navigations
-  if (req.mode === "navigate") {
+  // HTML: Network-first
+  if (req.mode === "navigate" || (req.headers.get("accept") || "").includes("text/html")) {
     event.respondWith((async () => {
       try {
-        const fresh = await fetch(req, { cache: "no-store" });
+        const fresh = await fetch(req);
         const cache = await caches.open(CACHE_NAME);
         cache.put("./index.html", fresh.clone());
         return fresh;
       } catch {
-        const cached = await caches.match("./index.html");
-        return cached || new Response("Offline", { status: 503 });
+        const cache = await caches.open(CACHE_NAME);
+        return (await cache.match("./index.html")) || Response.error();
       }
     })());
     return;
   }
 
-  // Stale-while-revalidate for other requests
+  // Assets: cache-first
   event.respondWith((async () => {
-    const cached = await caches.match(req);
-    const fetchPromise = fetch(req).then((res) => {
-      const copy = res.clone();
-      caches.open(CACHE_NAME).then((cache) => cache.put(req, copy));
-      return res;
-    }).catch(() => cached);
+    const cache = await caches.open(CACHE_NAME);
+    const cached = await cache.match(req);
+    if (cached) return cached;
 
-    return cached || fetchPromise;
+    try {
+      const fresh = await fetch(req);
+      cache.put(req, fresh.clone());
+      return fresh;
+    } catch {
+      return cached || Response.error();
+    }
   })());
 });
