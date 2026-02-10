@@ -5,7 +5,7 @@
    ✅ Cache bust via VERSION
 ========================= */
 
-const VERSION = "v25"; // <-- bei jedem Update hochzählen!
+const SW_VERSION = "v2.0.5"; // <-- bei jedem Update hochzählen
 const CACHE_NAME = `ironquest-${VERSION}`;
 
 // Passe die Liste an deine echten Dateien an
