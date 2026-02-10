@@ -1,12 +1,40 @@
 /* =========================
-   IRON QUEST – app.js (FULL)
+   IRON QUEST – app.js (FULL, iOS/PWA FIX)
    ✅ Alles wie vorher + Mini-Analytics (Dashboard + eigener Tab)
-   - Dashboard: kleine Analytics-Card (Week Trend, Top Übung, Typ-Verteilung)
-   - Analytics Tab: Wochen-XP Chart + Top 10 Übungen + XP nach Typ + ⭐ Heatmap
-   - Keine Daten gehen verloren (IndexedDB bleibt unverändert)
+   ✅ iOS Fix: kein structuredClone / kein replaceAll / kein ??=
+   ✅ PWA Auto-Update: reload bei neuer SW-Version
    ========================= */
 
 console.log("IRON QUEST loaded ✅");
+
+/* =========================
+   POLYFILLS / iOS COMPAT
+========================= */
+(function () {
+  // Object.fromEntries fallback (older iOS)
+  if (!Object.fromEntries) {
+    Object.fromEntries = function (entries) {
+      var obj = {};
+      for (var i = 0; i < entries.length; i++) {
+        var e = entries[i];
+        obj[e[0]] = e[1];
+      }
+      return obj;
+    };
+  }
+})();
+
+function deepClone(obj) {
+  // Safe fallback for iOS Safari / older WebViews
+  return obj == null ? obj : JSON.parse(JSON.stringify(obj));
+}
+
+function replaceAllSafe(str, search, replacement) {
+  var s = String(str == null ? "" : str);
+  if (typeof s.replaceAll === "function") return s.replaceAll(search, replacement);
+  var esc = String(search).replace(/[.*+?^${}()|[\]\\]/g, "\\$&");
+  return s.replace(new RegExp(esc, "g"), replacement);
+}
 
 /* =========================
    BASIC DOM
@@ -16,8 +44,12 @@ const isoDate = (d) => new Date(d).toISOString().slice(0, 10);
 const clampWeek = (w) => Math.max(1, Math.min(12, w || 1));
 
 function loadJSON(key, fallback) {
-  try { return JSON.parse(localStorage.getItem(key)) ?? fallback; }
-  catch { return fallback; }
+  try {
+    const v = JSON.parse(localStorage.getItem(key));
+    return (v === null || v === undefined) ? fallback : v;
+  } catch {
+    return fallback;
+  }
 }
 function saveJSON(key, value) {
   localStorage.setItem(key, JSON.stringify(value));
@@ -259,13 +291,13 @@ function getMutationForWeek(week) {
 }
 
 function mutationXpMultiplierForType(type, mutation) {
-  if (type === "NEAT" && mutation?.mult?.NEAT) return mutation.mult.NEAT;
-  if (type === "Mehrgelenkig" && mutation?.mult?.STR) return mutation.mult.STR;
-  if (type === "Unilateral" && mutation?.mult?.STA) return mutation.mult.STA;
-  if (type === "Conditioning" && mutation?.mult?.END) return mutation.mult.END;
-  if (type === "Core" && mutation?.mult?.MOB) return mutation.mult.MOB;
+  if (type === "NEAT" && mutation && mutation.mult && mutation.mult.NEAT) return mutation.mult.NEAT;
+  if (type === "Mehrgelenkig" && mutation && mutation.mult && mutation.mult.STR) return mutation.mult.STR;
+  if (type === "Unilateral" && mutation && mutation.mult && mutation.mult.STA) return mutation.mult.STA;
+  if (type === "Conditioning" && mutation && mutation.mult && mutation.mult.END) return mutation.mult.END;
+  if (type === "Core" && mutation && mutation.mult && mutation.mult.MOB) return mutation.mult.MOB;
   if (type === "Komplexe") {
-    const ms = [mutation?.mult?.STR, mutation?.mult?.STA, mutation?.mult?.END, mutation?.mult?.MOB].filter(Boolean);
+    const ms = [mutation && mutation.mult && mutation.mult.STR, mutation && mutation.mult && mutation.mult.STA, mutation && mutation.mult && mutation.mult.END, mutation && mutation.mult && mutation.mult.MOB].filter(Boolean);
     if (!ms.length) return 1;
     return ms.reduce((a,b)=>a+b,0)/ms.length;
   }
@@ -369,10 +401,12 @@ const EXERCISES = [
 ];
 
 function typeForExercise(exName) {
-  return EXERCISES.find(e => e.name === exName)?.type ?? "Mehrgelenkig";
+  const f = EXERCISES.find(e => e.name === exName);
+  return f ? f.type : "Mehrgelenkig";
 }
 function metaForExercise(exName){
-  return EXERCISES.find(e => e.name === exName) || null;
+  const f = EXERCISES.find(e => e.name === exName);
+  return f || null;
 }
 function isWalkType(type){ return type === "NEAT"; }
 function isRestType(type){ return type === "Rest"; }
@@ -385,8 +419,8 @@ function buildExerciseDropdown() {
 
   const map = {};
   EXERCISES.forEach(ex => {
-    map[ex.group] ??= {};
-    map[ex.group][ex.cat] ??= [];
+    if (!map[ex.group]) map[ex.group] = {};
+    if (!map[ex.group][ex.cat]) map[ex.group][ex.cat] = [];
     map[ex.group][ex.cat].push(ex);
   });
 
@@ -444,7 +478,7 @@ function recommendedSetsForExercise(exName, type, week, adaptive) {
   const ov = overridesForExercise(exName);
   const base = ov ? { text: ov.setsText, value: ov.setsValue } : baseRecommendedSets(type, week);
   if (type === "NEAT" || type === "Rest") return base;
-  const d = adaptive?.setDelta ?? 0;
+  const d = adaptive && adaptive.setDelta ? adaptive.setDelta : 0;
   if (!d) return base;
   return { text: applySetDeltaText(base.text, d) + " (adaptive)", value: base.value == null ? null : Math.max(1, base.value + d) };
 }
@@ -452,7 +486,7 @@ function recommendedRepsForExercise(exName, type, week, adaptive) {
   const ov = overridesForExercise(exName);
   if (ov) return ov.repsText;
   const base = baseRecommendedReps(type, week);
-  const d = adaptive?.repDelta ?? 0;
+  const d = adaptive && adaptive.repDelta ? adaptive.repDelta : 0;
   if (!d || type === "NEAT" || type === "Rest") return base;
   const nums = base.match(/\d+/g)?.map(n => parseInt(n,10));
   if (!nums) return base;
@@ -478,7 +512,7 @@ function neatXP(minutes) {
 }
 
 /* =========================
-   QUESTS (Supplements + retroactive via selected date)
+   QUESTS
 ========================= */
 const QUESTS = [
   { id:"steps10k",   name:"10.000 Schritte", xp:70, note:"NEAT-Boost", slot:"any" },
@@ -493,7 +527,7 @@ const QUESTS = [
 
 function loadQuestState(){ return loadJSON(KEY_QUESTS, {}); }
 function saveQuestState(s){ saveJSON(KEY_QUESTS, s); }
-function isQuestDoneForDay(qState, questId, dayISO){ return qState?.[dayISO]?.[questId] === true; }
+function isQuestDoneForDay(qState, questId, dayISO){ return qState && qState[dayISO] && qState[dayISO][questId] === true; }
 
 function loadCalendarState(){
   return loadJSON(KEY_CAL, { weekOffset: 0, selectedDate: isoDate(new Date()) });
@@ -506,7 +540,7 @@ function getSelectedDayISO(){
 
 async function setQuestDoneForDay(questId, dayISO, done){
   const qState = loadQuestState();
-  qState[dayISO] ??= {};
+  if (!qState[dayISO]) qState[dayISO] = {};
   const already = qState[dayISO][questId] === true;
   if (done && already) return;
 
@@ -520,10 +554,10 @@ async function setQuestDoneForDay(questId, dayISO, done){
     await idbAdd({
       date: dayISO,
       week,
-      exercise:`Daily Quest: ${q?.name ?? questId}`,
+      exercise:`Daily Quest: ${q ? q.name : questId}`,
       type:"Quest",
-      detail:`${q?.slot === "am" ? "AM" : q?.slot === "pm" ? "PM" : "Any"}`,
-      xp:q?.xp ?? 0
+      detail:`${q && q.slot === "am" ? "AM" : q && q.slot === "pm" ? "PM" : "Any"}`,
+      xp:q ? q.xp : 0
     });
   }
 }
@@ -613,12 +647,12 @@ function saveBossChecks(s){ saveJSON(KEY_BOSSCHK, s); }
 function bossCheckKey(week, dateISO){ return `${week}|${dateISO}`; }
 function getBossChecksFor(week, dateISO){
   const all = loadBossChecks();
-  return all[bossCheckKey(week, dateISO)] ?? {};
+  return all[bossCheckKey(week, dateISO)] || {};
 }
 function setBossCheckFor(week, dateISO, idx, value){
   const all = loadBossChecks();
   const k = bossCheckKey(week, dateISO);
-  all[k] ??= {};
+  if (!all[k]) all[k] = {};
   all[k][idx] = value;
   saveBossChecks(all);
 }
@@ -649,7 +683,7 @@ function renderBoss(curWeek){
   ul.innerHTML = "";
 
   BOSSES.forEach(b => {
-    const st = bossState[b.week] ?? { cleared:false, clearedAt:null };
+    const st = bossState[b.week] || { cleared:false, clearedAt:null };
     const isWeek = (curWeek === b.week);
     const locked = !isWeek;
     const doneChecks = allBossChecksDone(b.week, today, b.workout.length);
@@ -776,7 +810,7 @@ function saveWeekRewards(s){ saveJSON(KEY_WKREW, s); }
 
 function rewardActiveForWeek(week){
   const map = loadWeekRewards();
-  return map?.[week] === true;
+  return map && map[week] === true;
 }
 
 // If week N has >=5 training days -> reward activates for week N+1
@@ -815,7 +849,7 @@ async function evaluateWeeklyAchievements(entries, weekNum){
   if (questCount >= 6) shouldEarn.push("questmaster");
 
   const achState = loadWeeklyAch();
-  achState[weekNum] ??= {};
+  if (!achState[weekNum]) achState[weekNum] = {};
   const newlyEarned = [];
 
   for (const id of shouldEarn){
@@ -841,7 +875,7 @@ async function evaluateWeeklyAchievements(entries, weekNum){
 }
 
 /* =========================
-   SKILLTREE (XP influence)
+   SKILLTREE
 ========================= */
 const TREES = [
   { key:"multi", name:"Mehrgelenkig (STR)", gateType:"Mehrgelenkig", domList:"tree-multi" },
@@ -870,7 +904,10 @@ function loadSkillState(){
   };
   const st = loadJSON(KEY_SKILL, fallback);
   for (const t of TREES){
-    if (!st.nodes?.[t.key]) st.nodes[t.key] = defaultNodesForTree(t.key);
+    if (!st.nodes || !st.nodes[t.key]) {
+      if (!st.nodes) st.nodes = {};
+      st.nodes[t.key] = defaultNodesForTree(t.key);
+    }
   }
   if (typeof st.spent !== "number") st.spent = 0;
   return st;
@@ -935,9 +972,10 @@ function skillMultiplierForType(type){
 
   if (!mapKey) return 1;
 
-  const nodes = st.nodes?.[mapKey] || [];
+  const nodes = (st.nodes && st.nodes[mapKey]) ? st.nodes[mapKey] : [];
   const unlockedCount = nodes.filter(n => n.unlocked).length;
-  const hasCap = nodes.find(n => n.id.endsWith("_cap"))?.unlocked === true;
+  const capNode = nodes.find(n => String(n.id).endsWith("_cap"));
+  const hasCap = capNode ? capNode.unlocked === true : false;
 
   let mult = 1 + unlockedCount * 0.02;
   if (hasCap) mult += 0.05;
@@ -1064,12 +1102,36 @@ function groupForPlanDayKey(dayKey){
 function getWeekPlan(week){
   const ovr = loadPlanOverrides();
   const w = String(week);
-  const base = structuredClone(PLAN_DEFAULT);
+  const base = deepClone(PLAN_DEFAULT); // ✅ iOS-safe
   if (!ovr[w]) return base;
   for (const k of Object.keys(ovr[w])) base[k] = ovr[w][k];
   return base;
 }
 
+/* =========================
+   CALENDAR HELPERS
+========================= */
+function startOfWeekMonday(dateISO){
+  const d = new Date(dateISO);
+  const day = d.getDay();
+  const diffToMon = (day === 0 ? -6 : 1 - day);
+  d.setDate(d.getDate() + diffToMon);
+  return isoDate(d);
+}
+function addDays(dateISO, n){
+  const d = new Date(dateISO);
+  d.setDate(d.getDate() + n);
+  return isoDate(d);
+}
+function rangeLabel(mondayISO){
+  const sunISO = addDays(mondayISO, 6);
+  return `${mondayISO} – ${sunISO}`;
+}
+const DOW = ["Mo","Di","Mi","Do","Fr","Sa","So"];
+
+/* =========================
+   WEEKLY PLAN RENDER
+========================= */
 function renderWeeklyPlan(curWeek, entries){
   const content = $("planContent");
   if (!content) return;
@@ -1164,7 +1226,7 @@ function renderWeeklyPlan(curWeek, entries){
 
       const ovr = loadPlanOverrides();
       const wKey = String(w);
-      ovr[wKey] ??= {};
+      if (!ovr[wKey]) ovr[wKey] = {};
       ovr[wKey][day] = (ovr[wKey][day] || (PLAN_DEFAULT[day] || [])).slice();
       ovr[wKey][day][idx] = val;
       savePlanOverrides(ovr);
@@ -1177,24 +1239,6 @@ function renderWeeklyPlan(curWeek, entries){
 /* =========================
    CALENDAR (weekly view)
 ========================= */
-function startOfWeekMonday(dateISO){
-  const d = new Date(dateISO);
-  const day = d.getDay();
-  const diffToMon = (day === 0 ? -6 : 1 - day);
-  d.setDate(d.getDate() + diffToMon);
-  return isoDate(d);
-}
-function addDays(dateISO, n){
-  const d = new Date(dateISO);
-  d.setDate(d.getDate() + n);
-  return isoDate(d);
-}
-function rangeLabel(mondayISO){
-  const sunISO = addDays(mondayISO, 6);
-  return `${mondayISO} – ${sunISO}`;
-}
-const DOW = ["Mo","Di","Mi","Do","Fr","Sa","So"];
-
 function renderCalendar(entries){
   const grid = $("calGrid");
   if (!grid) return;
@@ -1322,7 +1366,8 @@ async function startEditEntry(id){
   $("editId").value = String(e.id);
   if ($("logFormTitle")) $("logFormTitle").textContent = "Eintrag bearbeiten";
   if ($("add")) $("add").textContent = "Änderungen speichern";
-  $("cancelEdit")?.classList.remove("hide");
+  const ce = $("cancelEdit");
+  if (ce) ce.classList.remove("hide");
 
   if ($("date")) $("date").value = e.date;
   if ($("exercise")) $("exercise").value = e.exercise;
@@ -1348,7 +1393,8 @@ function resetEditMode(){
   if ($("editId")) $("editId").value = "";
   if ($("logFormTitle")) $("logFormTitle").textContent = "Neuer Eintrag (rückwirkend möglich)";
   if ($("add")) $("add").textContent = "Eintrag speichern";
-  $("cancelEdit")?.classList.add("hide");
+  const ce = $("cancelEdit");
+  if (ce) ce.classList.add("hide");
 }
 
 /* =========================
@@ -1382,14 +1428,14 @@ async function updateLogUI(entries){
 
   if ($("logStart")) $("logStart").textContent = ensureStartDate();
 
-  const dateISO2 = $("date")?.value || isoDate(new Date());
+  const dateISO2 = ($("date") && $("date").value) ? $("date").value : isoDate(new Date());
   const week = currentWeekFor(dateISO2);
   if ($("logWeek")) $("logWeek").textContent = `W${week}`;
 
   const mutation = getMutationForWeek(week);
   const adaptive = getAdaptiveModifiers(entries, week);
 
-  const exName = $("exercise")?.value;
+  const exName = $("exercise") ? $("exercise").value : null;
   const type = typeForExercise(exName);
 
   if ($("autoType")) $("autoType").textContent = type;
@@ -1403,8 +1449,10 @@ async function updateLogUI(entries){
   const isWalk = isWalkType(type);
   const isRest = isRestType(type);
 
-  $("walkingRow")?.classList.toggle("hide", !isWalk);
-  $("setsRow")?.classList.toggle("hide", isWalk || isRest);
+  const wr = $("walkingRow");
+  if (wr) wr.classList.toggle("hide", !isWalk);
+  const sr = $("setsRow");
+  if (sr) sr.classList.toggle("hide", isWalk || isRest);
 
   if (!isWalk && !isRest && $("sets") && setRec.value) {
     const el = $("sets");
@@ -1435,12 +1483,12 @@ async function updateLogUI(entries){
 }
 
 function updateCalcPreview(week, mutation){
-  const exName = $("exercise")?.value;
+  const exName = $("exercise") ? $("exercise").value : null;
   const type = typeForExercise(exName);
 
   let base = 0;
   if (type === "NEAT") {
-    const minutes = Math.max(1, parseInt($("walkMin")?.value || "0", 10));
+    const minutes = Math.max(1, parseInt(($("walkMin") ? $("walkMin").value : "0") || "0", 10));
     base = neatXP(minutes);
   } else if (type === "Rest") {
     base = 0;
@@ -1491,10 +1539,10 @@ function baseAttrFromEntry(e) {
 
 function applyMutationToAttr(attr, mutation){
   const out = { ...attr };
-  if (mutation?.mult?.STR) out.STR *= mutation.mult.STR;
-  if (mutation?.mult?.STA) out.STA *= mutation.mult.STA;
-  if (mutation?.mult?.END) out.END *= mutation.mult.END;
-  if (mutation?.mult?.MOB) out.MOB *= mutation.mult.MOB;
+  if (mutation && mutation.mult && mutation.mult.STR) out.STR *= mutation.mult.STR;
+  if (mutation && mutation.mult && mutation.mult.STA) out.STA *= mutation.mult.STA;
+  if (mutation && mutation.mult && mutation.mult.END) out.END *= mutation.mult.END;
+  if (mutation && mutation.mult && mutation.mult.MOB) out.MOB *= mutation.mult.MOB;
   return out;
 }
 
@@ -1549,7 +1597,9 @@ function renderMutationUI(curWeek){
 ========================= */
 function csvSafe(v){
   const s = String(v ?? "");
-  if (s.includes(",") || s.includes('"') || s.includes("\n")) return `"${s.replaceAll('"','""')}"`;
+  if (s.includes(",") || s.includes('"') || s.includes("\n")) {
+    return `"${replaceAllSafe(s, '"', '""')}"`; // ✅ iOS-safe
+  }
   return s;
 }
 function toCSV(entries){
@@ -1619,10 +1669,10 @@ function renderAllEntriesList(entries){
    SAVE / UPDATE ENTRY
 ========================= */
 async function saveOrUpdateEntry(){
-  const dateISO2 = $("date")?.value || isoDate(new Date());
+  const dateISO2 = ($("date") && $("date").value) ? $("date").value : isoDate(new Date());
   const week = currentWeekFor(dateISO2);
 
-  const exName = $("exercise")?.value || "Unbekannt";
+  const exName = $("exercise") ? ($("exercise").value || "Unbekannt") : "Unbekannt";
   const type = typeForExercise(exName);
 
   const entries = sortEntriesDesc(await idbGetAll());
@@ -1632,12 +1682,12 @@ async function saveOrUpdateEntry(){
   const setRec = recommendedSetsForExercise(exName, type, week, adaptive).text;
   const repRec = recommendedRepsForExercise(exName, type, week, adaptive);
 
-  const sets = parseInt(($("sets")?.value || "").trim(), 10);
-  const reps = parseInt(($("reps")?.value || "").trim(), 10);
+  const sets = parseInt((($("sets") ? $("sets").value : "") || "").trim(), 10);
+  const reps = parseInt((($("reps") ? $("reps").value : "") || "").trim(), 10);
 
   let base = 0;
   if (type === "NEAT") {
-    const minutes = Math.max(1, parseInt($("walkMin")?.value || "0", 10));
+    const minutes = Math.max(1, parseInt((($("walkMin") ? $("walkMin").value : "0") || "0"), 10));
     base = neatXP(minutes);
   } else if (type === "Rest") {
     base = 0;
@@ -1653,7 +1703,7 @@ async function saveOrUpdateEntry(){
 
   let detail = `Empf: ${setRec} / ${repRec}`;
   if (type === "NEAT") {
-    const minutes = Math.max(1, parseInt($("walkMin")?.value || "0", 10));
+    const minutes = Math.max(1, parseInt((($("walkMin") ? $("walkMin").value : "0") || "0"), 10));
     detail = `Min: ${minutes} • ${detail}`;
   } else if (type !== "Rest") {
     if (!Number.isNaN(sets)) detail = `Sets: ${sets} • ` + detail;
@@ -1663,7 +1713,7 @@ async function saveOrUpdateEntry(){
   }
   detail += ` • Mut x${mutMult.toFixed(2)} • Skill x${skillMult.toFixed(2)} • Reward x${rewardMult.toFixed(2)}`;
 
-  const editId = parseInt(($("editId")?.value ?? "").trim(), 10);
+  const editId = parseInt((($("editId") ? $("editId").value : "") ?? "").trim(), 10);
 
   if (editId) {
     await idbPut({ id: editId, date: dateISO2, week, exercise: exName, type, detail, xp });
@@ -1681,7 +1731,6 @@ async function saveOrUpdateEntry(){
 /* =========================
    MINI-ANALYTICS (Dashboard + Analytics Tab)
 ========================= */
-// Create Tab + Panel without changing HTML
 function ensureAnalyticsTabExists(){
   const nav = document.querySelector("nav.tabs");
   const main = document.querySelector("main");
@@ -1693,7 +1742,6 @@ function ensureAnalyticsTabExists(){
     btn.className = "tab";
     btn.setAttribute("data-tab", "analytics");
     btn.textContent = "Analytics";
-    // Insert before Export to keep it neat
     const exportBtn = nav.querySelector('.tab[data-tab="export"]');
     if (exportBtn) nav.insertBefore(btn, exportBtn);
     else nav.appendChild(btn);
@@ -1739,17 +1787,14 @@ function ensureAnalyticsTabExists(){
         <p class="hint">Ziel: Mehr ⭐⭐⭐-Tage – und weniger „—“.</p>
       </div>
     `;
-    // Add before footer panels end (append at end of main)
     main.appendChild(sec);
   }
 
-  // Dashboard mini-card
   if (!document.getElementById("dashAnalyticsCard")) {
     const dash = document.getElementById("tab-dash");
     if (!dash) return;
     const cards = dash.querySelectorAll(".card");
-    // Insert after "Heute" card (2nd card)
-    const insertAfter = cards?.[1] || null;
+    const insertAfter = cards && cards[1] ? cards[1] : null;
 
     const card = document.createElement("div");
     card.className = "card";
@@ -1788,8 +1833,6 @@ function topExercisesForWeek(entries, week){
     if ((e.week||0) !== week) continue;
     if (!e.exercise) continue;
     const name = String(e.exercise);
-    // ignore purely informational entries if you want:
-    // keep all for now; but skip "Bossfight CLEARED" and similar
     if (name.startsWith("Bossfight CLEARED")) continue;
     m[name] = (m[name] || 0) + (e.xp || 0);
   }
@@ -1808,12 +1851,13 @@ function typeDistForWeek(entries, week){
 
 function dayXpForWeek(entries, week){
   const start = ensureStartDate();
-  // compute the 7 dates of that week
   const weekStart = addDays(start, (week - 1) * 7);
   const monday = startOfWeekMonday(weekStart);
   const days = Array.from({length:7}, (_,i)=>addDays(monday,i));
 
-  const m = Object.fromEntries(days.map(d=>[d,0]));
+  const m = {};
+  for (let i=0;i<days.length;i++) m[days[i]] = 0;
+
   for (const e of entries){
     if (e.week !== week) continue;
     if (m[e.date] != null) m[e.date] += (e.xp||0);
@@ -1844,7 +1888,6 @@ function drawBarChart(canvas, labels, values){
   const gap = Math.max(6, Math.floor(innerW / (n*12)));
   const barW = Math.floor((innerW - gap*(n-1)) / n);
 
-  // axis baseline
   ctx.globalAlpha = 0.35;
   ctx.fillRect(pad, H-pad, innerW, 2);
   ctx.globalAlpha = 1;
@@ -1855,10 +1898,8 @@ function drawBarChart(canvas, labels, values){
     const x = pad + i*(barW+gap);
     const y = pad + (innerH - h);
 
-    // bars (default color)
     ctx.fillRect(x, y, barW, h);
 
-    // labels
     ctx.globalAlpha = 0.85;
     ctx.font = "22px system-ui, -apple-system, Segoe UI, Roboto";
     ctx.fillText(labels[i], x, H - 6);
@@ -1886,7 +1927,6 @@ function drawSpark(canvas, values){
     return {x,y};
   });
 
-  // line
   ctx.beginPath();
   pts.forEach((p,i)=> i===0 ? ctx.moveTo(p.x,p.y) : ctx.lineTo(p.x,p.y));
   ctx.strokeStyle = "#ffffff";
@@ -1895,7 +1935,6 @@ function drawSpark(canvas, values){
   ctx.stroke();
   ctx.globalAlpha = 1;
 
-  // dots
   pts.forEach(p=>{
     ctx.beginPath();
     ctx.arc(p.x,p.y,4,0,Math.PI*2);
@@ -1908,7 +1947,6 @@ function renderAnalytics(entries, curWeek){
 
   const weekMap = weekXpMap(entries);
 
-  // last 8 weeks ending at curWeek
   const weeks = [];
   for (let w = Math.max(1, curWeek-7); w <= curWeek; w++) weeks.push(w);
   const vals = weeks.map(w=> weekMap[w] || 0);
@@ -1918,7 +1956,6 @@ function renderAnalytics(entries, curWeek){
   const prev = weekMap[curWeek-1] || 0;
   const trend = pctChange(cur, prev);
 
-  // Dashboard mini
   if ($("dashTrend")) $("dashTrend").textContent = `${trend} (${cur} XP)`;
   const topEx = topExercisesForWeek(entries, curWeek)[0]?.[0] || "—";
   if ($("dashTopEx")) $("dashTopEx").textContent = topEx;
@@ -1926,13 +1963,14 @@ function renderAnalytics(entries, curWeek){
   if ($("dashTopType")) $("dashTopType").textContent = topType;
 
   const thr = getStarThresholdsForWeek(curWeek, entries);
-  const { days, map: dayMap } = dayXpForWeek(entries, curWeek);
+  const wk = dayXpForWeek(entries, curWeek);
+  const days = wk.days;
+  const dayMap = wk.map;
   const threeCount = days.filter(d => (dayMap[d]||0) >= thr.three).length;
   if ($("dash3StarCount")) $("dash3StarCount").textContent = String(threeCount);
 
   drawSpark($("dashSpark"), vals);
 
-  // Analytics tab header
   if ($("anWeek")) $("anWeek").textContent = `W${curWeek}`;
   if ($("anTrend")) $("anTrend").textContent = `${trend} (W${curWeek}: ${cur} XP / W${curWeek-1}: ${prev} XP)`;
 
@@ -1940,7 +1978,6 @@ function renderAnalytics(entries, curWeek){
   if ($("anWeekChartHint")) $("anWeekChartHint").textContent =
     `Max: ${Math.max(...vals)} XP • Min: ${Math.min(...vals)} XP`;
 
-  // Top exercises list (Top 10, current week)
   const top10 = topExercisesForWeek(entries, curWeek).slice(0,10);
   const ulTop = $("anTopExercises");
   if (ulTop){
@@ -1952,7 +1989,6 @@ function renderAnalytics(entries, curWeek){
     });
   }
 
-  // Type distribution list (current week)
   const dist = typeDistForWeek(entries, curWeek);
   const totalWeek = dist.reduce((s,[_t,x])=>s+x,0) || 1;
   const ulDist = $("anTypeDist");
@@ -1966,7 +2002,6 @@ function renderAnalytics(entries, curWeek){
     });
   }
 
-  // Star grid (re-use calGrid style)
   const grid = $("anStarGrid");
   if (grid){
     grid.innerHTML = "";
@@ -2004,12 +2039,10 @@ async function renderAll(){
 
   const stats = await computeStats(entries);
 
-  // Achievements + weekly reward (may add entries)
   const evalRes = await evaluateWeeklyAchievements(entries, stats.curWeek);
-  const finalEntries = evalRes.newlyEarned?.length ? sortEntriesDesc(await idbGetAll()) : entries;
+  const finalEntries = (evalRes.newlyEarned && evalRes.newlyEarned.length) ? sortEntriesDesc(await idbGetAll()) : entries;
   const stats2 = await computeStats(finalEntries);
 
-  // Dashboard
   if ($("startDisplay")) $("startDisplay").textContent = stats2.startDate;
   if ($("weekNumber")) $("weekNumber").textContent = `W${stats2.curWeek}`;
   if ($("blockNow")) $("blockNow").textContent = blockName(weekBlock(stats2.curWeek));
@@ -2029,15 +2062,16 @@ async function renderAll(){
   renderMutationUI(stats2.curWeek);
   renderAttributes(stats2.attr);
 
-  // Weekly summary
   if ($("wkTrainDays")) $("wkTrainDays").textContent = evalRes.trainDays ?? 0;
   if ($("wkThreeStarDays")) $("wkThreeStarDays").textContent = evalRes.threeStarDays ?? 0;
-  const earnedNames = (evalRes.earned || []).map(id => ACHIEVEMENTS.find(a=>a.id===id)?.name).filter(Boolean);
+  const earnedNames = (evalRes.earned || []).map(id => {
+    const a = ACHIEVEMENTS.find(x=>x.id===id);
+    return a ? a.name : null;
+  }).filter(Boolean);
   if ($("wkAchievements")) $("wkAchievements").textContent = earnedNames.length ? earnedNames.join(", ") : "—";
   const adaptive = getAdaptiveModifiers(finalEntries, stats2.curWeek);
   if ($("adaptiveHint")) $("adaptiveHint").textContent = adaptive.note;
 
-  // Recent list
   const recentList = $("recentList");
   if (recentList){
     const recent = finalEntries.slice(0, 6);
@@ -2049,21 +2083,17 @@ async function renderAll(){
     });
   }
 
-  // Calendar + plan
   renderCalendar(finalEntries);
   renderWeeklyPlan(stats2.curWeek, finalEntries);
 
-  // Quests + Boss
   renderQuests();
   renderBoss(stats2.curWeek);
 
-  // Skill points in dashboard + skilltrees
   ensureDashboardSkillPill();
   const sp = computeSkillPointsAvailable(finalEntries);
   if ($("skillPointsAvail")) $("skillPointsAvail").textContent = sp.available;
   renderSkillTrees(finalEntries, stats2.curWeek);
 
-  // Log UI + list
   await updateLogUI(finalEntries);
   renderAllEntriesList(finalEntries);
 
@@ -2073,12 +2103,11 @@ async function renderAll(){
   const rew = rewardActiveForWeek(stats2.curWeek) ? "Reward +5% aktiv" : "Reward —";
   if ($("appStatus")) $("appStatus").textContent = `OK • ⭐ ${thr.one} • ⭐⭐ ${thr.two} • ⭐⭐⭐ ${thr.three} • ${rew}`;
 
-  // ✅ Analytics
   renderAnalytics(finalEntries, stats2.curWeek);
 }
 
 /* =========================
-   INIT + EVENTS
+   INIT + EVENTS + PWA UPDATE
 ========================= */
 async function init(){
   try {
@@ -2089,7 +2118,6 @@ async function init(){
     resetEditMode();
     removeBonusCheckboxes();
 
-    // Calendar nav
     $("calPrev")?.addEventListener("click", async ()=>{
       const st = loadCalendarState();
       st.weekOffset = (st.weekOffset || 0) - 1;
@@ -2103,7 +2131,6 @@ async function init(){
       await renderAll();
     });
 
-    // Save start date retroactively
     $("saveStartDash")?.addEventListener("click", async () => {
       const newStart = $("startDateDash")?.value;
       if (!newStart) return alert("Bitte ein Startdatum wählen.");
@@ -2127,7 +2154,6 @@ async function init(){
       alert("Startdatum gespeichert & Einträge neu berechnet ✅");
     });
 
-    // Change date updates selected date + render
     $("date")?.addEventListener("change", async () => {
       const st = loadCalendarState();
       st.selectedDate = $("date").value;
@@ -2137,12 +2163,11 @@ async function init(){
 
     $("exercise")?.addEventListener("change", async () => { await renderAll(); });
 
-    // Inputs update preview
     ["sets","reps","walkMin"].forEach(id=>{
       const el = $(id);
       if (!el) return;
       el.addEventListener("input", async ()=>{
-        const d = $("date")?.value || isoDate(new Date());
+        const d = ($("date") && $("date").value) ? $("date").value : isoDate(new Date());
         const w = currentWeekFor(d);
         const mut = getMutationForWeek(w);
         updateCalcPreview(w, mut);
@@ -2154,7 +2179,6 @@ async function init(){
       });
     });
 
-    // Auto-save on other inputs
     ["exercise","date","walkMin"].forEach(id => {
       const el = $(id);
       if (!el) return;
@@ -2162,16 +2186,13 @@ async function init(){
       el.addEventListener("change", autosaveLogDraft);
     });
 
-    // Save / update
     $("add")?.addEventListener("click", saveOrUpdateEntry);
 
-    // Cancel edit
     $("cancelEdit")?.addEventListener("click", async ()=>{
       resetEditMode();
       await renderAll();
     });
 
-    // Clear all
     $("clear")?.addEventListener("click", async () => {
       if (confirm("Wirklich ALLE Einträge löschen?")) {
         await idbClear();
@@ -2179,7 +2200,6 @@ async function init(){
       }
     });
 
-    // Reset boss
     $("resetBoss")?.addEventListener("click", async () => {
       if (confirm("Boss-Fight Status & Checks zurücksetzen?")) {
         localStorage.removeItem(KEY_BOSS);
@@ -2188,14 +2208,12 @@ async function init(){
       }
     });
 
-    // Export
     $("exportCsv")?.addEventListener("click", async () => {
       const entries = sortEntriesDesc(await idbGetAll());
       if (!entries.length) return alert("Keine Einträge zum Exportieren.");
       downloadCSV("ironquest_export.csv", toCSV(entries));
     });
 
-    // Reset skilltree
     $("resetSkills")?.addEventListener("click", async ()=>{
       if (confirm("Skilltree zurücksetzen?")) {
         const st = loadSkillState();
@@ -2206,13 +2224,34 @@ async function init(){
       }
     });
 
-    // SW
-    if ("serviceWorker" in navigator) navigator.serviceWorker.register("sw.js");
+    // ✅ Service Worker + Auto-Update (Home Screen)
+    if ("serviceWorker" in navigator) {
+      navigator.serviceWorker.register("sw.js").then((reg) => {
+        // If an update is found, tell the waiting SW to activate immediately
+        reg.addEventListener("updatefound", () => {
+          const nw = reg.installing;
+          if (!nw) return;
+          nw.addEventListener("statechange", () => {
+            if (nw.state === "installed" && navigator.serviceWorker.controller) {
+              // new version waiting
+              if (reg.waiting) reg.waiting.postMessage({ type: "SKIP_WAITING" });
+            }
+          });
+        });
+      });
+
+      // Reload once when the new SW takes control
+      let reloaded = false;
+      navigator.serviceWorker.addEventListener("controllerchange", () => {
+        if (reloaded) return;
+        reloaded = true;
+        window.location.reload();
+      });
+    }
 
     await recalcAllEntryWeeks();
     await renderAll();
 
-    // Restore draft after first render
     restoreLogDraft();
   } catch (e) {
     console.error(e);
