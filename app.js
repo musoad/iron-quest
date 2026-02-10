@@ -1,53 +1,26 @@
 /* =========================
-   IRON QUEST – app.js (FULL, iOS/PWA FIX)
+   IRON QUEST – app.js (FULL, iOS SAFE)
    ✅ Alles wie vorher + Mini-Analytics (Dashboard + eigener Tab)
-   ✅ iOS Fix: kein structuredClone / kein replaceAll / kein ??=
-   ✅ PWA Auto-Update: reload bei neuer SW-Version
+   ✅ iOS Safe: kein ?. / ?? / ??= / structuredClone / replaceAll
+   ✅ Auto-Update Home-Screen PWA (SW update -> SKIP_WAITING -> reload)
    ========================= */
 
 console.log("IRON QUEST loaded ✅");
 
 /* =========================
-   POLYFILLS / iOS COMPAT
-========================= */
-(function () {
-  // Object.fromEntries fallback (older iOS)
-  if (!Object.fromEntries) {
-    Object.fromEntries = function (entries) {
-      var obj = {};
-      for (var i = 0; i < entries.length; i++) {
-        var e = entries[i];
-        obj[e[0]] = e[1];
-      }
-      return obj;
-    };
-  }
-})();
-
-function deepClone(obj) {
-  // Safe fallback for iOS Safari / older WebViews
-  return obj == null ? obj : JSON.parse(JSON.stringify(obj));
-}
-
-function replaceAllSafe(str, search, replacement) {
-  var s = String(str == null ? "" : str);
-  if (typeof s.replaceAll === "function") return s.replaceAll(search, replacement);
-  var esc = String(search).replace(/[.*+?^${}()|[\]\\]/g, "\\$&");
-  return s.replace(new RegExp(esc, "g"), replacement);
-}
-
-/* =========================
    BASIC DOM
 ========================= */
-const $ = (id) => document.getElementById(id);
-const isoDate = (d) => new Date(d).toISOString().slice(0, 10);
-const clampWeek = (w) => Math.max(1, Math.min(12, w || 1));
+function $(id) { return document.getElementById(id); }
+function isoDate(d) { return new Date(d).toISOString().slice(0, 10); }
+function clampWeek(w) { return Math.max(1, Math.min(12, w || 1)); }
 
 function loadJSON(key, fallback) {
   try {
-    const v = JSON.parse(localStorage.getItem(key));
-    return (v === null || v === undefined) ? fallback : v;
-  } catch {
+    var raw = localStorage.getItem(key);
+    if (raw == null) return fallback;
+    var v = JSON.parse(raw);
+    return (v == null) ? fallback : v;
+  } catch (e) {
     return fallback;
   }
 }
@@ -58,92 +31,101 @@ function saveJSON(key, value) {
 /* =========================
    DB (IndexedDB)
 ========================= */
-const DB_NAME = "ironquest_db";
-const DB_VERSION = 2;
-const STORE = "entries";
+var DB_NAME = "ironquest_db";
+var DB_VERSION = 2;
+var STORE = "entries";
 
 function openDB() {
-  return new Promise((resolve, reject) => {
-    const req = indexedDB.open(DB_NAME, DB_VERSION);
-    req.onupgradeneeded = () => {
-      const db = req.result;
+  return new Promise(function (resolve, reject) {
+    var req = indexedDB.open(DB_NAME, DB_VERSION);
+    req.onupgradeneeded = function () {
+      var db = req.result;
       if (!db.objectStoreNames.contains(STORE)) {
-        const store = db.createObjectStore(STORE, { keyPath: "id", autoIncrement: true });
+        var store = db.createObjectStore(STORE, { keyPath: "id", autoIncrement: true });
         store.createIndex("date", "date", { unique: false });
         store.createIndex("week", "week", { unique: false });
       } else {
-        const store = req.transaction.objectStore(STORE);
-        if (!store.indexNames.contains("date")) store.createIndex("date", "date", { unique: false });
-        if (!store.indexNames.contains("week")) store.createIndex("week", "week", { unique: false });
+        var store2 = req.transaction.objectStore(STORE);
+        if (!store2.indexNames.contains("date")) store2.createIndex("date", "date", { unique: false });
+        if (!store2.indexNames.contains("week")) store2.createIndex("week", "week", { unique: false });
       }
     };
-    req.onsuccess = () => resolve(req.result);
-    req.onerror = () => reject(req.error);
+    req.onsuccess = function () { resolve(req.result); };
+    req.onerror = function () { reject(req.error); };
   });
 }
 
-async function idbGetAll() {
-  const db = await openDB();
-  return new Promise((resolve, reject) => {
-    const tx = db.transaction(STORE, "readonly");
-    const req = tx.objectStore(STORE).getAll();
-    req.onsuccess = () => resolve(req.result || []);
-    req.onerror = () => reject(req.error);
+function idbGetAll() {
+  return openDB().then(function (db) {
+    return new Promise(function (resolve, reject) {
+      var tx = db.transaction(STORE, "readonly");
+      var req = tx.objectStore(STORE).getAll();
+      req.onsuccess = function () { resolve(req.result || []); };
+      req.onerror = function () { reject(req.error); };
+    });
   });
 }
-async function idbAdd(entry) {
-  const db = await openDB();
-  return new Promise((resolve, reject) => {
-    const tx = db.transaction(STORE, "readwrite");
-    tx.objectStore(STORE).add(entry);
-    tx.oncomplete = () => resolve(true);
-    tx.onerror = () => reject(tx.error);
+function idbAdd(entry) {
+  return openDB().then(function (db) {
+    return new Promise(function (resolve, reject) {
+      var tx = db.transaction(STORE, "readwrite");
+      tx.objectStore(STORE).add(entry);
+      tx.oncomplete = function () { resolve(true); };
+      tx.onerror = function () { reject(tx.error); };
+    });
   });
 }
-async function idbPut(entry) {
-  const db = await openDB();
-  return new Promise((resolve, reject) => {
-    const tx = db.transaction(STORE, "readwrite");
-    tx.objectStore(STORE).put(entry);
-    tx.oncomplete = () => resolve(true);
-    tx.onerror = () => reject(tx.error);
+function idbPut(entry) {
+  return openDB().then(function (db) {
+    return new Promise(function (resolve, reject) {
+      var tx = db.transaction(STORE, "readwrite");
+      tx.objectStore(STORE).put(entry);
+      tx.oncomplete = function () { resolve(true); };
+      tx.onerror = function () { reject(tx.error); };
+    });
   });
 }
-async function idbDelete(id) {
-  const db = await openDB();
-  return new Promise((resolve, reject) => {
-    const tx = db.transaction(STORE, "readwrite");
-    tx.objectStore(STORE).delete(id);
-    tx.oncomplete = () => resolve(true);
-    tx.onerror = () => reject(tx.error);
+function idbDelete(id) {
+  return openDB().then(function (db) {
+    return new Promise(function (resolve, reject) {
+      var tx = db.transaction(STORE, "readwrite");
+      tx.objectStore(STORE).delete(id);
+      tx.oncomplete = function () { resolve(true); };
+      tx.onerror = function () { reject(tx.error); };
+    });
   });
 }
-async function idbClear() {
-  const db = await openDB();
-  return new Promise((resolve, reject) => {
-    const tx = db.transaction(STORE, "readwrite");
-    tx.objectStore(STORE).clear();
-    tx.oncomplete = () => resolve(true);
-    tx.onerror = () => reject(tx.error);
+function idbClear() {
+  return openDB().then(function (db) {
+    return new Promise(function (resolve, reject) {
+      var tx = db.transaction(STORE, "readwrite");
+      tx.objectStore(STORE).clear();
+      tx.oncomplete = function () { resolve(true); };
+      tx.onerror = function () { reject(tx.error); };
+    });
   });
 }
-async function idbAddMany(entries) {
-  for (const e of entries) await idbAdd(e);
+function idbAddMany(entries) {
+  var p = Promise.resolve();
+  entries.forEach(function (e) {
+    p = p.then(function () { return idbAdd(e); });
+  });
+  return p;
 }
 
 /* =========================
    KEYS
 ========================= */
-const KEY_START   = "ironquest_startdate_v20";
-const KEY_MUT     = "ironquest_mutations_v20";
-const KEY_QUESTS  = "ironquest_dailyquests_v20";
-const KEY_BOSS    = "ironquest_boss_v20";
-const KEY_BOSSCHK = "ironquest_boss_checks_v20";
-const KEY_ACH     = "ironquest_weeklyach_v20";
-const KEY_CAL     = "ironquest_calendar_v20";
-const KEY_SKILL   = "ironquest_skilltree_v20";
-const KEY_PLANOVR = "ironquest_plan_overrides_v20";
-const KEY_WKREW   = "ironquest_week_rewards_v20";
+var KEY_START   = "ironquest_startdate_v20";
+var KEY_MUT     = "ironquest_mutations_v20";
+var KEY_QUESTS  = "ironquest_dailyquests_v20";
+var KEY_BOSS    = "ironquest_boss_v20";
+var KEY_BOSSCHK = "ironquest_boss_checks_v20";
+var KEY_ACH     = "ironquest_weeklyach_v20";
+var KEY_CAL     = "ironquest_calendar_v20";
+var KEY_SKILL   = "ironquest_skilltree_v20";
+var KEY_PLANOVR = "ironquest_plan_overrides_v20";
+var KEY_WKREW   = "ironquest_week_rewards_v20";
 
 /* =========================
    TIME / WEEK
@@ -152,39 +134,44 @@ function daysBetween(a, b) {
   return Math.floor((new Date(b) - new Date(a)) / 86400000);
 }
 function getWeekNumber(startISO, dateISO) {
-  const diff = daysBetween(startISO, dateISO);
+  var diff = daysBetween(startISO, dateISO);
   return diff < 0 ? 0 : Math.floor(diff / 7) + 1;
 }
 
 function ensureStartDate() {
-  let start = localStorage.getItem(KEY_START);
+  var start = localStorage.getItem(KEY_START);
   if (!start) {
     start = isoDate(new Date());
     localStorage.setItem(KEY_START, start);
   }
-  if ($("startDateDash")) $("startDateDash").value = start;
+  var el = $("startDateDash");
+  if (el) el.value = start;
   return start;
 }
 function setStartDateLocal(newISO) {
   localStorage.setItem(KEY_START, newISO);
-  if ($("startDateDash")) $("startDateDash").value = newISO;
+  var el = $("startDateDash");
+  if (el) el.value = newISO;
 }
 
 function currentWeekFor(dateISO) {
-  const start = ensureStartDate();
+  var start = ensureStartDate();
   return clampWeek(getWeekNumber(start, dateISO));
 }
 
-async function recalcAllEntryWeeks() {
-  const start = ensureStartDate();
-  const all = await idbGetAll();
-  for (const e of all) {
-    const nw = clampWeek(getWeekNumber(start, e.date));
-    if (e.week !== nw) {
-      e.week = nw;
-      await idbPut(e);
-    }
-  }
+function recalcAllEntryWeeks() {
+  var start = ensureStartDate();
+  return idbGetAll().then(function (all) {
+    var p = Promise.resolve();
+    all.forEach(function (e) {
+      var nw = clampWeek(getWeekNumber(start, e.date));
+      if (e.week !== nw) {
+        e.week = nw;
+        p = p.then(function () { return idbPut(e); });
+      }
+    });
+    return p;
+  });
 }
 
 function resetWeekBoundSystems() {
@@ -198,20 +185,19 @@ function resetWeekBoundSystems() {
    SORT
 ========================= */
 function sortEntriesDesc(entries) {
-  return entries.sort((a, b) => {
+  return entries.sort(function (a, b) {
     if (a.date !== b.date) return a.date < b.date ? 1 : -1;
-    return (b.id ?? 0) - (a.id ?? 0);
+    return (b.id || 0) - (a.id || 0);
   });
 }
 
 /* =========================
-   STARS (fixed rule)
-   1200–1599 ⭐ • 1600–1999 ⭐⭐ • 2000+ ⭐⭐⭐
+   STARS
 ========================= */
-function getStarThresholdsForWeek(_week, _entries){
+function getStarThresholdsForWeek(_week, _entries) {
   return { one: 1200, two: 1600, three: 2000 };
 }
-function starsForDay(xp, thr){
+function starsForDay(xp, thr) {
   if (xp >= thr.three) return "⭐⭐⭐";
   if (xp >= thr.two) return "⭐⭐";
   if (xp >= thr.one) return "⭐";
@@ -219,23 +205,23 @@ function starsForDay(xp, thr){
 }
 
 /* =========================
-   LEVEL SYSTEM (slower)
+   LEVEL SYSTEM
 ========================= */
 function xpNeededForNextLevel(level) {
-  const l = Math.max(1, level);
-  return Math.round(350 + 120 * l + 32 * (l ** 1.75));
+  var l = Math.max(1, level);
+  return Math.round(350 + 120 * l + 32 * Math.pow(l, 1.75));
 }
 function levelFromTotalXp(totalXp) {
-  let lvl = 1;
-  let xp = Math.max(0, Math.round(totalXp || 0));
+  var lvl = 1;
+  var xp = Math.max(0, Math.round(totalXp || 0));
   while (true) {
-    const need = xpNeededForNextLevel(lvl);
+    var need = xpNeededForNextLevel(lvl);
     if (xp >= need) { xp -= need; lvl += 1; }
     else break;
     if (lvl > 999) break;
   }
-  const needNow = xpNeededForNextLevel(lvl);
-  return { lvl, into: xp, need: needNow };
+  var needNow = xpNeededForNextLevel(lvl);
+  return { lvl: lvl, into: xp, need: needNow };
 }
 function titleForLevel(lvl) {
   if (lvl >= 60) return "Mythic";
@@ -250,7 +236,7 @@ function titleForLevel(lvl) {
    BLOCKS
 ========================= */
 function weekBlock(w) {
-  const ww = clampWeek(w);
+  var ww = clampWeek(w);
   return ww <= 4 ? 1 : (ww <= 8 ? 2 : 3);
 }
 function blockName(block) {
@@ -259,7 +245,7 @@ function blockName(block) {
   return "Block 3 (Dichte/Intensität)";
 }
 function weeklyProgressHint(week) {
-  const b = weekBlock(week);
+  var b = weekBlock(week);
   if (b === 1) return "Technik/ROM, Progress über Wiederholungen.";
   if (b === 2) return "Mehr Volumen, Progress über Reps oder schwerere Hanteln.";
   return "Dichte/Intensität (Tempo/kurzere Pausen, sauber).";
@@ -268,26 +254,29 @@ function weeklyProgressHint(week) {
 /* =========================
    MUTATIONS
 ========================= */
-const MUTATIONS = [
+var MUTATIONS = [
   { id:"tempo", name:"Tempo Week", desc:"Langsame Exzentrik, saubere ROM.", effect:"STR/STA XP +10%", mult:{ STR:1.10, STA:1.10 } },
   { id:"corefocus", name:"Core Focus", desc:"Core & Kontrolle im Zentrum.", effect:"MOB XP +25%", mult:{ MOB:1.25 } },
   { id:"engine", name:"Engine Mode", desc:"Konditionierung bekommt den Boost.", effect:"END XP +15%", mult:{ END:1.15 } },
   { id:"neatboost", name:"NEAT Boost", desc:"Alltag zählt mehr.", effect:"NEAT XP +20%", mult:{ NEAT:1.20 } },
-  { id:"unilateral", name:"Unilateral Blessing", desc:"Stabilität und Balance.", effect:"STA XP +15%", mult:{ STA:1.15 } },
+  { id:"unilateral", name:"Unilateral Blessing", desc:"Stabilität und Balance.", effect:"STA XP +15%", mult:{ STA:1.15 } }
 ];
 
 function loadMutMap(){ return loadJSON(KEY_MUT, {}); }
 function saveMutMap(m){ saveJSON(KEY_MUT, m); }
 
 function getMutationForWeek(week) {
-  const w = clampWeek(week);
-  const map = loadMutMap();
+  var w = clampWeek(week);
+  var map = loadMutMap();
   if (!map[w]) {
-    const choice = MUTATIONS[Math.floor(Math.random() * MUTATIONS.length)];
+    var choice = MUTATIONS[Math.floor(Math.random() * MUTATIONS.length)];
     map[w] = choice.id;
     saveMutMap(map);
   }
-  return MUTATIONS.find(m => m.id === map[w]) || MUTATIONS[0];
+  for (var i=0;i<MUTATIONS.length;i++){
+    if (MUTATIONS[i].id === map[w]) return MUTATIONS[i];
+  }
+  return MUTATIONS[0];
 }
 
 function mutationXpMultiplierForType(type, mutation) {
@@ -296,54 +285,64 @@ function mutationXpMultiplierForType(type, mutation) {
   if (type === "Unilateral" && mutation && mutation.mult && mutation.mult.STA) return mutation.mult.STA;
   if (type === "Conditioning" && mutation && mutation.mult && mutation.mult.END) return mutation.mult.END;
   if (type === "Core" && mutation && mutation.mult && mutation.mult.MOB) return mutation.mult.MOB;
+
   if (type === "Komplexe") {
-    const ms = [mutation && mutation.mult && mutation.mult.STR, mutation && mutation.mult && mutation.mult.STA, mutation && mutation.mult && mutation.mult.END, mutation && mutation.mult && mutation.mult.MOB].filter(Boolean);
+    var ms = [];
+    if (mutation && mutation.mult) {
+      if (mutation.mult.STR) ms.push(mutation.mult.STR);
+      if (mutation.mult.STA) ms.push(mutation.mult.STA);
+      if (mutation.mult.END) ms.push(mutation.mult.END);
+      if (mutation.mult.MOB) ms.push(mutation.mult.MOB);
+    }
     if (!ms.length) return 1;
-    return ms.reduce((a,b)=>a+b,0)/ms.length;
+    var sum = 0;
+    ms.forEach(function (x){ sum += x; });
+    return sum / ms.length;
   }
   return 1;
 }
 
 /* =========================
-   ADAPTIVE (recommendations only)
+   ADAPTIVE
 ========================= */
 function computeWeekDayXP(entries, weekNum) {
-  const dayXP = {};
-  for (const e of entries) {
-    if (e.week !== weekNum) continue;
+  var dayXP = {};
+  entries.forEach(function (e) {
+    if (e.week !== weekNum) return;
     dayXP[e.date] = (dayXP[e.date] || 0) + (e.xp || 0);
-  }
+  });
   return dayXP;
 }
 function getAdaptiveModifiers(entries, curWeek) {
-  const prev = curWeek - 1;
+  var prev = curWeek - 1;
   if (prev < 1) return { setDelta: 0, repDelta: 0, note: "Startwoche: neutral." };
 
-  const thr = getStarThresholdsForWeek(prev, entries);
-  const dayXP = computeWeekDayXP(entries, prev);
-  const days = Object.keys(dayXP);
+  var thr = getStarThresholdsForWeek(prev, entries);
+  var dayXP = computeWeekDayXP(entries, prev);
+  var days = Object.keys(dayXP);
 
-  const trainDays = days.filter(d => dayXP[d] >= thr.one).length;
-  const twoStarDays = days.filter(d => dayXP[d] >= thr.two).length;
-  const threeStarDays = days.filter(d => dayXP[d] >= thr.three).length;
+  var trainDays = days.filter(function (d){ return dayXP[d] >= thr.one; }).length;
+  var twoStarDays = days.filter(function (d){ return dayXP[d] >= thr.two; }).length;
+  var threeStarDays = days.filter(function (d){ return dayXP[d] >= thr.three; }).length;
 
-  if (trainDays >= 5 && threeStarDays >= 2) return { setDelta:+1, repDelta:+2, note:`Elite Woche (W${prev}) → +1 Satz & +2 Reps.` };
-  if (trainDays >= 4 && (twoStarDays >= 2 || threeStarDays >= 1)) return { setDelta:+1, repDelta:+1, note:`Starke Woche (W${prev}) → +1 Satz & +1 Rep.` };
-  if (trainDays <= 2) return { setDelta:-1, repDelta:-1, note:`Schwache Woche (W${prev}) → Deload -1 Satz & -1 Rep.` };
-  return { setDelta:0, repDelta:0, note:`Stabil (W${prev}) → neutral.` };
+  if (trainDays >= 5 && threeStarDays >= 2) return { setDelta:+1, repDelta:+2, note:"Elite Woche (W"+prev+") → +1 Satz & +2 Reps." };
+  if (trainDays >= 4 && (twoStarDays >= 2 || threeStarDays >= 1)) return { setDelta:+1, repDelta:+1, note:"Starke Woche (W"+prev+") → +1 Satz & +1 Rep." };
+  if (trainDays <= 2) return { setDelta:-1, repDelta:-1, note:"Schwache Woche (W"+prev+") → Deload -1 Satz & -1 Rep." };
+  return { setDelta:0, repDelta:0, note:"Stabil (W"+prev+") → neutral." };
 }
 function applySetDeltaText(text, delta) {
-  const nums = text.match(/\d+/g)?.map(n => parseInt(n,10));
+  var nums = text.match(/\d+/g);
   if (!nums || nums.length === 0) return text;
-  const newNums = nums.map(n => Math.max(1, n + delta));
-  let i = 0;
-  return text.replace(/\d+/g, () => String(newNums[i++]));
+  var parsed = nums.map(function (n){ return parseInt(n,10); });
+  var newNums = parsed.map(function (n){ return Math.max(1, n + delta); });
+  var i = 0;
+  return text.replace(/\d+/g, function () { return String(newNums[i++]); });
 }
 
 /* =========================
    EXERCISES
 ========================= */
-const EXERCISES = [
+var EXERCISES = [
   // PUSH
   { name:"DB Floor Press (neutral)", type:"Mehrgelenkig", group:"Tag 1 – Push", cat:"Brust/Trizeps" },
   { name:"DB Bench Press (Floor alt)", type:"Mehrgelenkig", group:"Tag 1 – Push", cat:"Brust/Trizeps" },
@@ -397,42 +396,46 @@ const EXERCISES = [
   { name:"Walking Desk (Laufband 3 km/h)", type:"NEAT", group:"NEAT / Alltag", cat:"NEAT" },
 
   // REST
-  { name:"Ruhetag (Recovery + Mobility)", type:"Rest", group:"Ruhetag", cat:"Recovery" },
+  { name:"Ruhetag (Recovery + Mobility)", type:"Rest", group:"Ruhetag", cat:"Recovery" }
 ];
 
 function typeForExercise(exName) {
-  const f = EXERCISES.find(e => e.name === exName);
-  return f ? f.type : "Mehrgelenkig";
+  for (var i=0;i<EXERCISES.length;i++){
+    if (EXERCISES[i].name === exName) return EXERCISES[i].type;
+  }
+  return "Mehrgelenkig";
 }
 function metaForExercise(exName){
-  const f = EXERCISES.find(e => e.name === exName);
-  return f || null;
+  for (var i=0;i<EXERCISES.length;i++){
+    if (EXERCISES[i].name === exName) return EXERCISES[i];
+  }
+  return null;
 }
 function isWalkType(type){ return type === "NEAT"; }
 function isRestType(type){ return type === "Rest"; }
 
 function buildExerciseDropdown() {
-  const sel = $("exercise");
+  var sel = $("exercise");
   if (!sel) return;
-  const prev = sel.value;
+  var prev = sel.value;
   sel.innerHTML = "";
 
-  const map = {};
-  EXERCISES.forEach(ex => {
-    if (!map[ex.group]) map[ex.group] = {};
-    if (!map[ex.group][ex.cat]) map[ex.group][ex.cat] = [];
+  var map = {};
+  EXERCISES.forEach(function (ex) {
+    if (map[ex.group] == null) map[ex.group] = {};
+    if (map[ex.group][ex.cat] == null) map[ex.group][ex.cat] = [];
     map[ex.group][ex.cat].push(ex);
   });
 
-  Object.keys(map).forEach(groupName => {
-    const ogGroup = document.createElement("optgroup");
+  Object.keys(map).forEach(function (groupName) {
+    var ogGroup = document.createElement("optgroup");
     ogGroup.label = groupName;
 
-    Object.keys(map[groupName]).forEach(cat => {
-      map[groupName][cat].forEach(ex => {
-        const opt = document.createElement("option");
+    Object.keys(map[groupName]).forEach(function (cat) {
+      map[groupName][cat].forEach(function (ex) {
+        var opt = document.createElement("option");
         opt.value = ex.name;
-        opt.textContent = `${ex.name}`;
+        opt.textContent = "" + ex.name;
         ogGroup.appendChild(opt);
       });
     });
@@ -440,24 +443,28 @@ function buildExerciseDropdown() {
     sel.appendChild(ogGroup);
   });
 
-  if (prev && [...sel.options].some(o => o.value === prev)) sel.value = prev;
+  var hasPrev = false;
+  for (var i=0;i<sel.options.length;i++){
+    if (sel.options[i].value === prev) { hasPrev = true; break; }
+  }
+  if (prev && hasPrev) sel.value = prev;
   else sel.selectedIndex = 0;
 }
 
 /* =========================
-   RECOMMENDATIONS (display only)
+   RECOMMENDATIONS
 ========================= */
 function overridesForExercise(exName) {
   if (!exName) return null;
-  if (exName.includes("Farmer")) return { setsText:"2–3 Runden", setsValue:3, repsText:"30–60s pro Runde (aufrecht, Core fest)" };
-  if (exName.includes("Lateral")) return { setsText:"3 Sätze", setsValue:3, repsText:"12–20 Wdh (2–3s runter)" };
-  if (exName.includes("Hamstring Walkouts")) return { setsText:"3 Sätze", setsValue:3, repsText:"8–12 Wdh (kontrolliert)" };
-  if (exName.includes("Calf")) return { setsText:"3–4 Sätze", setsValue:4, repsText:"15–25 Wdh (oben 1s halten)" };
-  if (exName.includes("Ruhetag")) return { setsText:"—", setsValue:null, repsText:"10–20 Min Mobility + Spaziergang" };
+  if (exName.indexOf("Farmer") >= 0) return { setsText:"2–3 Runden", setsValue:3, repsText:"30–60s pro Runde (aufrecht, Core fest)" };
+  if (exName.indexOf("Lateral") >= 0) return { setsText:"3 Sätze", setsValue:3, repsText:"12–20 Wdh (2–3s runter)" };
+  if (exName.indexOf("Hamstring Walkouts") >= 0) return { setsText:"3 Sätze", setsValue:3, repsText:"8–12 Wdh (kontrolliert)" };
+  if (exName.indexOf("Calf") >= 0) return { setsText:"3–4 Sätze", setsValue:4, repsText:"15–25 Wdh (oben 1s halten)" };
+  if (exName.indexOf("Ruhetag") >= 0) return { setsText:"—", setsValue:null, repsText:"10–20 Min Mobility + Spaziergang" };
   return null;
 }
 function baseRecommendedSets(type, week) {
-  const b = weekBlock(week);
+  var b = weekBlock(week);
   if (type === "NEAT") return { text:"Minuten statt Sätze", value:null };
   if (type === "Rest") return { text:"—", value:null };
   if (type === "Conditioning") return b === 1 ? { text:"4–5 Runden", value:4 } : (b === 2 ? { text:"5–6 Runden", value:5 } : { text:"5–6 Runden", value:5 });
@@ -466,7 +473,7 @@ function baseRecommendedSets(type, week) {
   return b === 1 ? { text:"3–4 Sätze", value:4 } : (b === 2 ? { text:"4–5 Sätze", value:5 } : { text:"4–5 Sätze", value:5 });
 }
 function baseRecommendedReps(type, week) {
-  const b = weekBlock(week);
+  var b = weekBlock(week);
   if (type === "NEAT") return "Minuten (z. B. 30–60)";
   if (type === "Rest") return "Mobility: Schulter/T-Spine/Hüfte";
   if (type === "Core") return b === 1 ? "30–45s pro Satz" : "40–60s pro Satz";
@@ -475,30 +482,34 @@ function baseRecommendedReps(type, week) {
   return b === 1 ? "10–12 Wdh/Satz" : (b === 2 ? "8–10 Wdh/Satz" : "6–8 Wdh/Satz");
 }
 function recommendedSetsForExercise(exName, type, week, adaptive) {
-  const ov = overridesForExercise(exName);
-  const base = ov ? { text: ov.setsText, value: ov.setsValue } : baseRecommendedSets(type, week);
+  var ov = overridesForExercise(exName);
+  var base = ov ? { text: ov.setsText, value: ov.setsValue } : baseRecommendedSets(type, week);
   if (type === "NEAT" || type === "Rest") return base;
-  const d = adaptive && adaptive.setDelta ? adaptive.setDelta : 0;
+  var d = adaptive ? (adaptive.setDelta || 0) : 0;
   if (!d) return base;
-  return { text: applySetDeltaText(base.text, d) + " (adaptive)", value: base.value == null ? null : Math.max(1, base.value + d) };
+  return {
+    text: applySetDeltaText(base.text, d) + " (adaptive)",
+    value: base.value == null ? null : Math.max(1, base.value + d)
+  };
 }
 function recommendedRepsForExercise(exName, type, week, adaptive) {
-  const ov = overridesForExercise(exName);
+  var ov = overridesForExercise(exName);
   if (ov) return ov.repsText;
-  const base = baseRecommendedReps(type, week);
-  const d = adaptive && adaptive.repDelta ? adaptive.repDelta : 0;
+  var base = baseRecommendedReps(type, week);
+  var d = adaptive ? (adaptive.repDelta || 0) : 0;
   if (!d || type === "NEAT" || type === "Rest") return base;
-  const nums = base.match(/\d+/g)?.map(n => parseInt(n,10));
+  var nums = base.match(/\d+/g);
   if (!nums) return base;
-  let i = 0;
-  const shifted = base.replace(/\d+/g, () => String(Math.max(1, nums[i++] + d)));
+  var parsed = nums.map(function (n){ return parseInt(n,10); });
+  var i = 0;
+  var shifted = base.replace(/\d+/g, function () { return String(Math.max(1, parsed[i++] + d)); });
   return shifted + " (adaptive)";
 }
 
 /* =========================
-   XP SYSTEM (per exercise)
+   XP SYSTEM
 ========================= */
-const XP_PER_EXERCISE = {
+var XP_PER_EXERCISE = {
   "Mehrgelenkig": 180,
   "Unilateral": 200,
   "Core": 140,
@@ -514,7 +525,7 @@ function neatXP(minutes) {
 /* =========================
    QUESTS
 ========================= */
-const QUESTS = [
+var QUESTS = [
   { id:"steps10k",   name:"10.000 Schritte", xp:70, note:"NEAT-Boost", slot:"any" },
   { id:"mobility10", name:"10 Min Mobility", xp:40, note:"Hüfte/Schulter/WS", slot:"any" },
   { id:"water",      name:"2,5–3L Wasser",   xp:22, note:"Regeneration", slot:"any" },
@@ -522,103 +533,110 @@ const QUESTS = [
   { id:"supp_d3",      name:"Vitamin D3", xp:10, note:"morgens", slot:"am" },
   { id:"supp_crea",    name:"Kreatin 5g", xp:10, note:"morgens", slot:"am" },
   { id:"supp_mag",     name:"Magnesium",  xp:10, note:"abends",  slot:"pm" },
-  { id:"supp_omega3",  name:"Omega-3",    xp:10, note:"abends",  slot:"pm" },
+  { id:"supp_omega3",  name:"Omega-3",    xp:10, note:"abends",  slot:"pm" }
 ];
 
 function loadQuestState(){ return loadJSON(KEY_QUESTS, {}); }
 function saveQuestState(s){ saveJSON(KEY_QUESTS, s); }
-function isQuestDoneForDay(qState, questId, dayISO){ return qState && qState[dayISO] && qState[dayISO][questId] === true; }
+function isQuestDoneForDay(qState, questId, dayISO){
+  return (qState && qState[dayISO] && qState[dayISO][questId] === true);
+}
 
 function loadCalendarState(){
   return loadJSON(KEY_CAL, { weekOffset: 0, selectedDate: isoDate(new Date()) });
 }
 function saveCalendarState(st){ saveJSON(KEY_CAL, st); }
 function getSelectedDayISO(){
-  const st = loadCalendarState();
+  var st = loadCalendarState();
   return st.selectedDate || isoDate(new Date());
 }
 
-async function setQuestDoneForDay(questId, dayISO, done){
-  const qState = loadQuestState();
-  if (!qState[dayISO]) qState[dayISO] = {};
-  const already = qState[dayISO][questId] === true;
-  if (done && already) return;
+function setQuestDoneForDay(questId, dayISO, done){
+  var qState = loadQuestState();
+  if (qState[dayISO] == null) qState[dayISO] = {};
+  var already = (qState[dayISO][questId] === true);
+  if (done && already) return Promise.resolve(true);
 
   if (done) qState[dayISO][questId] = true;
   else delete qState[dayISO][questId];
   saveQuestState(qState);
 
   if (done) {
-    const q = QUESTS.find(x => x.id === questId);
-    const week = currentWeekFor(dayISO);
-    await idbAdd({
+    var q = null;
+    for (var i=0;i<QUESTS.length;i++){ if (QUESTS[i].id === questId) { q = QUESTS[i]; break; } }
+    var week = currentWeekFor(dayISO);
+    return idbAdd({
       date: dayISO,
-      week,
-      exercise:`Daily Quest: ${q ? q.name : questId}`,
-      type:"Quest",
-      detail:`${q && q.slot === "am" ? "AM" : q && q.slot === "pm" ? "PM" : "Any"}`,
-      xp:q ? q.xp : 0
+      week: week,
+      exercise: "Daily Quest: " + ((q && q.name) ? q.name : questId),
+      type: "Quest",
+      detail: ((q && q.slot === "am") ? "AM" : ((q && q.slot === "pm") ? "PM" : "Any")),
+      xp: (q && q.xp) ? q.xp : 0
     });
   }
+  return Promise.resolve(true);
 }
 
 function renderQuests(){
-  const dayISO = getSelectedDayISO();
-  const qState = loadQuestState();
-  const ul = $("questList");
+  var dayISO = getSelectedDayISO();
+  var qState = loadQuestState();
+  var ul = $("questList");
   if (!ul) return;
   ul.innerHTML = "";
 
-  const info = document.createElement("li");
-  info.innerHTML = `<div class="hint"><b>Quests-Datum:</b> ${dayISO} (Kalender → Tag auswählen für rückwirkend)</div>`;
+  var info = document.createElement("li");
+  info.innerHTML = '<div class="hint"><b>Quests-Datum:</b> ' + dayISO + ' (Kalender → Tag auswählen für rückwirkend)</div>';
   ul.appendChild(info);
 
   function renderGroup(title, list){
-    const head = document.createElement("li");
-    head.innerHTML = `<div class="hint"><b>${title}</b></div>`;
+    var head = document.createElement("li");
+    head.innerHTML = '<div class="hint"><b>' + title + '</b></div>';
     ul.appendChild(head);
 
-    list.forEach(q => {
-      const done = isQuestDoneForDay(qState, q.id, dayISO);
-      const li = document.createElement("li");
-      li.innerHTML = `
-        <div class="checkItem">
-          <button type="button" class="qbtn ${done ? "done":""}" data-q="${q.id}">
-            ${done ? "✓" : "+"}
-          </button>
-          <div class="checkMain">
-            <div class="checkTitle">${q.name}</div>
-            <div class="checkSub">${q.note}</div>
-          </div>
-          <div class="xpBadge">+${q.xp} XP</div>
-        </div>
-      `;
+    list.forEach(function (q) {
+      var done = isQuestDoneForDay(qState, q.id, dayISO);
+      var li = document.createElement("li");
+      li.innerHTML =
+        '<div class="checkItem">' +
+          '<button type="button" class="qbtn ' + (done ? "done" : "") + '" data-q="' + q.id + '">' +
+            (done ? "✓" : "+") +
+          '</button>' +
+          '<div class="checkMain">' +
+            '<div class="checkTitle">' + q.name + '</div>' +
+            '<div class="checkSub">' + q.note + '</div>' +
+          '</div>' +
+          '<div class="xpBadge">+' + q.xp + ' XP</div>' +
+        '</div>';
       ul.appendChild(li);
     });
   }
 
-  renderGroup("Morgens (Supplements)", QUESTS.filter(q=>q.slot==="am"));
-  renderGroup("Abends (Supplements)", QUESTS.filter(q=>q.slot==="pm"));
-  renderGroup("Jederzeit", QUESTS.filter(q=>q.slot==="any"));
+  renderGroup("Morgens (Supplements)", QUESTS.filter(function(q){ return q.slot === "am"; }));
+  renderGroup("Abends (Supplements)", QUESTS.filter(function(q){ return q.slot === "pm"; }));
+  renderGroup("Jederzeit", QUESTS.filter(function(q){ return q.slot === "any"; }));
 
-  ul.querySelectorAll("button[data-q]").forEach(btn=>{
-    btn.addEventListener("click", async ()=>{
-      const qid = btn.getAttribute("data-q");
-      const done = isQuestDoneForDay(loadQuestState(), qid, dayISO);
-      if (done) {
-        alert("Quest deaktiviert – XP-Eintrag bleibt bestehen (simple).");
-        return;
-      }
-      await setQuestDoneForDay(qid, dayISO, true);
-      await renderAll();
-    });
-  });
+  var buttons = ul.querySelectorAll("button[data-q]");
+  for (var i=0;i<buttons.length;i++){
+    (function (btn) {
+      btn.addEventListener("click", function () {
+        var qid = btn.getAttribute("data-q");
+        var done = isQuestDoneForDay(loadQuestState(), qid, dayISO);
+        if (done) {
+          alert("Quest deaktiviert – XP-Eintrag bleibt bestehen (simple).");
+          return;
+        }
+        setQuestDoneForDay(qid, dayISO, true).then(function () {
+          return renderAll();
+        });
+      });
+    })(buttons[i]);
+  }
 }
 
 /* =========================
-   BOSSES
+   BOSSES (unverändert funktional)
 ========================= */
-const BOSSES = [
+var BOSSES = [
   { week: 2, name: "The Foundation Beast", xp: 650, reward: "1 Joker + Titel: Foundation Slayer",
     workout: ["DB Goblet Squat – 5×10 (3s runter)","DB Floor Press – 5×8","DB Row – 5×10 (Pause oben)","Pause strikt 90s"]},
   { week: 4, name: "The Asymmetry Lord", xp: 800, reward: "+1 STA + Unilateral XP +10% (1 Woche)",
@@ -630,12 +648,14 @@ const BOSSES = [
   { week: 10, name: "The Iron Champion", xp: 1400, reward: "+1 Attribut deiner Wahl + Titel: Iron Challenger",
     workout: ["Komplex 6 Runden (je 6 Wdh)","Deadlift → Clean → Front Squat → Push Press","Hanteln nicht absetzen","Technik vor Tempo"]},
   { week: 12, name: "FINAL: Iron Overlord", xp: 2400, reward: "Titel: IRON OVERLORD SLAYER + New Game+",
-    workout: ["Goblet Squat – 4×12","DB Floor Press – 4×10","1-Arm DB Row – 4×10","Bulgarian Split Squat – 3×8","Plank – 3×60s"]},
+    workout: ["Goblet Squat – 4×12","DB Floor Press – 4×10","1-Arm DB Row – 4×10","Bulgarian Split Squat – 3×8","Plank – 3×60s"]}
 ];
 
 function defaultBoss(){
-  const obj = {};
-  BOSSES.forEach(b => obj[b.week] = { cleared:false, clearedAt:null });
+  var obj = {};
+  BOSSES.forEach(function (b) {
+    obj[b.week] = { cleared:false, clearedAt:null };
+  });
   return obj;
 }
 function loadBoss(){ return loadJSON(KEY_BOSS, defaultBoss()); }
@@ -644,278 +664,306 @@ function saveBoss(b){ saveJSON(KEY_BOSS, b); }
 function loadBossChecks(){ return loadJSON(KEY_BOSSCHK, {}); }
 function saveBossChecks(s){ saveJSON(KEY_BOSSCHK, s); }
 
-function bossCheckKey(week, dateISO){ return `${week}|${dateISO}`; }
+function bossCheckKey(week, dateISO){ return week + "|" + dateISO; }
 function getBossChecksFor(week, dateISO){
-  const all = loadBossChecks();
-  return all[bossCheckKey(week, dateISO)] || {};
+  var all = loadBossChecks();
+  var k = bossCheckKey(week, dateISO);
+  return all[k] || {};
 }
 function setBossCheckFor(week, dateISO, idx, value){
-  const all = loadBossChecks();
-  const k = bossCheckKey(week, dateISO);
-  if (!all[k]) all[k] = {};
+  var all = loadBossChecks();
+  var k = bossCheckKey(week, dateISO);
+  if (all[k] == null) all[k] = {};
   all[k][idx] = value;
   saveBossChecks(all);
 }
 function allBossChecksDone(week, dateISO, workoutLen){
-  const checks = getBossChecksFor(week, dateISO);
-  for (let i=0;i<workoutLen;i++){
+  var checks = getBossChecksFor(week, dateISO);
+  for (var i=0;i<workoutLen;i++){
     if (!checks[i]) return false;
   }
   return true;
 }
 function splitXP(total, n){
-  const base = Math.floor(total / n);
-  const rem = total - base * n;
-  const arr = Array(n).fill(base);
+  var base = Math.floor(total / n);
+  var rem = total - base * n;
+  var arr = [];
+  for (var i=0;i<n;i++) arr.push(base);
   arr[n-1] += rem;
   return arr;
 }
-function getBossForWeek(w){ return BOSSES.find(b => b.week === w) || null; }
+function getBossForWeek(w){
+  for (var i=0;i<BOSSES.length;i++){
+    if (BOSSES[i].week === w) return BOSSES[i];
+  }
+  return null;
+}
 
 function renderBoss(curWeek){
-  const today = isoDate(new Date());
-  const bossState = loadBoss();
-  if ($("bossStartDisplay")) $("bossStartDisplay").textContent = ensureStartDate();
-  if ($("bossCurrentWeek")) $("bossCurrentWeek").textContent = `W${curWeek}`;
+  var today = isoDate(new Date());
+  var bossState = loadBoss();
 
-  const ul = $("bossList");
+  var startEl = $("bossStartDisplay");
+  if (startEl) startEl.textContent = ensureStartDate();
+  var wkEl = $("bossCurrentWeek");
+  if (wkEl) wkEl.textContent = "W" + curWeek;
+
+  var ul = $("bossList");
   if (!ul) return;
   ul.innerHTML = "";
 
-  BOSSES.forEach(b => {
-    const st = bossState[b.week] || { cleared:false, clearedAt:null };
-    const isWeek = (curWeek === b.week);
-    const locked = !isWeek;
-    const doneChecks = allBossChecksDone(b.week, today, b.workout.length);
-    const canClear = isWeek && doneChecks;
+  BOSSES.forEach(function (b) {
+    var st = bossState[b.week] || { cleared:false, clearedAt:null };
+    var isWeek = (curWeek === b.week);
+    var locked = !isWeek;
+    var doneChecks = allBossChecksDone(b.week, today, b.workout.length);
+    var canClear = isWeek && doneChecks;
 
-    const li = document.createElement("li");
-    li.innerHTML = `
-      <div class="bossrow">
-        <div style="min-width:0;">
-          <div><b>Week ${b.week}:</b> ${b.name}</div>
-          <div class="hint">Reward: ${b.reward} • +${b.xp} XP</div>
-          ${st.clearedAt ? `<div class="hint">Cleared am: ${st.clearedAt}</div>` : ""}
-          ${locked ? `<div class="hint">🔒 Locked – nur in Woche ${b.week}</div>` : `<div class="hint">✅ Woche aktiv</div>`}
-        </div>
-        <div class="row" style="margin:0; align-items:flex-start;">
-          <span class="badge ${locked ? "lock" : (st.cleared ? "ok":"no")}">${locked ? "LOCKED" : (st.cleared ? "CLEARED":"OPEN")}</span>
-          <button type="button" class="secondary" style="width:auto; padding:10px 12px;" data-week="${b.week}" ${canClear ? "" : "disabled"}>Clear</button>
-        </div>
-      </div>
+    var li = document.createElement("li");
+    li.innerHTML =
+      '<div class="bossrow">' +
+        '<div style="min-width:0;">' +
+          '<div><b>Week ' + b.week + ':</b> ' + b.name + '</div>' +
+          '<div class="hint">Reward: ' + b.reward + ' • +' + b.xp + ' XP</div>' +
+          (st.clearedAt ? ('<div class="hint">Cleared am: ' + st.clearedAt + '</div>') : '') +
+          (locked ? ('<div class="hint">🔒 Locked – nur in Woche ' + b.week + '</div>') : '<div class="hint">✅ Woche aktiv</div>') +
+        '</div>' +
+        '<div class="row" style="margin:0; align-items:flex-start;">' +
+          '<span class="badge ' + (locked ? "lock" : (st.cleared ? "ok" : "no")) + '">' +
+            (locked ? "LOCKED" : (st.cleared ? "CLEARED" : "OPEN")) +
+          '</span>' +
+          '<button type="button" class="secondary" style="width:auto; padding:10px 12px;" data-week="' + b.week + '" ' + (canClear ? "" : "disabled") + '>Clear</button>' +
+        '</div>' +
+      '</div>' +
+      '<div class="hint" style="margin-top:10px;"><b>Boss-Workout Checkliste (heute):</b></div>' +
+      '<ul class="checklist" id="bosschk_' + b.week + '"></ul>' +
+      '<div class="hint">Clear wird erst aktiv, wenn alle Punkte abgehakt sind.</div>';
 
-      <div class="hint" style="margin-top:10px;"><b>Boss-Workout Checkliste (heute):</b></div>
-      <ul class="checklist" id="bosschk_${b.week}"></ul>
-      <div class="hint">Clear wird erst aktiv, wenn alle Punkte abgehakt sind.</div>
-    `;
     ul.appendChild(li);
 
-    const chkUl = li.querySelector(`#bosschk_${b.week}`);
-    const checks = getBossChecksFor(b.week, today);
-    const xpParts = splitXP(b.xp, b.workout.length);
+    var chkUl = li.querySelector("#bosschk_" + b.week);
+    var checks = getBossChecksFor(b.week, today);
+    var xpParts = splitXP(b.xp, b.workout.length);
 
-    b.workout.forEach((line, idx) => {
-      const checked = !!checks[idx];
-      const row = document.createElement("li");
-      row.innerHTML = `
-        <div class="checkItem">
-          <input type="checkbox" ${checked ? "checked":""} ${locked ? "disabled":""}>
-          <div class="checkMain">
-            <div class="checkTitle">${line}</div>
-            <div class="checkSub">${b.name}</div>
-          </div>
-          <div class="xpBadge">+${xpParts[idx]} XP</div>
-        </div>
-      `;
+    b.workout.forEach(function (line, idx) {
+      var checked = !!checks[idx];
+      var row = document.createElement("li");
+      row.innerHTML =
+        '<div class="checkItem">' +
+          '<input type="checkbox" ' + (checked ? "checked" : "") + ' ' + (locked ? "disabled" : "") + '>' +
+          '<div class="checkMain">' +
+            '<div class="checkTitle">' + line + '</div>' +
+            '<div class="checkSub">' + b.name + '</div>' +
+          '</div>' +
+          '<div class="xpBadge">+' + xpParts[idx] + ' XP</div>' +
+        '</div>';
+
       chkUl.appendChild(row);
 
-      row.querySelector("input").addEventListener("change", async (e) => {
+      var cb = row.querySelector("input");
+      cb.addEventListener("change", function (e) {
         setBossCheckFor(b.week, today, idx, e.target.checked);
-        await renderAll();
+        renderAll();
       });
     });
   });
 
-  ul.querySelectorAll("button[data-week]").forEach(btn => {
-    btn.addEventListener("click", async () => {
-      const week = parseInt(btn.getAttribute("data-week"), 10);
-      const boss = BOSSES.find(x => x.week === week);
-      if (!boss) return;
+  var btns = ul.querySelectorAll("button[data-week]");
+  for (var i=0;i<btns.length;i++){
+    (function (btn) {
+      btn.addEventListener("click", function () {
+        var week = parseInt(btn.getAttribute("data-week"), 10);
+        var boss = null;
+        for (var j=0;j<BOSSES.length;j++){ if (BOSSES[j].week === week) { boss = BOSSES[j]; break; } }
+        if (!boss) return;
 
-      const today = isoDate(new Date());
-      const w = currentWeekFor(today);
+        var today2 = isoDate(new Date());
+        var w = currentWeekFor(today2);
 
-      if (w !== week) return alert(`LOCKED. Aktuell W${w}. Dieser Boss ist nur in W${week}.`);
-      if (!allBossChecksDone(week, today, boss.workout.length)) return alert("Erst alle Checkboxen abhaken!");
+        if (w !== week) return alert("LOCKED. Aktuell W"+w+". Dieser Boss ist nur in W"+week+".");
+        if (!allBossChecksDone(week, today2, boss.workout.length)) return alert("Erst alle Checkboxen abhaken!");
 
-      const xpParts = splitXP(boss.xp, boss.workout.length);
-      const entriesToAdd = boss.workout.map((line, idx) => ({
-        date: today, week: w,
-        exercise: `Boss W${week}: ${line}`,
-        type: "Boss-Workout",
-        detail: `${boss.name} • Reward: ${boss.reward}`,
-        xp: xpParts[idx]
-      }));
-      entriesToAdd.push({ date: today, week: w, exercise: `Bossfight CLEARED: ${boss.name}`, type: "Boss", detail: `W${week} Clear`, xp: 0 });
+        var xpParts = splitXP(boss.xp, boss.workout.length);
+        var entriesToAdd = boss.workout.map(function (line, idx) {
+          return {
+            date: today2, week: w,
+            exercise: "Boss W"+week+": " + line,
+            type: "Boss-Workout",
+            detail: boss.name + " • Reward: " + boss.reward,
+            xp: xpParts[idx]
+          };
+        });
+        entriesToAdd.push({ date: today2, week: w, exercise: "Bossfight CLEARED: " + boss.name, type: "Boss", detail: "W"+week+" Clear", xp: 0 });
 
-      await idbAddMany(entriesToAdd);
-
-      const bs = loadBoss();
-      bs[week] = { cleared:true, clearedAt: today };
-      saveBoss(bs);
-
-      await renderAll();
-      alert(`Bossfight cleared! +${boss.xp} XP ✅`);
-    });
-  });
+        idbAddMany(entriesToAdd).then(function () {
+          var bs = loadBoss();
+          bs[week] = { cleared:true, clearedAt: today2 };
+          saveBoss(bs);
+          return renderAll();
+        }).then(function () {
+          alert("Bossfight cleared! +" + boss.xp + " XP ✅");
+        });
+      });
+    })(btns[i]);
+  }
 }
 
 /* =========================
    WEEKLY ACHIEVEMENTS + WEEKLY REWARD
 ========================= */
-const ACHIEVEMENTS = [
+var ACHIEVEMENTS = [
   { id:"noskip", name:"No Skip Week", xp:650, rule:"5 Trainingstage (≥⭐)" },
   { id:"perfect", name:"Perfect Run", xp:750, rule:"5 Tage ⭐⭐ oder ⭐⭐⭐" },
   { id:"threestar", name:"3-Star Hunter", xp:550, rule:"mind. 2× ⭐⭐⭐" },
-  { id:"questmaster", name:"Quest Master", xp:450, rule:"mind. 6 Quests (inkl. Supplements)" },
+  { id:"questmaster", name:"Quest Master", xp:450, rule:"mind. 6 Quests (inkl. Supplements)" }
 ];
 
 function loadWeeklyAch(){ return loadJSON(KEY_ACH, {}); }
 function saveWeeklyAch(s){ saveJSON(KEY_ACH, s); }
 
 function countDailyQuestsInWeek(weekNum){
-  const q = loadQuestState();
-  let count = 0;
-  const start = ensureStartDate();
-  for (const dayISO of Object.keys(q)){
-    const w = clampWeek(getWeekNumber(start, dayISO));
-    if (w === weekNum) count += Object.values(q[dayISO] || {}).filter(Boolean).length;
-  }
+  var q = loadQuestState();
+  var count = 0;
+  var start = ensureStartDate();
+  Object.keys(q).forEach(function (dayISO) {
+    var w = clampWeek(getWeekNumber(start, dayISO));
+    if (w === weekNum) {
+      var vals = Object.values(q[dayISO] || {});
+      count += vals.filter(Boolean).length;
+    }
+  });
   return count;
 }
-
-// training day = any non-Quest, non-Rest, non-NEAT entry (Boss-Workout counts)
 function countTrainingDaysInWeek(entries, weekNum){
-  const days = new Set();
-  for (const e of entries){
-    if (e.week !== weekNum) continue;
-    if (e.type === "Quest" || e.type === "Rest" || e.type === "NEAT") continue;
-    days.add(e.date);
-  }
-  return days.size;
+  var days = {};
+  entries.forEach(function (e) {
+    if (e.week !== weekNum) return;
+    if (e.type === "Quest" || e.type === "Rest" || e.type === "NEAT") return;
+    days[e.date] = true;
+  });
+  return Object.keys(days).length;
 }
 
 function loadWeekRewards(){ return loadJSON(KEY_WKREW, {}); }
 function saveWeekRewards(s){ saveJSON(KEY_WKREW, s); }
 
 function rewardActiveForWeek(week){
-  const map = loadWeekRewards();
-  return map && map[week] === true;
+  var map = loadWeekRewards();
+  return !!(map && map[week] === true);
 }
 
-// If week N has >=5 training days -> reward activates for week N+1
-async function updateWeeklyReward(entries, weekNum){
-  if (!weekNum || weekNum < 1) return;
-  const map = loadWeekRewards();
-  const trainingDays = countTrainingDaysInWeek(entries, weekNum);
-  const next = clampWeek(weekNum + 1);
+function updateWeeklyReward(entries, weekNum){
+  if (!weekNum || weekNum < 1) return Promise.resolve(true);
+  var map = loadWeekRewards();
+  var trainingDays = countTrainingDaysInWeek(entries, weekNum);
+  var next = clampWeek(weekNum + 1);
 
   if (trainingDays >= 5) {
     if (!map[next]) {
       map[next] = true;
       saveWeekRewards(map);
-      const today = isoDate(new Date());
-      await idbAdd({ date: today, week: weekNum, exercise:`Weekly Reward Unlocked`, type:"Reward", detail:`W${next}: +5% XP Bonus`, xp:0 });
+      var today = isoDate(new Date());
+      return idbAdd({ date: today, week: weekNum, exercise:"Weekly Reward Unlocked", type:"Reward", detail:"W"+next+": +5% XP Bonus", xp:0 });
     }
   }
+  return Promise.resolve(true);
 }
 
-async function evaluateWeeklyAchievements(entries, weekNum){
-  if (!weekNum) return { earned:[], newlyEarned:[], trainDays:0, threeStarDays:0 };
+function evaluateWeeklyAchievements(entries, weekNum){
+  if (!weekNum) return Promise.resolve({ earned:[], newlyEarned:[], trainDays:0, threeStarDays:0 });
 
-  const thr = getStarThresholdsForWeek(weekNum, entries);
-  const dayXP = computeWeekDayXP(entries, weekNum);
-  const dates = Object.keys(dayXP);
+  var thr = getStarThresholdsForWeek(weekNum, entries);
+  var dayXP = computeWeekDayXP(entries, weekNum);
+  var dates = Object.keys(dayXP);
 
-  const trainDaysByStars = dates.filter(d => dayXP[d] >= thr.one).length;
-  const twoPlusDays = dates.filter(d => dayXP[d] >= thr.two).length;
-  const threeStarDays = dates.filter(d => dayXP[d] >= thr.three).length;
-  const questCount = countDailyQuestsInWeek(weekNum);
+  var trainDaysByStars = dates.filter(function (d){ return dayXP[d] >= thr.one; }).length;
+  var twoPlusDays = dates.filter(function (d){ return dayXP[d] >= thr.two; }).length;
+  var threeStarDays = dates.filter(function (d){ return dayXP[d] >= thr.three; }).length;
+  var questCount = countDailyQuestsInWeek(weekNum);
 
-  const shouldEarn = [];
+  var shouldEarn = [];
   if (trainDaysByStars >= 5) shouldEarn.push("noskip");
   if (twoPlusDays >= 5) shouldEarn.push("perfect");
   if (threeStarDays >= 2) shouldEarn.push("threestar");
   if (questCount >= 6) shouldEarn.push("questmaster");
 
-  const achState = loadWeeklyAch();
-  if (!achState[weekNum]) achState[weekNum] = {};
-  const newlyEarned = [];
+  var achState = loadWeeklyAch();
+  if (achState[weekNum] == null) achState[weekNum] = {};
+  var newlyEarned = [];
 
-  for (const id of shouldEarn){
+  shouldEarn.forEach(function (id) {
     if (!achState[weekNum][id]) {
       achState[weekNum][id] = true;
       newlyEarned.push(id);
     }
-  }
+  });
   saveWeeklyAch(achState);
 
+  var p = Promise.resolve();
+
   if (newlyEarned.length){
-    const today = isoDate(new Date());
-    for (const id of newlyEarned){
-      const a = ACHIEVEMENTS.find(x => x.id === id);
-      if (!a) continue;
-      await idbAdd({ date: today, week: weekNum, exercise: `Achievement: ${a.name}`, type: "Achievement", detail: a.rule, xp: a.xp });
-    }
+    var today = isoDate(new Date());
+    newlyEarned.forEach(function (id) {
+      var a = null;
+      for (var i=0;i<ACHIEVEMENTS.length;i++){ if (ACHIEVEMENTS[i].id === id) { a = ACHIEVEMENTS[i]; break; } }
+      if (!a) return;
+      p = p.then(function () {
+        return idbAdd({ date: today, week: weekNum, exercise: "Achievement: " + a.name, type: "Achievement", detail: a.rule, xp: a.xp });
+      });
+    });
   }
 
-  await updateWeeklyReward(entries, weekNum);
-
-  return { earned: shouldEarn, newlyEarned, trainDays: trainDaysByStars, threeStarDays };
+  return p.then(function () {
+    return updateWeeklyReward(entries, weekNum);
+  }).then(function () {
+    return { earned: shouldEarn, newlyEarned: newlyEarned, trainDays: trainDaysByStars, threeStarDays: threeStarDays };
+  });
 }
 
 /* =========================
-   SKILLTREE
+   SKILLTREE (wie vorher)
 ========================= */
-const TREES = [
+var TREES = [
   { key:"multi", name:"Mehrgelenkig (STR)", gateType:"Mehrgelenkig", domList:"tree-multi" },
   { key:"uni",   name:"Unilateral (STA)",   gateType:"Unilateral",   domList:"tree-uni" },
   { key:"core",  name:"Core (MOB/STA)",     gateType:"Core",         domList:"tree-core" },
   { key:"cond",  name:"Conditioning (END)", gateType:"Conditioning", domList:"tree-cond" },
-  { key:"comp",  name:"Komplexe (ELITE)",   gateType:"Komplexe",     domList:"tree-comp" },
+  { key:"comp",  name:"Komplexe (ELITE)",   gateType:"Komplexe",     domList:"tree-comp" }
 ];
 
 function defaultNodesForTree(treeKey){
   return [
-    { id:`${treeKey}_t1a`, tier:1, cost:1, name:"Tier 1: Foundation I", unlocked:false },
-    { id:`${treeKey}_t1b`, tier:1, cost:1, name:"Tier 1: Foundation II", unlocked:false },
-    { id:`${treeKey}_t1c`, tier:1, cost:1, name:"Tier 1: Foundation III", unlocked:false },
-    { id:`${treeKey}_t2a`, tier:2, cost:2, name:"Tier 2: Advanced I", unlocked:false },
-    { id:`${treeKey}_t2b`, tier:2, cost:2, name:"Tier 2: Advanced II", unlocked:false },
-    { id:`${treeKey}_t3a`, tier:3, cost:3, name:"Tier 3: Mastery", unlocked:false },
-    { id:`${treeKey}_cap`, tier:4, cost:5, name:"Capstone: Ascension", unlocked:false },
+    { id: treeKey+"_t1a", tier:1, cost:1, name:"Tier 1: Foundation I", unlocked:false },
+    { id: treeKey+"_t1b", tier:1, cost:1, name:"Tier 1: Foundation II", unlocked:false },
+    { id: treeKey+"_t1c", tier:1, cost:1, name:"Tier 1: Foundation III", unlocked:false },
+    { id: treeKey+"_t2a", tier:2, cost:2, name:"Tier 2: Advanced I", unlocked:false },
+    { id: treeKey+"_t2b", tier:2, cost:2, name:"Tier 2: Advanced II", unlocked:false },
+    { id: treeKey+"_t3a", tier:3, cost:3, name:"Tier 3: Mastery", unlocked:false },
+    { id: treeKey+"_cap", tier:4, cost:5, name:"Capstone: Ascension", unlocked:false }
   ];
 }
 
 function loadSkillState(){
-  const fallback = {
+  var fallback = {
     spent: 0,
-    nodes: Object.fromEntries(TREES.map(t => [t.key, defaultNodesForTree(t.key)]))
+    nodes: (function () {
+      var o = {};
+      TREES.forEach(function (t){ o[t.key] = defaultNodesForTree(t.key); });
+      return o;
+    })()
   };
-  const st = loadJSON(KEY_SKILL, fallback);
-  for (const t of TREES){
-    if (!st.nodes || !st.nodes[t.key]) {
-      if (!st.nodes) st.nodes = {};
-      st.nodes[t.key] = defaultNodesForTree(t.key);
-    }
-  }
+  var st = loadJSON(KEY_SKILL, fallback);
+  if (!st.nodes) st.nodes = {};
+  TREES.forEach(function (t) {
+    if (!st.nodes[t.key]) st.nodes[t.key] = defaultNodesForTree(t.key);
+  });
   if (typeof st.spent !== "number") st.spent = 0;
   return st;
 }
 function saveSkillState(st){ saveJSON(KEY_SKILL, st); }
 
 function countUnlocked(nodes, tier){
-  return nodes.filter(n => n.tier === tier && n.unlocked).length;
+  return nodes.filter(function (n){ return n.tier === tier && n.unlocked; }).length;
 }
 function isNodeAvailable(nodes, node){
   if (node.unlocked) return false;
@@ -927,57 +975,67 @@ function isNodeAvailable(nodes, node){
 }
 
 function computeSkillPointsEarned(entries){
-  const start = ensureStartDate();
-  const dayXP = {};
-  for (const e of entries) dayXP[e.date] = (dayXP[e.date] || 0) + (e.xp || 0);
+  var start = ensureStartDate();
+  var dayXP = {};
+  entries.forEach(function (e) {
+    dayXP[e.date] = (dayXP[e.date] || 0) + (e.xp || 0);
+  });
 
-  let points = 0;
-  for (const dayISO of Object.keys(dayXP)){
-    const w = clampWeek(getWeekNumber(start, dayISO));
-    const thr = getStarThresholdsForWeek(w, entries);
-    const s = starsForDay(dayXP[dayISO] || 0, thr);
+  var points = 0;
+  Object.keys(dayXP).forEach(function (dayISO) {
+    var w = clampWeek(getWeekNumber(start, dayISO));
+    var thr = getStarThresholdsForWeek(w, entries);
+    var s = starsForDay(dayXP[dayISO] || 0, thr);
     if (s === "⭐") points += 1;
     else if (s === "⭐⭐") points += 2;
     else if (s === "⭐⭐⭐") points += 3;
-  }
-  const bossClears = entries.filter(e => e.type === "Boss" && String(e.exercise || "").startsWith("Bossfight CLEARED")).length;
+  });
+
+  var bossClears = entries.filter(function (e) {
+    return e.type === "Boss" && String(e.exercise || "").indexOf("Bossfight CLEARED") === 0;
+  }).length;
   points += bossClears * 3;
 
-  const ach = entries.filter(e => e.type === "Achievement").length;
+  var ach = entries.filter(function (e) { return e.type === "Achievement"; }).length;
   points += ach * 1;
 
   return points;
 }
 function computeSkillPointsAvailable(entries){
-  const earned = computeSkillPointsEarned(entries);
-  const st = loadSkillState();
-  const spent = st.spent || 0;
-  return { earned, spent, available: Math.max(0, earned - spent) };
+  var earned = computeSkillPointsEarned(entries);
+  var st = loadSkillState();
+  var spent = st.spent || 0;
+  return { earned: earned, spent: spent, available: Math.max(0, earned - spent) };
 }
 
 function getActiveTreeGates(entries, currentWeek){
-  const typesThisWeek = new Set(entries.filter(e => e.week === currentWeek).map(e => e.type));
-  return Object.fromEntries(TREES.map(t => [t.key, typesThisWeek.has(t.gateType)]));
+  var typesThisWeek = {};
+  entries.forEach(function (e) {
+    if (e.week === currentWeek) typesThisWeek[e.type] = true;
+  });
+  var o = {};
+  TREES.forEach(function (t) { o[t.key] = !!typesThisWeek[t.gateType]; });
+  return o;
 }
 
-// Skilltree XP Effects
 function skillMultiplierForType(type){
-  const st = loadSkillState();
-  const mapKey =
-    type === "Mehrgelenkig" ? "multi" :
-    type === "Unilateral" ? "uni" :
-    type === "Core" ? "core" :
-    type === "Conditioning" ? "cond" :
-    type === "Komplexe" ? "comp" : null;
+  var st = loadSkillState();
+  var mapKey =
+    (type === "Mehrgelenkig") ? "multi" :
+    (type === "Unilateral") ? "uni" :
+    (type === "Core") ? "core" :
+    (type === "Conditioning") ? "cond" :
+    (type === "Komplexe") ? "comp" : null;
 
   if (!mapKey) return 1;
 
-  const nodes = (st.nodes && st.nodes[mapKey]) ? st.nodes[mapKey] : [];
-  const unlockedCount = nodes.filter(n => n.unlocked).length;
-  const capNode = nodes.find(n => String(n.id).endsWith("_cap"));
-  const hasCap = capNode ? capNode.unlocked === true : false;
+  var nodes = (st.nodes && st.nodes[mapKey]) ? st.nodes[mapKey] : [];
+  var unlockedCount = nodes.filter(function (n){ return n.unlocked; }).length;
 
-  let mult = 1 + unlockedCount * 0.02;
+  var hasCap = false;
+  nodes.forEach(function (n){ if (String(n.id).indexOf("_cap") >= 0 && n.unlocked) hasCap = true; });
+
+  var mult = 1 + unlockedCount * 0.02;
   if (hasCap) mult += 0.05;
   if (mapKey === "comp" && hasCap) mult += 0.03;
 
@@ -985,90 +1043,95 @@ function skillMultiplierForType(type){
 }
 
 function ensureDashboardSkillPill(){
-  const todayCard = document.querySelector("#tab-dash .card:nth-of-type(2)");
+  var todayCard = document.querySelector("#tab-dash .card:nth-of-type(2)");
   if (!todayCard) return;
   if (document.getElementById("skillPointsAvail")) return;
 
-  const row = todayCard.querySelector(".row2:last-of-type") || todayCard.querySelector(".row2") || null;
-  const pill = document.createElement("div");
+  var row = todayCard.querySelector(".row2:last-of-type") || todayCard.querySelector(".row2") || null;
+  var pill = document.createElement("div");
   pill.className = "pill";
-  pill.innerHTML = `<b>Skillpunkte verfügbar:</b> <span id="skillPointsAvail">0</span>`;
+  pill.innerHTML = '<b>Skillpunkte verfügbar:</b> <span id="skillPointsAvail">0</span>';
   if (row) row.appendChild(pill);
   else todayCard.appendChild(pill);
 }
 
 function renderSkillTrees(entries, curWeek){
-  const st = loadSkillState();
-  const sp = computeSkillPointsAvailable(entries);
-  const gates = getActiveTreeGates(entries, curWeek);
+  var st = loadSkillState();
+  var sp = computeSkillPointsAvailable(entries);
+  var gates = getActiveTreeGates(entries, curWeek);
 
-  ["multi","uni","core","cond","comp"].forEach(k=>{
-    const el = $("sp-"+k);
+  ["multi","uni","core","cond","comp"].forEach(function (k) {
+    var el = $("sp-"+k);
     if (el) el.textContent = sp.available;
   });
 
-  for (const tree of TREES){
-    const ul = $(tree.domList);
-    if (!ul) continue;
+  TREES.forEach(function (tree) {
+    var ul = $(tree.domList);
+    if (!ul) return;
     ul.innerHTML = "";
 
-    const gateOk = !!gates[tree.key];
-    const head = document.createElement("li");
-    head.innerHTML = `<div class="hint"><b>${tree.name}</b> • Gate: ${gateOk ? "✅ aktiv" : "🔒 gesperrt (diese Woche nicht trainiert)"}</div>`;
+    var gateOk = !!gates[tree.key];
+    var head = document.createElement("li");
+    head.innerHTML = '<div class="hint"><b>' + tree.name + '</b> • Gate: ' + (gateOk ? "✅ aktiv" : "🔒 gesperrt (diese Woche nicht trainiert)") + '</div>';
     ul.appendChild(head);
 
-    const nodes = st.nodes[tree.key];
-    nodes.forEach(node => {
-      const available = isNodeAvailable(nodes, node);
-      const canBuy = gateOk && available && (sp.available >= node.cost);
+    var nodes = st.nodes[tree.key];
+    nodes.forEach(function (node) {
+      var available = isNodeAvailable(nodes, node);
+      var canBuy = gateOk && available && (sp.available >= node.cost);
 
-      const li = document.createElement("li");
-      const status = node.unlocked ? "✅ unlocked" : (available ? "🔓 verfügbar" : "🔒 locked");
-      li.innerHTML = `
-        <div class="entryRow">
-          <div style="min-width:0;">
-            <div><b>${node.name}</b></div>
-            <div class="hint">Cost: ${node.cost} SP • ${status} • Effekt: +2% XP (Capstone extra)</div>
-          </div>
-          <div class="row" style="margin:0; align-items:flex-start;">
-            <button class="secondary" style="width:auto; padding:10px 12px;" data-node="${node.id}" ${canBuy ? "" : "disabled"}>
-              ${node.unlocked ? "Unlocked" : "Unlock"}
-            </button>
-          </div>
-        </div>
-      `;
+      var li = document.createElement("li");
+      var status = node.unlocked ? "✅ unlocked" : (available ? "🔓 verfügbar" : "🔒 locked");
+      li.innerHTML =
+        '<div class="entryRow">' +
+          '<div style="min-width:0;">' +
+            '<div><b>' + node.name + '</b></div>' +
+            '<div class="hint">Cost: ' + node.cost + ' SP • ' + status + ' • Effekt: +2% XP (Capstone extra)</div>' +
+          '</div>' +
+          '<div class="row" style="margin:0; align-items:flex-start;">' +
+            '<button class="secondary" style="width:auto; padding:10px 12px;" data-node="' + node.id + '" ' + (canBuy ? "" : "disabled") + '>' +
+              (node.unlocked ? "Unlocked" : "Unlock") +
+            '</button>' +
+          '</div>' +
+        '</div>';
       ul.appendChild(li);
     });
-  }
-
-  document.querySelectorAll("[data-node]").forEach(btn => {
-    btn.onclick = async () => {
-      const id = btn.getAttribute("data-node");
-      const st2 = loadSkillState();
-      const sp2 = computeSkillPointsAvailable(entries);
-      const gates2 = getActiveTreeGates(entries, curWeek);
-
-      let found = null, treeKey = null;
-      for (const t of TREES){
-        const nodes = st2.nodes[t.key];
-        const n = nodes.find(x => x.id === id);
-        if (n) { found = n; treeKey = t.key; break; }
-      }
-      if (!found) return;
-
-      if (!gates2[treeKey]) return alert("Tree gesperrt – trainiere den Typ diese Woche.");
-      if (found.unlocked) return;
-      const nodes = st2.nodes[treeKey];
-      if (!isNodeAvailable(nodes, found)) return alert("Noch locked – erfülle Tier-Voraussetzungen.");
-      if (sp2.available < found.cost) return alert("Nicht genug Skillpunkte.");
-
-      found.unlocked = true;
-      st2.spent = (st2.spent || 0) + found.cost;
-      saveSkillState(st2);
-
-      await renderAll();
-    };
   });
+
+  var btns = document.querySelectorAll("[data-node]");
+  for (var i=0;i<btns.length;i++){
+    (function (btn) {
+      btn.onclick = function () {
+        var id = btn.getAttribute("data-node");
+        var st2 = loadSkillState();
+        var sp2 = computeSkillPointsAvailable(entries);
+        var gates2 = getActiveTreeGates(entries, curWeek);
+
+        var found = null, treeKey = null;
+        TREES.forEach(function (t) {
+          if (found) return;
+          var nodes = st2.nodes[t.key];
+          for (var j=0;j<nodes.length;j++){
+            if (nodes[j].id === id) { found = nodes[j]; treeKey = t.key; break; }
+          }
+        });
+        if (!found) return;
+
+        if (!gates2[treeKey]) return alert("Tree gesperrt – trainiere den Typ diese Woche.");
+        if (found.unlocked) return;
+
+        var nodes2 = st2.nodes[treeKey];
+        if (!isNodeAvailable(nodes2, found)) return alert("Noch locked – erfülle Tier-Voraussetzungen.");
+        if (sp2.available < found.cost) return alert("Nicht genug Skillpunkte.");
+
+        found.unlocked = true;
+        st2.spent = (st2.spent || 0) + found.cost;
+        saveSkillState(st2);
+
+        renderAll();
+      };
+    })(btns[i]);
+  }
 }
 
 /* =========================
@@ -1077,18 +1140,18 @@ function renderSkillTrees(entries, curWeek){
 function loadPlanOverrides(){ return loadJSON(KEY_PLANOVR, {}); }
 function savePlanOverrides(s){ saveJSON(KEY_PLANOVR, s); }
 
-const PLAN_DEFAULT = {
+var PLAN_DEFAULT = {
   "Mon": ["DB Floor Press (neutral)","Arnold Press","Deficit Push-Ups","Overhead Trizeps Extension","DB Lateral Raises"],
   "Tue": ["1-Arm DB Row (Pause oben)","Renegade Rows","Reverse Flys (langsam)","DB Supinated Curl","Farmer’s Carry (DB)"],
   "Wed": ["Ruhetag (Recovery + Mobility)"],
   "Thu": ["Bulgarian Split Squats","DB Romanian Deadlift","Goblet Squat","Side Plank + Leg Raise","Standing DB Calf Raises"],
   "Fri": ["Komplex: Deadlift","Komplex: Clean","Komplex: Front Squat","Komplex: Push Press","Plank Shoulder Taps"],
   "Sat": ["Burpees","Mountain Climbers","High Knees","Russian Twists (DB)","Hollow Body Hold"],
-  "Sun": ["Ruhetag (Recovery + Mobility)"],
+  "Sun": ["Ruhetag (Recovery + Mobility)"]
 };
 
 function exercisesForGroup(groupName){
-  return EXERCISES.filter(e => e.group === groupName && e.type !== "Rest");
+  return EXERCISES.filter(function (e) { return e.group === groupName && e.type !== "Rest"; });
 }
 function groupForPlanDayKey(dayKey){
   if (dayKey === "Mon") return "Tag 1 – Push";
@@ -1100,311 +1163,324 @@ function groupForPlanDayKey(dayKey){
 }
 
 function getWeekPlan(week){
-  const ovr = loadPlanOverrides();
-  const w = String(week);
-  const base = deepClone(PLAN_DEFAULT); // ✅ iOS-safe
+  var ovr = loadPlanOverrides();
+  var w = String(week);
+  var base = JSON.parse(JSON.stringify(PLAN_DEFAULT)); // iOS safe clone
   if (!ovr[w]) return base;
-  for (const k of Object.keys(ovr[w])) base[k] = ovr[w][k];
+  Object.keys(ovr[w]).forEach(function (k) {
+    base[k] = ovr[w][k];
+  });
   return base;
 }
 
-/* =========================
-   CALENDAR HELPERS
-========================= */
-function startOfWeekMonday(dateISO){
-  const d = new Date(dateISO);
-  const day = d.getDay();
-  const diffToMon = (day === 0 ? -6 : 1 - day);
-  d.setDate(d.getDate() + diffToMon);
-  return isoDate(d);
-}
-function addDays(dateISO, n){
-  const d = new Date(dateISO);
-  d.setDate(d.getDate() + n);
-  return isoDate(d);
-}
-function rangeLabel(mondayISO){
-  const sunISO = addDays(mondayISO, 6);
-  return `${mondayISO} – ${sunISO}`;
-}
-const DOW = ["Mo","Di","Mi","Do","Fr","Sa","So"];
-
-/* =========================
-   WEEKLY PLAN RENDER
-========================= */
 function renderWeeklyPlan(curWeek, entries){
-  const content = $("planContent");
+  var content = $("planContent");
   if (!content) return;
 
-  const start = ensureStartDate();
-  const w = clampWeek(curWeek || 1);
-  const b = weekBlock(w);
-  const plan = getWeekPlan(w);
-  const mutation = getMutationForWeek(w);
-  const adaptive = getAdaptiveModifiers(entries, w);
-  const boss = getBossForWeek(w);
+  var start = ensureStartDate();
+  var w = clampWeek(curWeek || 1);
+  var b = weekBlock(w);
+  var plan = getWeekPlan(w);
+  var mutation = getMutationForWeek(w);
+  var adaptive = getAdaptiveModifiers(entries, w);
+  var boss = getBossForWeek(w);
 
   if ($("planStart")) $("planStart").textContent = start;
-  if ($("planWeek")) $("planWeek").textContent = `W${w}`;
+  if ($("planWeek")) $("planWeek").textContent = "W" + w;
   if ($("planBlock")) $("planBlock").textContent = blockName(b);
   if ($("planHint")) $("planHint").textContent = weeklyProgressHint(w);
-  if ($("planMutation")) $("planMutation").textContent = `${mutation.name} – ${mutation.effect}`;
-  if ($("planAdaptive")) $("planAdaptive").textContent = `${adaptive.setDelta>=0?"+":""}${adaptive.setDelta} Sätze, ${adaptive.repDelta>=0?"+":""}${adaptive.repDelta} Reps`;
+  if ($("planMutation")) $("planMutation").textContent = mutation.name + " – " + mutation.effect;
+  if ($("planAdaptive")) $("planAdaptive").textContent =
+    (adaptive.setDelta >= 0 ? "+" : "") + adaptive.setDelta + " Sätze, " +
+    (adaptive.repDelta >= 0 ? "+" : "") + adaptive.repDelta + " Reps";
 
-  const reward = rewardActiveForWeek(w) ? "✅ Aktiv: +5% XP diese Woche" : "—";
-  const thr = getStarThresholdsForWeek(w, entries);
+  var reward = rewardActiveForWeek(w) ? "✅ Aktiv: +5% XP diese Woche" : "—";
+  var thr = getStarThresholdsForWeek(w, entries);
 
-  let html = "";
-  html += `<div class="pill"><b>Ruhetage:</b> Mittwoch & Sonntag (Recovery/Mobility)</div>`;
-  html += `<div class="row2">
-    <div class="pill"><b>Sterne:</b> ⭐ ab ${thr.one} • ⭐⭐ ab ${thr.two} • ⭐⭐⭐ ab ${thr.three}</div>
-    <div class="pill"><b>Weekly Reward:</b> ${reward}</div>
-  </div>`;
-  html += `<div class="divider"></div>`;
+  var html = "";
+  html += '<div class="pill"><b>Ruhetage:</b> Mittwoch & Sonntag (Recovery/Mobility)</div>';
+  html += '<div class="row2">' +
+    '<div class="pill"><b>Sterne:</b> ⭐ ab ' + thr.one + ' • ⭐⭐ ab ' + thr.two + ' • ⭐⭐⭐ ab ' + thr.three + '</div>' +
+    '<div class="pill"><b>Weekly Reward:</b> ' + reward + '</div>' +
+  '</div>';
+  html += '<div class="divider"></div>';
 
-  if (boss) html += `<div class="pill"><b>Boss diese Woche:</b> ${boss.name} (+${boss.xp} XP)</div><div class="divider"></div>`;
+  if (boss) html += '<div class="pill"><b>Boss diese Woche:</b> ' + boss.name + ' (+' + boss.xp + ' XP)</div><div class="divider"></div>';
 
-  const dayNames = [
+  var dayNames = [
     ["Mon","Montag (Tag 1 – Push)"],
     ["Tue","Dienstag (Tag 2 – Pull)"],
     ["Wed","Mittwoch (Ruhetag)"],
     ["Thu","Donnerstag (Tag 3 – Beine & Core)"],
     ["Fri","Freitag (Tag 4 – Ganzkörper)"],
     ["Sat","Samstag (Tag 5 – Conditioning)"],
-    ["Sun","Sonntag (Ruhetag)"],
+    ["Sun","Sonntag (Ruhetag)"]
   ];
 
-  dayNames.forEach(([key,label])=>{
-    const exList = plan[key] || [];
-    html += `<div class="planDay"><h3>${label}</h3><ul class="planList">`;
+  dayNames.forEach(function (pair) {
+    var key = pair[0], label = pair[1];
+    var exList = plan[key] || [];
+    html += '<div class="planDay"><h3>' + label + '</h3><ul class="planList">';
 
     if (key === "Wed" || key === "Sun"){
-      html += `<li><b>Ruhetag</b><br><span class="small">10–20 Min Mobility + Spaziergang. Optional: Walking Desk 30–60 Min.</span></li>`;
-      html += `</ul></div>`;
+      html += '<li><b>Ruhetag</b><br><span class="small">10–20 Min Mobility + Spaziergang. Optional: Walking Desk 30–60 Min.</span></li>';
+      html += '</ul></div>';
       return;
     }
 
-    const group = groupForPlanDayKey(key);
-    const options = exercisesForGroup(group);
+    var group = groupForPlanDayKey(key);
+    var options = exercisesForGroup(group);
 
-    exList.forEach((exName, idx)=>{
-      const type = typeForExercise(exName);
-      const setRec = recommendedSetsForExercise(exName, type, w, adaptive).text;
-      const repRec = recommendedRepsForExercise(exName, type, w, adaptive);
+    exList.forEach(function (exName, idx) {
+      var type = typeForExercise(exName);
+      var setRec = recommendedSetsForExercise(exName, type, w, adaptive).text;
+      var repRec = recommendedRepsForExercise(exName, type, w, adaptive);
 
-      let sel = `<select class="swapSel" data-day="${key}" data-idx="${idx}">`;
-      options.forEach(o=>{
-        sel += `<option value="${o.name}" ${o.name===exName?"selected":""}>${o.name}</option>`;
+      var sel = '<select class="swapSel" data-day="' + key + '" data-idx="' + idx + '">';
+      options.forEach(function (o) {
+        sel += '<option value="' + o.name + '" ' + (o.name === exName ? "selected" : "") + '>' + o.name + '</option>';
       });
-      sel += `</select>`;
+      sel += '</select>';
 
-      html += `<li>
-        <div style="display:grid; gap:8px;">
-          <div><b>${exName}</b></div>
-          <div class="small">${type} • ${setRec} • ${repRec}</div>
-          <div class="small">Swap: ${sel}</div>
-        </div>
-      </li>`;
+      html += '<li>' +
+        '<div style="display:grid; gap:8px;">' +
+          '<div><b>' + exName + '</b></div>' +
+          '<div class="small">' + type + ' • ' + setRec + ' • ' + repRec + '</div>' +
+          '<div class="small">Swap: ' + sel + '</div>' +
+        '</div>' +
+      '</li>';
     });
 
-    html += `</ul></div>`;
+    html += '</ul></div>';
   });
 
-  html += `<div class="planDay"><h3>NEAT (optional)</h3>
-    <ul class="planList">
-      <li><b>Walking Desk 3 km/h</b><br><span class="small">XP = Minuten × 2.5</span></li>
-    </ul>
-  </div>`;
+  html += '<div class="planDay"><h3>NEAT (optional)</h3>' +
+    '<ul class="planList">' +
+      '<li><b>Walking Desk 3 km/h</b><br><span class="small">XP = Minuten × 2.5</span></li>' +
+    '</ul>' +
+  '</div>';
 
   content.innerHTML = html;
 
-  content.querySelectorAll("select.swapSel").forEach(sel=>{
-    sel.addEventListener("change", async ()=>{
-      const day = sel.getAttribute("data-day");
-      const idx = parseInt(sel.getAttribute("data-idx"), 10);
-      const val = sel.value;
+  var sels = content.querySelectorAll("select.swapSel");
+  for (var i=0;i<sels.length;i++){
+    (function (sel) {
+      sel.addEventListener("change", function () {
+        var day = sel.getAttribute("data-day");
+        var idx = parseInt(sel.getAttribute("data-idx"), 10);
+        var val = sel.value;
 
-      const ovr = loadPlanOverrides();
-      const wKey = String(w);
-      if (!ovr[wKey]) ovr[wKey] = {};
-      ovr[wKey][day] = (ovr[wKey][day] || (PLAN_DEFAULT[day] || [])).slice();
-      ovr[wKey][day][idx] = val;
-      savePlanOverrides(ovr);
+        var ovr = loadPlanOverrides();
+        var wKey = String(w);
+        if (ovr[wKey] == null) ovr[wKey] = {};
+        if (ovr[wKey][day] == null) ovr[wKey][day] = (PLAN_DEFAULT[day] || []).slice();
+        ovr[wKey][day][idx] = val;
+        savePlanOverrides(ovr);
 
-      await renderAll();
-    });
-  });
+        renderAll();
+      });
+    })(sels[i]);
+  }
 }
 
 /* =========================
-   CALENDAR (weekly view)
+   CALENDAR
 ========================= */
+function startOfWeekMonday(dateISO){
+  var d = new Date(dateISO);
+  var day = d.getDay();
+  var diffToMon = (day === 0 ? -6 : 1 - day);
+  d.setDate(d.getDate() + diffToMon);
+  return isoDate(d);
+}
+function addDays(dateISO, n){
+  var d = new Date(dateISO);
+  d.setDate(d.getDate() + n);
+  return isoDate(d);
+}
+function rangeLabel(mondayISO){
+  var sunISO = addDays(mondayISO, 6);
+  return mondayISO + " – " + sunISO;
+}
+var DOW = ["Mo","Di","Mi","Do","Fr","Sa","So"];
+
 function renderCalendar(entries){
-  const grid = $("calGrid");
+  var grid = $("calGrid");
   if (!grid) return;
 
-  const start = ensureStartDate();
-  const today = isoDate(new Date());
-  const curWeek = clampWeek(getWeekNumber(start, today));
+  var start = ensureStartDate();
+  var today = isoDate(new Date());
+  var curWeek = clampWeek(getWeekNumber(start, today));
 
-  const st = loadCalendarState();
-  const targetWeek = clampWeek(curWeek + (st.weekOffset || 0));
+  var st = loadCalendarState();
+  var targetWeek = clampWeek(curWeek + (st.weekOffset || 0));
 
-  const weekStart = addDays(start, (targetWeek - 1) * 7);
-  const monday = startOfWeekMonday(weekStart);
+  var weekStart = addDays(start, (targetWeek - 1) * 7);
+  var monday = startOfWeekMonday(weekStart);
 
-  if ($("calWeekTitle")) $("calWeekTitle").textContent = `Woche ${targetWeek}`;
+  if ($("calWeekTitle")) $("calWeekTitle").textContent = "Woche " + targetWeek;
   if ($("calRange")) $("calRange").textContent = rangeLabel(monday);
 
-  const dayXP = {};
-  for (let i=0;i<7;i++){
-    const day = addDays(monday, i);
-    dayXP[day] = 0;
+  var dayXP = {};
+  for (var i=0;i<7;i++){
+    var dayISO = addDays(monday, i);
+    dayXP[dayISO] = 0;
   }
-  for (const e of entries){
+  entries.forEach(function (e) {
     if (dayXP[e.date] != null) dayXP[e.date] += (e.xp || 0);
-  }
+  });
 
-  let selected = st.selectedDate || today;
+  var selected = st.selectedDate || today;
   if (dayXP[selected] == null) selected = monday;
 
   grid.innerHTML = "";
-  const thr = getStarThresholdsForWeek(targetWeek, entries);
+  var thr = getStarThresholdsForWeek(targetWeek, entries);
 
-  for (let i=0;i<7;i++){
-    const dateISO2 = addDays(monday, i);
-    const xp = dayXP[dateISO2] || 0;
-    const stars = starsForDay(xp, thr);
+  for (var j=0;j<7;j++){
+    (function (i2) {
+      var dateISO2 = addDays(monday, i2);
+      var xp = dayXP[dateISO2] || 0;
+      var stars = starsForDay(xp, thr);
 
-    const cell = document.createElement("div");
-    cell.className = "calCell" + (dateISO2 === selected ? " active":"");
-    cell.innerHTML = `
-      <div class="calTop">
-        <div class="calDow">${DOW[i]}</div>
-        <div class="calDate">${dateISO2.slice(5)}</div>
-      </div>
-      <div class="calXP"><b>${xp}</b> XP</div>
-      <div class="calStars">${stars}</div>
-    `;
-    cell.addEventListener("click", async ()=>{
-      const st2 = loadCalendarState();
-      st2.selectedDate = dateISO2;
-      saveCalendarState(st2);
-      if ($("date")) $("date").value = dateISO2;
-      await renderAll();
-    });
-    grid.appendChild(cell);
+      var cell = document.createElement("div");
+      cell.className = "calCell" + (dateISO2 === selected ? " active" : "");
+      cell.innerHTML =
+        '<div class="calTop">' +
+          '<div class="calDow">' + DOW[i2] + '</div>' +
+          '<div class="calDate">' + dateISO2.slice(5) + '</div>' +
+        '</div>' +
+        '<div class="calXP"><b>' + xp + '</b> XP</div>' +
+        '<div class="calStars">' + stars + '</div>';
+
+      cell.addEventListener("click", function () {
+        var st2 = loadCalendarState();
+        st2.selectedDate = dateISO2;
+        saveCalendarState(st2);
+        var dateEl = $("date");
+        if (dateEl) dateEl.value = dateISO2;
+        renderAll();
+      });
+      grid.appendChild(cell);
+    })(j);
   }
 
   renderDayEntries(entries, selected);
 }
 
 function renderDayEntries(entries, dateISO2){
-  const ul = $("dayEntries");
-  const title = $("dayTitle");
-  const dayXpEl = $("dayXp");
-  const starsEl = $("dayStars");
+  var ul = $("dayEntries");
+  var title = $("dayTitle");
+  var dayXpEl = $("dayXp");
+  var starsEl = $("dayStars");
   if (!ul) return;
 
-  const dayEntries = entries.filter(e => e.date === dateISO2).sort((a,b)=>(b.id??0)-(a.id??0));
-  const dayXp = dayEntries.reduce((s,e)=>s+(e.xp||0),0);
+  var dayEntries = entries.filter(function (e){ return e.date === dateISO2; })
+    .sort(function (a,b){ return (b.id || 0) - (a.id || 0); });
+  var dayXp = dayEntries.reduce(function (s,e){ return s + (e.xp || 0); }, 0);
 
-  const wDay = currentWeekFor(dateISO2);
-  const thr = getStarThresholdsForWeek(wDay, entries);
+  var wDay = currentWeekFor(dateISO2);
+  var thr = getStarThresholdsForWeek(wDay, entries);
 
-  if (title) title.textContent = `Tages-Einträge: ${dateISO2}`;
-  if (dayXpEl) dayXpEl.textContent = dayXp;
+  if (title) title.textContent = "Tages-Einträge: " + dateISO2;
+  if (dayXpEl) dayXpEl.textContent = String(dayXp);
   if (starsEl) starsEl.textContent = starsForDay(dayXp, thr);
 
   ul.innerHTML = "";
   if (!dayEntries.length) {
-    ul.innerHTML = `<li>Noch keine Einträge an diesem Tag.</li>`;
+    ul.innerHTML = "<li>Noch keine Einträge an diesem Tag.</li>";
     return;
   }
 
-  dayEntries.forEach(e=>{
-    const li = document.createElement("li");
-    li.innerHTML = `
-      <div class="entryRow">
-        <div style="min-width:0;">
-          <div class="entryTitle"><b>${e.exercise}</b></div>
-          <div class="hint">${e.type} • ${e.detail || ""}</div>
-          <div class="hint">ID: ${e.id} • W${e.week}</div>
-        </div>
-        <div class="row" style="margin:0; align-items:flex-start;">
-          <span class="badge">${e.xp} XP</span>
-          <button class="secondary" style="width:auto; padding:10px 12px;" data-edit="${e.id}">Edit</button>
-          <button class="danger" style="width:auto; padding:10px 12px;" data-del="${e.id}">Delete</button>
-        </div>
-      </div>
-    `;
+  dayEntries.forEach(function (e) {
+    var li = document.createElement("li");
+    li.innerHTML =
+      '<div class="entryRow">' +
+        '<div style="min-width:0;">' +
+          '<div class="entryTitle"><b>' + e.exercise + '</b></div>' +
+          '<div class="hint">' + e.type + ' • ' + (e.detail || "") + '</div>' +
+          '<div class="hint">ID: ' + e.id + ' • W' + e.week + '</div>' +
+        '</div>' +
+        '<div class="row" style="margin:0; align-items:flex-start;">' +
+          '<span class="badge">' + e.xp + ' XP</span>' +
+          '<button class="secondary" style="width:auto; padding:10px 12px;" data-edit="' + e.id + '">Edit</button>' +
+          '<button class="danger" style="width:auto; padding:10px 12px;" data-del="' + e.id + '">Delete</button>' +
+        '</div>' +
+      '</div>';
     ul.appendChild(li);
   });
 
-  ul.querySelectorAll("button[data-edit]").forEach(btn=>{
-    btn.addEventListener("click", async ()=>{
-      const id = parseInt(btn.getAttribute("data-edit"),10);
-      await startEditEntry(id);
-    });
-  });
-  ul.querySelectorAll("button[data-del]").forEach(btn=>{
-    btn.addEventListener("click", async ()=>{
-      const id = parseInt(btn.getAttribute("data-del"),10);
-      await deleteEntryById(id);
-    });
-  });
+  var editBtns = ul.querySelectorAll("button[data-edit]");
+  for (var i=0;i<editBtns.length;i++){
+    (function (btn) {
+      btn.addEventListener("click", function () {
+        var id = parseInt(btn.getAttribute("data-edit"), 10);
+        startEditEntry(id);
+      });
+    })(editBtns[i]);
+  }
+
+  var delBtns = ul.querySelectorAll("button[data-del]");
+  for (var j=0;j<delBtns.length;j++){
+    (function (btn) {
+      btn.addEventListener("click", function () {
+        var id = parseInt(btn.getAttribute("data-del"), 10);
+        deleteEntryById(id);
+      });
+    })(delBtns[j]);
+  }
 }
 
 /* =========================
    EDIT/DELETE
 ========================= */
-async function startEditEntry(id){
-  const all = await idbGetAll();
-  const e = all.find(x => x.id === id);
-  if (!e) return alert("Eintrag nicht gefunden.");
+function startEditEntry(id){
+  return idbGetAll().then(function (all) {
+    var e = null;
+    for (var i=0;i<all.length;i++){ if (all[i].id === id) { e = all[i]; break; } }
+    if (!e) { alert("Eintrag nicht gefunden."); return; }
 
-  $("editId").value = String(e.id);
-  if ($("logFormTitle")) $("logFormTitle").textContent = "Eintrag bearbeiten";
-  if ($("add")) $("add").textContent = "Änderungen speichern";
-  const ce = $("cancelEdit");
-  if (ce) ce.classList.remove("hide");
+    $("editId").value = String(e.id);
+    if ($("logFormTitle")) $("logFormTitle").textContent = "Eintrag bearbeiten";
+    if ($("add")) $("add").textContent = "Änderungen speichern";
+    var cancel = $("cancelEdit");
+    if (cancel) cancel.classList.remove("hide");
 
-  if ($("date")) $("date").value = e.date;
-  if ($("exercise")) $("exercise").value = e.exercise;
+    if ($("date")) $("date").value = e.date;
+    if ($("exercise")) $("exercise").value = e.exercise;
 
-  const mSets = (e.detail||"").match(/Sets:\s*(\d+)/i);
-  const mReps = (e.detail||"").match(/Reps:\s*(\d+)/i);
-  const mMin  = (e.detail||"").match(/Min:\s*(\d+)/i);
+    var mSets = (e.detail || "").match(/Sets:\s*(\d+)/i);
+    var mReps = (e.detail || "").match(/Reps:\s*(\d+)/i);
+    var mMin  = (e.detail || "").match(/Min:\s*(\d+)/i);
 
-  if ($("sets") && mSets) $("sets").value = mSets[1];
-  if ($("reps") && mReps) $("reps").value = mReps[1];
-  if ($("walkMin") && mMin) $("walkMin").value = mMin[1];
+    if ($("sets") && mSets) $("sets").value = mSets[1];
+    if ($("reps") && mReps) $("reps").value = mReps[1];
+    if ($("walkMin") && mMin) $("walkMin").value = mMin[1];
 
-  location.hash = "log";
-  await renderAll();
+    location.hash = "log";
+    return renderAll();
+  });
 }
-async function deleteEntryById(id){
-  const ok = confirm("Diesen Eintrag wirklich löschen?");
-  if (!ok) return;
-  await idbDelete(id);
-  await renderAll();
+function deleteEntryById(id){
+  var ok = confirm("Diesen Eintrag wirklich löschen?");
+  if (!ok) return Promise.resolve(true);
+  return idbDelete(id).then(function () { return renderAll(); });
 }
 function resetEditMode(){
   if ($("editId")) $("editId").value = "";
   if ($("logFormTitle")) $("logFormTitle").textContent = "Neuer Eintrag (rückwirkend möglich)";
   if ($("add")) $("add").textContent = "Eintrag speichern";
-  const ce = $("cancelEdit");
-  if (ce) ce.classList.add("hide");
+  var cancel = $("cancelEdit");
+  if (cancel) cancel.classList.add("hide");
 }
 
 /* =========================
    LOG UI + PREVIEW
 ========================= */
 function removeBonusCheckboxes(){
-  ["rpe9","tech","pause","extraXp"].forEach(id => {
-    const el = $(id);
+  ["rpe9","tech","pause","extraXp"].forEach(function (id) {
+    var el = $(id);
     if (!el) return;
-    const label = el.closest("label");
+    var label = el.closest ? el.closest("label") : null;
     if (label) label.remove();
     else el.remove();
   });
@@ -1412,98 +1488,99 @@ function removeBonusCheckboxes(){
 
 function ensureRepsInput(){
   if ($("reps")) return;
-  const setsRow = $("setsRow");
+  var setsRow = $("setsRow");
   if (!setsRow) return;
-  const wrap = document.createElement("div");
-  wrap.innerHTML = `
-    <label>Wiederholungen pro Satz
-      <input id="reps" type="number" min="0" step="1" inputmode="numeric" placeholder="z. B. 10">
-    </label>
-  `;
+  var wrap = document.createElement("div");
+  wrap.innerHTML =
+    '<label>Wiederholungen pro Satz' +
+      '<input id="reps" type="number" min="0" step="1" inputmode="numeric" placeholder="z. B. 10">' +
+    '</label>';
   setsRow.appendChild(wrap);
 }
 
-async function updateLogUI(entries){
+function updateLogUI(entries){
   ensureRepsInput();
 
   if ($("logStart")) $("logStart").textContent = ensureStartDate();
 
-  const dateISO2 = ($("date") && $("date").value) ? $("date").value : isoDate(new Date());
-  const week = currentWeekFor(dateISO2);
-  if ($("logWeek")) $("logWeek").textContent = `W${week}`;
+  var dateISO2 = ($("date") && $("date").value) ? $("date").value : isoDate(new Date());
+  var week = currentWeekFor(dateISO2);
+  if ($("logWeek")) $("logWeek").textContent = "W" + week;
 
-  const mutation = getMutationForWeek(week);
-  const adaptive = getAdaptiveModifiers(entries, week);
+  var mutation = getMutationForWeek(week);
+  var adaptive = getAdaptiveModifiers(entries, week);
 
-  const exName = $("exercise") ? $("exercise").value : null;
-  const type = typeForExercise(exName);
+  var exName = ($("exercise") && $("exercise").value) ? $("exercise").value : "";
+  var type = typeForExercise(exName);
 
   if ($("autoType")) $("autoType").textContent = type;
 
-  const setRec = recommendedSetsForExercise(exName, type, week, adaptive);
-  const repRec = recommendedRepsForExercise(exName, type, week, adaptive);
+  var setRec = recommendedSetsForExercise(exName, type, week, adaptive);
+  var repRec = recommendedRepsForExercise(exName, type, week, adaptive);
 
   if ($("recommendedSets")) $("recommendedSets").textContent = setRec.text;
   if ($("recommendedReps")) $("recommendedReps").textContent = repRec;
 
-  const isWalk = isWalkType(type);
-  const isRest = isRestType(type);
+  var isWalk = isWalkType(type);
+  var isRest = isRestType(type);
 
-  const wr = $("walkingRow");
-  if (wr) wr.classList.toggle("hide", !isWalk);
-  const sr = $("setsRow");
-  if (sr) sr.classList.toggle("hide", isWalk || isRest);
+  var walkRow = $("walkingRow");
+  if (walkRow) walkRow.classList.toggle("hide", !isWalk);
+
+  var setsRow = $("setsRow");
+  if (setsRow) setsRow.classList.toggle("hide", isWalk || isRest);
 
   if (!isWalk && !isRest && $("sets") && setRec.value) {
-    const el = $("sets");
-    const raw = (el.value ?? "").trim();
-    const isEditing = (document.activeElement === el);
-    if (!isEditing && (raw === "" || parseInt(raw,10) <= 0)) el.value = String(setRec.value);
+    var elS = $("sets");
+    var rawS = (elS.value || "").trim();
+    var isEditingS = (document.activeElement === elS);
+    if (!isEditingS && (rawS === "" || parseInt(rawS,10) <= 0)) elS.value = String(setRec.value);
   }
   if (!isWalk && !isRest && $("reps")) {
-    const el = $("reps");
-    const raw = (el.value ?? "").trim();
-    const isEditing = (document.activeElement === el);
-    if (!isEditing && raw === "") {
-      const n = (repRec.match(/\d+/) || [])[0];
-      if (n) el.value = n;
+    var elR = $("reps");
+    var rawR = (elR.value || "").trim();
+    var isEditingR = (document.activeElement === elR);
+    if (!isEditingR && rawR === "") {
+      var m = repRec.match(/\d+/);
+      if (m && m[0]) elR.value = m[0];
     }
   }
 
-  const mutMult = mutationXpMultiplierForType(type, mutation);
-  const skillMult = skillMultiplierForType(type);
-  const rewardMult = rewardActiveForWeek(week) ? 1.05 : 1.0;
+  var mutMult = mutationXpMultiplierForType(type, mutation);
+  var skillMult = skillMultiplierForType(type);
+  var rewardMult = rewardActiveForWeek(week) ? 1.05 : 1.0;
 
   if ($("logAdaptive")) {
     $("logAdaptive").textContent =
-      `W${week} • Mut x${mutMult.toFixed(2)} • Skill x${skillMult.toFixed(2)} • Reward x${rewardMult.toFixed(2)} • Adaptive nur Empfehlungen`;
+      "W"+week+" • Mut x"+mutMult.toFixed(2)+" • Skill x"+skillMult.toFixed(2)+" • Reward x"+rewardMult.toFixed(2)+" • Adaptive nur Empfehlungen";
   }
 
   updateCalcPreview(week, mutation);
 }
 
 function updateCalcPreview(week, mutation){
-  const exName = $("exercise") ? $("exercise").value : null;
-  const type = typeForExercise(exName);
+  var exName = ($("exercise") && $("exercise").value) ? $("exercise").value : "";
+  var type = typeForExercise(exName);
 
-  let base = 0;
+  var base = 0;
   if (type === "NEAT") {
-    const minutes = Math.max(1, parseInt(($("walkMin") ? $("walkMin").value : "0") || "0", 10));
+    var minutes = Math.max(1, parseInt(($("walkMin") && $("walkMin").value) ? $("walkMin").value : "0", 10));
     base = neatXP(minutes);
   } else if (type === "Rest") {
     base = 0;
   } else {
-    base = XP_PER_EXERCISE[type] ?? 0;
+    base = XP_PER_EXERCISE[type] || 0;
   }
 
-  const mutMult = mutationXpMultiplierForType(type, mutation);
-  const skillMult = skillMultiplierForType(type);
-  const rewardMult = rewardActiveForWeek(week) ? 1.05 : 1.0;
+  var mutMult = mutationXpMultiplierForType(type, mutation);
+  var skillMult = skillMultiplierForType(type);
+  var rewardMult = rewardActiveForWeek(week) ? 1.05 : 1.0;
 
-  const xp = Math.round(base * mutMult * skillMult * rewardMult);
+  var xp = Math.round(base * mutMult * skillMult * rewardMult);
 
-  if ($("calcXp")) $("calcXp").textContent = xp;
-  if ($("calcInfo")) $("calcInfo").textContent = `Base ${base} • Mut x${mutMult.toFixed(2)} • Skill x${skillMult.toFixed(2)} • Reward x${rewardMult.toFixed(2)}`;
+  if ($("calcXp")) $("calcXp").textContent = String(xp);
+  if ($("calcInfo")) $("calcInfo").textContent =
+    "Base "+base+" • Mut x"+mutMult.toFixed(2)+" • Skill x"+skillMult.toFixed(2)+" • Reward x"+rewardMult.toFixed(2);
 }
 
 /* =========================
@@ -1511,21 +1588,21 @@ function updateCalcPreview(week, mutation){
 ========================= */
 function attrReqForLevel(level){ return 900 + (level - 1) * 150; }
 function attrLevelFromXp(totalXp){
-  let lvl = 1;
-  let xp = Math.max(0, Math.round(totalXp || 0));
+  var lvl = 1;
+  var xp = Math.max(0, Math.round(totalXp || 0));
   while (true) {
-    const req = attrReqForLevel(lvl);
+    var req = attrReqForLevel(lvl);
     if (xp >= req) { xp -= req; lvl += 1; }
     else break;
     if (lvl > 999) break;
   }
-  return { lvl, into: xp, need: attrReqForLevel(lvl) };
+  return { lvl: lvl, into: xp, need: attrReqForLevel(lvl) };
 }
 
 function baseAttrFromEntry(e) {
-  const out = { STR:0, STA:0, END:0, MOB:0 };
-  const xp = e.xp || 0;
-  const t = e.type || "";
+  var out = { STR:0, STA:0, END:0, MOB:0 };
+  var xp = e.xp || 0;
+  var t = e.type || "";
 
   if (t === "Mehrgelenkig") out.STR += xp;
   else if (t === "Unilateral") out.STA += xp;
@@ -1538,56 +1615,55 @@ function baseAttrFromEntry(e) {
 }
 
 function applyMutationToAttr(attr, mutation){
-  const out = { ...attr };
-  if (mutation && mutation.mult && mutation.mult.STR) out.STR *= mutation.mult.STR;
-  if (mutation && mutation.mult && mutation.mult.STA) out.STA *= mutation.mult.STA;
-  if (mutation && mutation.mult && mutation.mult.END) out.END *= mutation.mult.END;
-  if (mutation && mutation.mult && mutation.mult.MOB) out.MOB *= mutation.mult.MOB;
+  var out = { STR:attr.STR, STA:attr.STA, END:attr.END, MOB:attr.MOB };
+  if (mutation && mutation.mult) {
+    if (mutation.mult.STR) out.STR *= mutation.mult.STR;
+    if (mutation.mult.STA) out.STA *= mutation.mult.STA;
+    if (mutation.mult.END) out.END *= mutation.mult.END;
+    if (mutation.mult.MOB) out.MOB *= mutation.mult.MOB;
+  }
   return out;
 }
 
-/* =========================
-   STATS
-========================= */
-async function computeStats(entries){
-  const startDate = ensureStartDate();
-  const today = isoDate(new Date());
-  const curWeek = clampWeek(getWeekNumber(startDate, today));
+function computeStats(entries){
+  var startDate = ensureStartDate();
+  var today = isoDate(new Date());
+  var curWeek = clampWeek(getWeekNumber(startDate, today));
 
-  let todayXp = 0, weekXp = 0, totalXp = 0;
-  const attr = { STR:0, STA:0, END:0, MOB:0 };
+  var todayXp = 0, weekXp = 0, totalXp = 0;
+  var attr = { STR:0, STA:0, END:0, MOB:0 };
 
-  for (const e of entries){
-    totalXp += e.xp || 0;
-    if (e.date === today) todayXp += e.xp || 0;
-    if (e.week === curWeek) weekXp += e.xp || 0;
+  entries.forEach(function (e) {
+    totalXp += (e.xp || 0);
+    if (e.date === today) todayXp += (e.xp || 0);
+    if (e.week === curWeek) weekXp += (e.xp || 0);
 
-    const mut = getMutationForWeek(e.week || curWeek);
-    const base = baseAttrFromEntry(e);
-    const adj = applyMutationToAttr(base, mut);
+    var mut = getMutationForWeek(e.week || curWeek);
+    var base = baseAttrFromEntry(e);
+    var adj = applyMutationToAttr(base, mut);
     attr.STR += adj.STR; attr.STA += adj.STA; attr.END += adj.END; attr.MOB += adj.MOB;
-  }
+  });
 
-  return { todayXp, weekXp, totalXp, curWeek, startDate, attr };
+  return { todayXp: todayXp, weekXp: weekXp, totalXp: totalXp, curWeek: curWeek, startDate: startDate, attr: attr };
 }
 
 function renderAttributes(attr){
-  const keys = ["STR","STA","END","MOB"];
-  keys.forEach(k => {
-    const xp = Math.round(attr[k] || 0);
-    const { lvl, into, need } = attrLevelFromXp(xp);
-    const pct = Math.max(0, Math.min(100, Math.round((into / need) * 100)));
+  ["STR","STA","END","MOB"].forEach(function (k) {
+    var xp = Math.round(attr[k] || 0);
+    var lvObj = attrLevelFromXp(xp);
+    var lvl = lvObj.lvl, into = lvObj.into, need = lvObj.need;
+    var pct = Math.max(0, Math.min(100, Math.round((into / need) * 100)));
 
-    if ($("lv"+k)) $("lv"+k).textContent = lvl;
-    if ($("xp"+k)) $("xp"+k).textContent = xp;
-    if ($("need"+k)) $("need"+k).textContent = Math.max(0, need - into);
+    if ($("lv"+k)) $("lv"+k).textContent = String(lvl);
+    if ($("xp"+k)) $("xp"+k).textContent = String(xp);
+    if ($("need"+k)) $("need"+k).textContent = String(Math.max(0, need - into));
     if ($("bar"+k)) $("bar"+k).style.width = pct + "%";
   });
 }
 
 function renderMutationUI(curWeek){
-  const m = getMutationForWeek(curWeek);
-  if ($("mutationName")) $("mutationName").textContent = `W${curWeek}: ${m.name}`;
+  var m = getMutationForWeek(curWeek);
+  if ($("mutationName")) $("mutationName").textContent = "W"+curWeek+": " + m.name;
   if ($("mutationDesc")) $("mutationDesc").textContent = m.desc;
   if ($("mutationEffect")) $("mutationEffect").textContent = m.effect;
 }
@@ -1596,222 +1672,237 @@ function renderMutationUI(curWeek){
    CSV EXPORT
 ========================= */
 function csvSafe(v){
-  const s = String(v ?? "");
-  if (s.includes(",") || s.includes('"') || s.includes("\n")) {
-    return `"${replaceAllSafe(s, '"', '""')}"`; // ✅ iOS-safe
+  var s = String(v == null ? "" : v);
+  if (s.indexOf(",") >= 0 || s.indexOf('"') >= 0 || s.indexOf("\n") >= 0) {
+    return '"' + s.split('"').join('""') + '"'; // iOS safe replaceAll
   }
   return s;
 }
 function toCSV(entries){
-  const header = ["id","date","week","exercise","type","detail","xp"];
-  const rows = [header.join(",")];
-  entries.forEach(e => rows.push([e.id, e.date, e.week, csvSafe(e.exercise), e.type, csvSafe(e.detail), e.xp].join(",")));
+  var header = ["id","date","week","exercise","type","detail","xp"];
+  var rows = [header.join(",")];
+  entries.forEach(function (e) {
+    rows.push([e.id, e.date, e.week, csvSafe(e.exercise), e.type, csvSafe(e.detail), e.xp].join(","));
+  });
   return rows.join("\n");
 }
 function downloadCSV(filename, content){
-  const blob = new Blob([content], { type: "text/csv;charset=utf-8;" });
-  const url = URL.createObjectURL(blob);
-  const a = document.createElement("a");
+  var blob = new Blob([content], { type: "text/csv;charset=utf-8;" });
+  var url = URL.createObjectURL(blob);
+  var a = document.createElement("a");
   a.href = url;
   a.download = filename;
   document.body.appendChild(a);
   a.click();
   a.remove();
-  setTimeout(() => URL.revokeObjectURL(url), 1000);
+  setTimeout(function () { URL.revokeObjectURL(url); }, 1000);
 }
 
 /* =========================
    ENTRIES LIST
 ========================= */
 function renderAllEntriesList(entries){
-  const list = $("list");
+  var list = $("list");
   if (!list) return;
 
   list.innerHTML = "";
   if (!entries.length){
-    list.innerHTML = `<li>Noch keine Einträge.</li>`;
+    list.innerHTML = "<li>Noch keine Einträge.</li>";
     return;
   }
 
-  entries.forEach(e=>{
-    const li = document.createElement("li");
-    li.innerHTML = `
-      <div class="entryRow">
-        <div style="min-width:0;">
-          <div class="entryTitle"><b>${e.date}</b> (W${e.week}) • <b>${e.exercise}</b></div>
-          <div class="hint">${e.type} • ${e.detail || ""}</div>
-        </div>
-        <div class="row" style="margin:0; align-items:flex-start;">
-          <span class="badge">${e.xp} XP</span>
-          <button class="secondary" style="width:auto; padding:10px 12px;" data-edit="${e.id}">Edit</button>
-          <button class="danger" style="width:auto; padding:10px 12px;" data-del="${e.id}">Delete</button>
-        </div>
-      </div>
-    `;
+  entries.forEach(function (e) {
+    var li = document.createElement("li");
+    li.innerHTML =
+      '<div class="entryRow">' +
+        '<div style="min-width:0;">' +
+          '<div class="entryTitle"><b>' + e.date + '</b> (W' + e.week + ') • <b>' + e.exercise + '</b></div>' +
+          '<div class="hint">' + e.type + ' • ' + (e.detail || "") + '</div>' +
+        '</div>' +
+        '<div class="row" style="margin:0; align-items:flex-start;">' +
+          '<span class="badge">' + e.xp + ' XP</span>' +
+          '<button class="secondary" style="width:auto; padding:10px 12px;" data-edit="' + e.id + '">Edit</button>' +
+          '<button class="danger" style="width:auto; padding:10px 12px;" data-del="' + e.id + '">Delete</button>' +
+        '</div>' +
+      '</div>';
     list.appendChild(li);
   });
 
-  list.querySelectorAll("button[data-edit]").forEach(btn=>{
-    btn.addEventListener("click", async ()=>{
-      const id = parseInt(btn.getAttribute("data-edit"),10);
-      await startEditEntry(id);
-    });
-  });
-  list.querySelectorAll("button[data-del]").forEach(btn=>{
-    btn.addEventListener("click", async ()=>{
-      const id = parseInt(btn.getAttribute("data-del"),10);
-      await deleteEntryById(id);
-    });
-  });
+  var editBtns = list.querySelectorAll("button[data-edit]");
+  for (var i=0;i<editBtns.length;i++){
+    (function (btn) {
+      btn.addEventListener("click", function () {
+        var id = parseInt(btn.getAttribute("data-edit"), 10);
+        startEditEntry(id);
+      });
+    })(editBtns[i]);
+  }
+  var delBtns = list.querySelectorAll("button[data-del]");
+  for (var j=0;j<delBtns.length;j++){
+    (function (btn) {
+      btn.addEventListener("click", function () {
+        var id = parseInt(btn.getAttribute("data-del"), 10);
+        deleteEntryById(id);
+      });
+    })(delBtns[j]);
+  }
 }
 
 /* =========================
    SAVE / UPDATE ENTRY
 ========================= */
-async function saveOrUpdateEntry(){
-  const dateISO2 = ($("date") && $("date").value) ? $("date").value : isoDate(new Date());
-  const week = currentWeekFor(dateISO2);
+function saveOrUpdateEntry(){
+  var dateISO2 = ($("date") && $("date").value) ? $("date").value : isoDate(new Date());
+  var week = currentWeekFor(dateISO2);
 
-  const exName = $("exercise") ? ($("exercise").value || "Unbekannt") : "Unbekannt";
-  const type = typeForExercise(exName);
+  var exName = ($("exercise") && $("exercise").value) ? $("exercise").value : "Unbekannt";
+  var type = typeForExercise(exName);
 
-  const entries = sortEntriesDesc(await idbGetAll());
-  const adaptive = getAdaptiveModifiers(entries, week);
-  const mutation = getMutationForWeek(week);
+  return idbGetAll().then(function (raw) {
+    var entries = sortEntriesDesc(raw);
+    var adaptive = getAdaptiveModifiers(entries, week);
+    var mutation = getMutationForWeek(week);
 
-  const setRec = recommendedSetsForExercise(exName, type, week, adaptive).text;
-  const repRec = recommendedRepsForExercise(exName, type, week, adaptive);
+    var setRec = recommendedSetsForExercise(exName, type, week, adaptive).text;
+    var repRec = recommendedRepsForExercise(exName, type, week, adaptive);
 
-  const sets = parseInt((($("sets") ? $("sets").value : "") || "").trim(), 10);
-  const reps = parseInt((($("reps") ? $("reps").value : "") || "").trim(), 10);
+    var sets = parseInt((($("sets") && $("sets").value) ? $("sets").value : "").trim(), 10);
+    var reps = parseInt((($("reps") && $("reps").value) ? $("reps").value : "").trim(), 10);
 
-  let base = 0;
-  if (type === "NEAT") {
-    const minutes = Math.max(1, parseInt((($("walkMin") ? $("walkMin").value : "0") || "0"), 10));
-    base = neatXP(minutes);
-  } else if (type === "Rest") {
-    base = 0;
-  } else {
-    base = XP_PER_EXERCISE[type] ?? 0;
-  }
+    var base = 0;
+    if (type === "NEAT") {
+      var minutes = Math.max(1, parseInt((($("walkMin") && $("walkMin").value) ? $("walkMin").value : "0"), 10));
+      base = neatXP(minutes);
+    } else if (type === "Rest") {
+      base = 0;
+    } else {
+      base = XP_PER_EXERCISE[type] || 0;
+    }
 
-  const mutMult = mutationXpMultiplierForType(type, mutation);
-  const skillMult = skillMultiplierForType(type);
-  const rewardMult = rewardActiveForWeek(week) ? 1.05 : 1.0;
+    var mutMult = mutationXpMultiplierForType(type, mutation);
+    var skillMult = skillMultiplierForType(type);
+    var rewardMult = rewardActiveForWeek(week) ? 1.05 : 1.0;
 
-  const xp = Math.round(base * mutMult * skillMult * rewardMult);
+    var xp = Math.round(base * mutMult * skillMult * rewardMult);
 
-  let detail = `Empf: ${setRec} / ${repRec}`;
-  if (type === "NEAT") {
-    const minutes = Math.max(1, parseInt((($("walkMin") ? $("walkMin").value : "0") || "0"), 10));
-    detail = `Min: ${minutes} • ${detail}`;
-  } else if (type !== "Rest") {
-    if (!Number.isNaN(sets)) detail = `Sets: ${sets} • ` + detail;
-    if (!Number.isNaN(reps)) detail = `Reps: ${reps} • ` + detail;
-  } else {
-    detail = `Recovery • Mobility 10–20 Min`;
-  }
-  detail += ` • Mut x${mutMult.toFixed(2)} • Skill x${skillMult.toFixed(2)} • Reward x${rewardMult.toFixed(2)}`;
+    var detail = "Empf: " + setRec + " / " + repRec;
+    if (type === "NEAT") {
+      var minutes2 = Math.max(1, parseInt((($("walkMin") && $("walkMin").value) ? $("walkMin").value : "0"), 10));
+      detail = "Min: " + minutes2 + " • " + detail;
+    } else if (type !== "Rest") {
+      if (!Number.isNaN(sets)) detail = "Sets: " + sets + " • " + detail;
+      if (!Number.isNaN(reps)) detail = "Reps: " + reps + " • " + detail;
+    } else {
+      detail = "Recovery • Mobility 10–20 Min";
+    }
+    detail += " • Mut x"+mutMult.toFixed(2)+" • Skill x"+skillMult.toFixed(2)+" • Reward x"+rewardMult.toFixed(2);
 
-  const editId = parseInt((($("editId") ? $("editId").value : "") ?? "").trim(), 10);
+    var editId = parseInt((($("editId") && $("editId").value) ? $("editId").value : "").trim(), 10);
 
-  if (editId) {
-    await idbPut({ id: editId, date: dateISO2, week, exercise: exName, type, detail, xp });
-    resetEditMode();
-    alert(`Gespeichert (Edit): ${dateISO2} • +${xp} XP ✅`);
-  } else {
-    await idbAdd({ date: dateISO2, week, exercise: exName, type, detail, xp });
-    alert(`Gespeichert: ${dateISO2} • +${xp} XP ✅`);
-  }
+    var p;
+    if (editId) {
+      p = idbPut({ id: editId, date: dateISO2, week: week, exercise: exName, type: type, detail: detail, xp: xp })
+        .then(function () {
+          resetEditMode();
+          alert("Gespeichert (Edit): " + dateISO2 + " • +" + xp + " XP ✅");
+        });
+    } else {
+      p = idbAdd({ date: dateISO2, week: week, exercise: exName, type: type, detail: detail, xp: xp })
+        .then(function () {
+          alert("Gespeichert: " + dateISO2 + " • +" + xp + " XP ✅");
+        });
+    }
 
-  clearLogDraft(dateISO2);
-  await renderAll();
+    return p.then(function () {
+      clearLogDraft(dateISO2);
+      return renderAll();
+    });
+  });
 }
 
 /* =========================
-   MINI-ANALYTICS (Dashboard + Analytics Tab)
+   MINI-ANALYTICS
 ========================= */
 function ensureAnalyticsTabExists(){
-  const nav = document.querySelector("nav.tabs");
-  const main = document.querySelector("main");
+  var nav = document.querySelector("nav.tabs");
+  var main = document.querySelector("main");
   if (!nav || !main) return;
 
   if (!document.querySelector('.tab[data-tab="analytics"]')) {
-    const btn = document.createElement("button");
+    var btn = document.createElement("button");
     btn.type = "button";
     btn.className = "tab";
     btn.setAttribute("data-tab", "analytics");
     btn.textContent = "Analytics";
-    const exportBtn = nav.querySelector('.tab[data-tab="export"]');
+    var exportBtn = nav.querySelector('.tab[data-tab="export"]');
     if (exportBtn) nav.insertBefore(btn, exportBtn);
     else nav.appendChild(btn);
   }
 
   if (!document.getElementById("tab-analytics")) {
-    const sec = document.createElement("section");
+    var sec = document.createElement("section");
     sec.id = "tab-analytics";
     sec.className = "panel";
-    sec.innerHTML = `
-      <div class="card">
-        <h2>Mini-Analytics</h2>
-        <p class="hint">Wochen-Trend, Top-Übungen, Typ-Verteilung & ⭐ Übersicht.</p>
+    sec.innerHTML =
+      '<div class="card">' +
+        '<h2>Mini-Analytics</h2>' +
+        '<p class="hint">Wochen-Trend, Top-Übungen, Typ-Verteilung & ⭐ Übersicht.</p>' +
 
-        <div class="row2">
-          <div class="pill"><b>Woche:</b> <span id="anWeek">—</span></div>
-          <div class="pill"><b>Trend vs. letzte Woche:</b> <span id="anTrend">—</span></div>
-        </div>
+        '<div class="row2">' +
+          '<div class="pill"><b>Woche:</b> <span id="anWeek">—</span></div>' +
+          '<div class="pill"><b>Trend vs. letzte Woche:</b> <span id="anTrend">—</span></div>' +
+        '</div>' +
 
-        <div class="divider"></div>
+        '<div class="divider"></div>' +
 
-        <h2>Wochen-XP (letzte 8 Wochen)</h2>
-        <canvas id="anWeekChart" width="900" height="240" style="width:100%; height:auto; border-radius:12px;"></canvas>
-        <div class="hint" id="anWeekChartHint">—</div>
+        '<h2>Wochen-XP (letzte 8 Wochen)</h2>' +
+        '<canvas id="anWeekChart" width="900" height="240" style="width:100%; height:auto; border-radius:12px;"></canvas>' +
+        '<div class="hint" id="anWeekChartHint">—</div>' +
 
-        <div class="divider"></div>
+        '<div class="divider"></div>' +
 
-        <div class="grid2">
-          <div class="skillbox">
-            <h3>Top 10 Übungen (nach XP)</h3>
-            <ul class="skilllist" id="anTopExercises"></ul>
-          </div>
-          <div class="skillbox">
-            <h3>XP nach Übungstyp</h3>
-            <ul class="skilllist" id="anTypeDist"></ul>
-          </div>
-        </div>
+        '<div class="grid2">' +
+          '<div class="skillbox">' +
+            '<h3>Top 10 Übungen (nach XP)</h3>' +
+            '<ul class="skilllist" id="anTopExercises"></ul>' +
+          '</div>' +
+          '<div class="skillbox">' +
+            '<h3>XP nach Übungstyp</h3>' +
+            '<ul class="skilllist" id="anTypeDist"></ul>' +
+          '</div>' +
+        '</div>' +
 
-        <div class="divider"></div>
+        '<div class="divider"></div>' +
 
-        <h2>⭐ Übersicht (aktuelle Woche)</h2>
-        <div id="anStarGrid" class="calGrid"></div>
-        <p class="hint">Ziel: Mehr ⭐⭐⭐-Tage – und weniger „—“.</p>
-      </div>
-    `;
+        '<h2>⭐ Übersicht (aktuelle Woche)</h2>' +
+        '<div id="anStarGrid" class="calGrid"></div>' +
+        '<p class="hint">Ziel: Mehr ⭐⭐⭐-Tage – und weniger „—“.</p>' +
+      '</div>';
+
     main.appendChild(sec);
   }
 
   if (!document.getElementById("dashAnalyticsCard")) {
-    const dash = document.getElementById("tab-dash");
+    var dash = document.getElementById("tab-dash");
     if (!dash) return;
-    const cards = dash.querySelectorAll(".card");
-    const insertAfter = cards && cards[1] ? cards[1] : null;
+    var cards = dash.querySelectorAll(".card");
+    var insertAfter = (cards && cards[1]) ? cards[1] : null;
 
-    const card = document.createElement("div");
+    var card = document.createElement("div");
     card.className = "card";
     card.id = "dashAnalyticsCard";
-    card.innerHTML = `
-      <h2>Mini-Analytics</h2>
-      <div class="row2">
-        <div class="pill"><b>Trend:</b> <span id="dashTrend">—</span></div>
-        <div class="pill"><b>Top Übung (Woche):</b> <span id="dashTopEx">—</span></div>
-      </div>
-      <div class="row2">
-        <div class="pill"><b>Top Typ (Woche):</b> <span id="dashTopType">—</span></div>
-        <div class="pill"><b>⭐⭐⭐-Tage (Woche):</b> <span id="dash3StarCount">0</span></div>
-      </div>
-      <canvas id="dashSpark" width="900" height="120" style="width:100%; height:auto; border-radius:12px;"></canvas>
-      <p class="hint">Sparkline = Wochen-XP der letzten 8 Wochen.</p>
-    `;
+    card.innerHTML =
+      '<h2>Mini-Analytics</h2>' +
+      '<div class="row2">' +
+        '<div class="pill"><b>Trend:</b> <span id="dashTrend">—</span></div>' +
+        '<div class="pill"><b>Top Übung (Woche):</b> <span id="dashTopEx">—</span></div>' +
+      '</div>' +
+      '<div class="row2">' +
+        '<div class="pill"><b>Top Typ (Woche):</b> <span id="dashTopType">—</span></div>' +
+        '<div class="pill"><b>⭐⭐⭐-Tage (Woche):</b> <span id="dash3StarCount">0</span></div>' +
+      '</div>' +
+      '<canvas id="dashSpark" width="900" height="120" style="width:100%; height:auto; border-radius:12px;"></canvas>' +
+      '<p class="hint">Sparkline = Wochen-XP der letzten 8 Wochen.</p>';
 
     if (insertAfter) insertAfter.insertAdjacentElement("afterend", card);
     else dash.appendChild(card);
@@ -1819,84 +1910,83 @@ function ensureAnalyticsTabExists(){
 }
 
 function weekXpMap(entries){
-  const map = {};
-  for (const e of entries){
-    const w = clampWeek(e.week || 1);
+  var map = {};
+  entries.forEach(function (e) {
+    var w = clampWeek(e.week || 1);
     map[w] = (map[w] || 0) + (e.xp || 0);
-  }
+  });
   return map;
 }
-
 function topExercisesForWeek(entries, week){
-  const m = {};
-  for (const e of entries){
-    if ((e.week||0) !== week) continue;
-    if (!e.exercise) continue;
-    const name = String(e.exercise);
-    if (name.startsWith("Bossfight CLEARED")) continue;
+  var m = {};
+  entries.forEach(function (e) {
+    if ((e.week || 0) !== week) return;
+    if (!e.exercise) return;
+    var name = String(e.exercise);
+    if (name.indexOf("Bossfight CLEARED") === 0) return;
     m[name] = (m[name] || 0) + (e.xp || 0);
-  }
-  return Object.entries(m).sort((a,b)=>b[1]-a[1]);
+  });
+  return Object.entries(m).sort(function (a,b){ return b[1] - a[1]; });
 }
-
 function typeDistForWeek(entries, week){
-  const m = {};
-  for (const e of entries){
-    if ((e.week||0) !== week) continue;
-    const t = e.type || "Other";
+  var m = {};
+  entries.forEach(function (e) {
+    if ((e.week || 0) !== week) return;
+    var t = e.type || "Other";
     m[t] = (m[t] || 0) + (e.xp || 0);
-  }
-  return Object.entries(m).sort((a,b)=>b[1]-a[1]);
+  });
+  return Object.entries(m).sort(function (a,b){ return b[1] - a[1]; });
 }
-
 function dayXpForWeek(entries, week){
-  const start = ensureStartDate();
-  const weekStart = addDays(start, (week - 1) * 7);
-  const monday = startOfWeekMonday(weekStart);
-  const days = Array.from({length:7}, (_,i)=>addDays(monday,i));
+  var start = ensureStartDate();
+  var weekStart = addDays(start, (week - 1) * 7);
+  var monday = startOfWeekMonday(weekStart);
+  var days = [];
+  for (var i=0;i<7;i++) days.push(addDays(monday, i));
 
-  const m = {};
-  for (let i=0;i<days.length;i++) m[days[i]] = 0;
+  var m = {};
+  days.forEach(function (d) { m[d] = 0; });
 
-  for (const e of entries){
-    if (e.week !== week) continue;
-    if (m[e.date] != null) m[e.date] += (e.xp||0);
-  }
-  return { days, map: m };
+  entries.forEach(function (e) {
+    if (e.week !== week) return;
+    if (m[e.date] != null) m[e.date] += (e.xp || 0);
+  });
+  return { days: days, map: m };
 }
-
 function pctChange(cur, prev){
   if (prev <= 0 && cur > 0) return "↑ neu";
   if (prev <= 0 && cur <= 0) return "—";
-  const p = ((cur - prev) / prev) * 100;
-  const sign = p >= 0 ? "+" : "";
-  return `${sign}${Math.round(p)}%`;
+  var p = ((cur - prev) / prev) * 100;
+  var sign = p >= 0 ? "+" : "";
+  return sign + Math.round(p) + "%";
 }
 
 function drawBarChart(canvas, labels, values){
   if (!canvas) return;
-  const ctx = canvas.getContext("2d");
-  const W = canvas.width, H = canvas.height;
+  var ctx = canvas.getContext("2d");
+  var W = canvas.width, H = canvas.height;
   ctx.clearRect(0,0,W,H);
 
-  const pad = 24;
-  const innerW = W - pad*2;
-  const innerH = H - pad*2;
+  var pad = 24;
+  var innerW = W - pad*2;
+  var innerH = H - pad*2;
 
-  const maxV = Math.max(1, ...values);
-  const n = values.length;
-  const gap = Math.max(6, Math.floor(innerW / (n*12)));
-  const barW = Math.floor((innerW - gap*(n-1)) / n);
+  var maxV = 1;
+  values.forEach(function (v){ if (v > maxV) maxV = v; });
+
+  var n = values.length;
+  var gap = Math.max(6, Math.floor(innerW / (n*12)));
+  var barW = Math.floor((innerW - gap*(n-1)) / n);
 
   ctx.globalAlpha = 0.35;
   ctx.fillRect(pad, H-pad, innerW, 2);
   ctx.globalAlpha = 1;
 
-  for (let i=0;i<n;i++){
-    const v = values[i];
-    const h = Math.round((v/maxV) * (innerH-20));
-    const x = pad + i*(barW+gap);
-    const y = pad + (innerH - h);
+  for (var i=0;i<n;i++){
+    var v = values[i];
+    var h = Math.round((v/maxV) * (innerH-20));
+    var x = pad + i*(barW+gap);
+    var y = pad + (innerH - h);
 
     ctx.fillRect(x, y, barW, h);
 
@@ -1909,33 +1999,38 @@ function drawBarChart(canvas, labels, values){
 
 function drawSpark(canvas, values){
   if (!canvas) return;
-  const ctx = canvas.getContext("2d");
-  const W = canvas.width, H = canvas.height;
+  var ctx = canvas.getContext("2d");
+  var W = canvas.width, H = canvas.height;
   ctx.clearRect(0,0,W,H);
 
-  const pad = 18;
-  const innerW = W - pad*2;
-  const innerH = H - pad*2;
+  var pad = 18;
+  var innerW = W - pad*2;
+  var innerH = H - pad*2;
 
-  const maxV = Math.max(1, ...values);
-  const minV = Math.min(...values, 0);
-  const range = Math.max(1, maxV - minV);
+  var maxV = 1;
+  values.forEach(function (v){ if (v > maxV) maxV = v; });
+  var minV = 0;
+  values.forEach(function (v){ if (v < minV) minV = v; });
+  var range = Math.max(1, maxV - minV);
 
-  const pts = values.map((v,i)=>{
-    const x = pad + (i/(values.length-1)) * innerW;
-    const y = pad + innerH - ((v-minV)/range)*innerH;
-    return {x,y};
+  var pts = values.map(function (v,i) {
+    var x = pad + (i/(values.length-1)) * innerW;
+    var y = pad + innerH - ((v-minV)/range)*innerH;
+    return {x:x,y:y};
   });
 
   ctx.beginPath();
-  pts.forEach((p,i)=> i===0 ? ctx.moveTo(p.x,p.y) : ctx.lineTo(p.x,p.y));
+  pts.forEach(function (p,i) {
+    if (i===0) ctx.moveTo(p.x,p.y);
+    else ctx.lineTo(p.x,p.y);
+  });
   ctx.strokeStyle = "#ffffff";
   ctx.lineWidth = 3;
   ctx.globalAlpha = 0.9;
   ctx.stroke();
   ctx.globalAlpha = 1;
 
-  pts.forEach(p=>{
+  pts.forEach(function (p) {
     ctx.beginPath();
     ctx.arc(p.x,p.y,4,0,Math.PI*2);
     ctx.fill();
@@ -1945,81 +2040,84 @@ function drawSpark(canvas, values){
 function renderAnalytics(entries, curWeek){
   ensureAnalyticsTabExists();
 
-  const weekMap = weekXpMap(entries);
+  var weekMap = weekXpMap(entries);
 
-  const weeks = [];
-  for (let w = Math.max(1, curWeek-7); w <= curWeek; w++) weeks.push(w);
-  const vals = weeks.map(w=> weekMap[w] || 0);
-  const labels = weeks.map(w=>`W${w}`);
+  var weeks = [];
+  for (var w = Math.max(1, curWeek-7); w <= curWeek; w++) weeks.push(w);
+  var vals = weeks.map(function (w2){ return weekMap[w2] || 0; });
+  var labels = weeks.map(function (w2){ return "W"+w2; });
 
-  const cur = weekMap[curWeek] || 0;
-  const prev = weekMap[curWeek-1] || 0;
-  const trend = pctChange(cur, prev);
+  var cur = weekMap[curWeek] || 0;
+  var prev = weekMap[curWeek-1] || 0;
+  var trend = pctChange(cur, prev);
 
-  if ($("dashTrend")) $("dashTrend").textContent = `${trend} (${cur} XP)`;
-  const topEx = topExercisesForWeek(entries, curWeek)[0]?.[0] || "—";
-  if ($("dashTopEx")) $("dashTopEx").textContent = topEx;
-  const topType = typeDistForWeek(entries, curWeek)[0]?.[0] || "—";
-  if ($("dashTopType")) $("dashTopType").textContent = topType;
+  if ($("dashTrend")) $("dashTrend").textContent = trend + " (" + cur + " XP)";
+  var topEx = topExercisesForWeek(entries, curWeek);
+  if ($("dashTopEx")) $("dashTopEx").textContent = topEx.length ? topEx[0][0] : "—";
+  var topType = typeDistForWeek(entries, curWeek);
+  if ($("dashTopType")) $("dashTopType").textContent = topType.length ? topType[0][0] : "—";
 
-  const thr = getStarThresholdsForWeek(curWeek, entries);
-  const wk = dayXpForWeek(entries, curWeek);
-  const days = wk.days;
-  const dayMap = wk.map;
-  const threeCount = days.filter(d => (dayMap[d]||0) >= thr.three).length;
+  var thr = getStarThresholdsForWeek(curWeek, entries);
+  var dayObj = dayXpForWeek(entries, curWeek);
+  var days = dayObj.days, dayMap = dayObj.map;
+  var threeCount = days.filter(function (d){ return (dayMap[d] || 0) >= thr.three; }).length;
   if ($("dash3StarCount")) $("dash3StarCount").textContent = String(threeCount);
 
   drawSpark($("dashSpark"), vals);
 
-  if ($("anWeek")) $("anWeek").textContent = `W${curWeek}`;
-  if ($("anTrend")) $("anTrend").textContent = `${trend} (W${curWeek}: ${cur} XP / W${curWeek-1}: ${prev} XP)`;
+  if ($("anWeek")) $("anWeek").textContent = "W"+curWeek;
+  if ($("anTrend")) $("anTrend").textContent = trend + " (W"+curWeek+": "+cur+" XP / W"+(curWeek-1)+": "+prev+" XP)";
 
   drawBarChart($("anWeekChart"), labels, vals);
-  if ($("anWeekChartHint")) $("anWeekChartHint").textContent =
-    `Max: ${Math.max(...vals)} XP • Min: ${Math.min(...vals)} XP`;
+  if ($("anWeekChartHint")) {
+    var max = Math.max.apply(null, vals);
+    var min = Math.min.apply(null, vals);
+    $("anWeekChartHint").textContent = "Max: " + max + " XP • Min: " + min + " XP";
+  }
 
-  const top10 = topExercisesForWeek(entries, curWeek).slice(0,10);
-  const ulTop = $("anTopExercises");
+  var ulTop = $("anTopExercises");
   if (ulTop){
+    var top10 = topExercisesForWeek(entries, curWeek).slice(0,10);
     ulTop.innerHTML = top10.length ? "" : "<li>—</li>";
-    top10.forEach(([name,xp], i)=>{
-      const li = document.createElement("li");
-      li.innerHTML = `<div class="entryRow"><div style="min-width:0;"><b>${i+1}.</b> ${name}</div><span class="badge">${Math.round(xp)} XP</span></div>`;
+    top10.forEach(function (pair, i) {
+      var name = pair[0], xp = pair[1];
+      var li = document.createElement("li");
+      li.innerHTML = '<div class="entryRow"><div style="min-width:0;"><b>'+(i+1)+'.</b> '+name+'</div><span class="badge">'+Math.round(xp)+' XP</span></div>';
       ulTop.appendChild(li);
     });
   }
 
-  const dist = typeDistForWeek(entries, curWeek);
-  const totalWeek = dist.reduce((s,[_t,x])=>s+x,0) || 1;
-  const ulDist = $("anTypeDist");
+  var ulDist = $("anTypeDist");
   if (ulDist){
+    var dist = typeDistForWeek(entries, curWeek);
+    var totalWeek = dist.reduce(function (s,p){ return s + p[1]; }, 0) || 1;
     ulDist.innerHTML = dist.length ? "" : "<li>—</li>";
-    dist.forEach(([t,x])=>{
-      const pct = Math.round((x/totalWeek)*100);
-      const li = document.createElement("li");
-      li.innerHTML = `<div class="entryRow"><div style="min-width:0;"><b>${t}</b> <span class="hint">(${pct}%)</span></div><span class="badge">${Math.round(x)} XP</span></div>`;
+    dist.forEach(function (pair) {
+      var t = pair[0], x = pair[1];
+      var pct = Math.round((x/totalWeek)*100);
+      var li = document.createElement("li");
+      li.innerHTML = '<div class="entryRow"><div style="min-width:0;"><b>'+t+'</b> <span class="hint">('+pct+'%)</span></div><span class="badge">'+Math.round(x)+' XP</span></div>';
       ulDist.appendChild(li);
     });
   }
 
-  const grid = $("anStarGrid");
+  var grid = $("anStarGrid");
   if (grid){
     grid.innerHTML = "";
-    for (let i=0;i<7;i++){
-      const d = days[i];
-      const xp = dayMap[d] || 0;
-      const stars = starsForDay(xp, thr);
+    for (var i=0;i<7;i++){
+      var d = days[i];
+      var xp2 = dayMap[d] || 0;
+      var stars = starsForDay(xp2, thr);
 
-      const cell = document.createElement("div");
+      var cell = document.createElement("div");
       cell.className = "calCell";
-      cell.innerHTML = `
-        <div class="calTop">
-          <div class="calDow">${DOW[i]}</div>
-          <div class="calDate">${d.slice(5)}</div>
-        </div>
-        <div class="calXP"><b>${xp}</b> XP</div>
-        <div class="calStars">${stars}</div>
-      `;
+      cell.innerHTML =
+        '<div class="calTop">' +
+          '<div class="calDow">' + DOW[i] + '</div>' +
+          '<div class="calDate">' + d.slice(5) + '</div>' +
+        '</div>' +
+        '<div class="calXP"><b>' + xp2 + '</b> XP</div>' +
+        '<div class="calStars">' + stars + '</div>';
       grid.appendChild(cell);
     }
   }
@@ -2028,88 +2126,130 @@ function renderAnalytics(entries, curWeek){
 /* =========================
    MAIN RENDER
 ========================= */
-async function renderAll(){
+function renderAll(){
   ensureStartDate();
   ensureAnalyticsTabExists();
   buildExerciseDropdown();
   removeBonusCheckboxes();
 
-  const raw = await idbGetAll();
-  const entries = sortEntriesDesc(raw);
+  return idbGetAll().then(function (raw) {
+    var entries = sortEntriesDesc(raw);
+    var stats = computeStats(entries);
 
-  const stats = await computeStats(entries);
+    return evaluateWeeklyAchievements(entries, stats.curWeek).then(function (evalRes) {
+      // falls neue Achievements hinzugefügt wurden: neu laden
+      var reloadNeeded = evalRes.newlyEarned && evalRes.newlyEarned.length;
+      var p = reloadNeeded ? idbGetAll().then(function (r2){ return sortEntriesDesc(r2); }) : Promise.resolve(entries);
 
-  const evalRes = await evaluateWeeklyAchievements(entries, stats.curWeek);
-  const finalEntries = (evalRes.newlyEarned && evalRes.newlyEarned.length) ? sortEntriesDesc(await idbGetAll()) : entries;
-  const stats2 = await computeStats(finalEntries);
+      return p.then(function (finalEntries) {
+        var stats2 = computeStats(finalEntries);
 
-  if ($("startDisplay")) $("startDisplay").textContent = stats2.startDate;
-  if ($("weekNumber")) $("weekNumber").textContent = `W${stats2.curWeek}`;
-  if ($("blockNow")) $("blockNow").textContent = blockName(weekBlock(stats2.curWeek));
-  if ($("blockHint")) $("blockHint").textContent = weeklyProgressHint(stats2.curWeek);
+        if ($("startDisplay")) $("startDisplay").textContent = stats2.startDate;
+        if ($("weekNumber")) $("weekNumber").textContent = "W" + stats2.curWeek;
+        if ($("blockNow")) $("blockNow").textContent = blockName(weekBlock(stats2.curWeek));
+        if ($("blockHint")) $("blockHint").textContent = weeklyProgressHint(stats2.curWeek);
 
-  const thrToday = getStarThresholdsForWeek(stats2.curWeek, finalEntries);
+        var thrToday = getStarThresholdsForWeek(stats2.curWeek, finalEntries);
 
-  if ($("todayXp")) $("todayXp").textContent = stats2.todayXp;
-  if ($("todayStars")) $("todayStars").textContent = starsForDay(stats2.todayXp, thrToday);
-  if ($("weekXp")) $("weekXp").textContent = stats2.weekXp;
-  if ($("totalXp")) $("totalXp").textContent = stats2.totalXp;
+        if ($("todayXp")) $("todayXp").textContent = String(stats2.todayXp);
+        if ($("todayStars")) $("todayStars").textContent = starsForDay(stats2.todayXp, thrToday);
+        if ($("weekXp")) $("weekXp").textContent = String(stats2.weekXp);
+        if ($("totalXp")) $("totalXp").textContent = String(stats2.totalXp);
 
-  const lv = levelFromTotalXp(stats2.totalXp);
-  if ($("level")) $("level").textContent = lv.lvl;
-  if ($("title")) $("title").textContent = titleForLevel(lv.lvl);
+        var lv = levelFromTotalXp(stats2.totalXp);
+        if ($("level")) $("level").textContent = String(lv.lvl);
+        if ($("title")) $("title").textContent = titleForLevel(lv.lvl);
 
-  renderMutationUI(stats2.curWeek);
-  renderAttributes(stats2.attr);
+        renderMutationUI(stats2.curWeek);
+        renderAttributes(stats2.attr);
 
-  if ($("wkTrainDays")) $("wkTrainDays").textContent = evalRes.trainDays ?? 0;
-  if ($("wkThreeStarDays")) $("wkThreeStarDays").textContent = evalRes.threeStarDays ?? 0;
-  const earnedNames = (evalRes.earned || []).map(id => {
-    const a = ACHIEVEMENTS.find(x=>x.id===id);
-    return a ? a.name : null;
-  }).filter(Boolean);
-  if ($("wkAchievements")) $("wkAchievements").textContent = earnedNames.length ? earnedNames.join(", ") : "—";
-  const adaptive = getAdaptiveModifiers(finalEntries, stats2.curWeek);
-  if ($("adaptiveHint")) $("adaptiveHint").textContent = adaptive.note;
+        if ($("wkTrainDays")) $("wkTrainDays").textContent = String(evalRes.trainDays || 0);
+        if ($("wkThreeStarDays")) $("wkThreeStarDays").textContent = String(evalRes.threeStarDays || 0);
 
-  const recentList = $("recentList");
-  if (recentList){
-    const recent = finalEntries.slice(0, 6);
-    recentList.innerHTML = recent.length ? "" : "<li>Noch keine Einträge.</li>";
-    recent.forEach(e => {
-      const li2 = document.createElement("li");
-      li2.textContent = `${e.date} (W${e.week}) • ${e.exercise} • ${e.xp} XP`;
-      recentList.appendChild(li2);
+        var earnedNames = (evalRes.earned || []).map(function (id) {
+          for (var i=0;i<ACHIEVEMENTS.length;i++){ if (ACHIEVEMENTS[i].id === id) return ACHIEVEMENTS[i].name; }
+          return null;
+        }).filter(Boolean);
+
+        if ($("wkAchievements")) $("wkAchievements").textContent = earnedNames.length ? earnedNames.join(", ") : "—";
+
+        var adaptive = getAdaptiveModifiers(finalEntries, stats2.curWeek);
+        if ($("adaptiveHint")) $("adaptiveHint").textContent = adaptive.note;
+
+        var recentList = $("recentList");
+        if (recentList){
+          var recent = finalEntries.slice(0, 6);
+          recentList.innerHTML = recent.length ? "" : "<li>Noch keine Einträge.</li>";
+          recent.forEach(function (e) {
+            var li2 = document.createElement("li");
+            li2.textContent = e.date + " (W"+e.week+") • " + e.exercise + " • " + e.xp + " XP";
+            recentList.appendChild(li2);
+          });
+        }
+
+        renderCalendar(finalEntries);
+        renderWeeklyPlan(stats2.curWeek, finalEntries);
+
+        renderQuests();
+        renderBoss(stats2.curWeek);
+
+        ensureDashboardSkillPill();
+        var sp = computeSkillPointsAvailable(finalEntries);
+        if ($("skillPointsAvail")) $("skillPointsAvail").textContent = String(sp.available);
+        renderSkillTrees(finalEntries, stats2.curWeek);
+
+        updateLogUI(finalEntries);
+        renderAllEntriesList(finalEntries);
+
+        if ($("countEntries")) $("countEntries").textContent = String(finalEntries.length);
+
+        var thr = getStarThresholdsForWeek(stats2.curWeek, finalEntries);
+        var rew = rewardActiveForWeek(stats2.curWeek) ? "Reward +5% aktiv" : "Reward —";
+        if ($("appStatus")) $("appStatus").textContent = "OK • ⭐ "+thr.one+" • ⭐⭐ "+thr.two+" • ⭐⭐⭐ "+thr.three+" • "+rew;
+
+        renderAnalytics(finalEntries, stats2.curWeek);
+      });
     });
-  }
-
-  renderCalendar(finalEntries);
-  renderWeeklyPlan(stats2.curWeek, finalEntries);
-
-  renderQuests();
-  renderBoss(stats2.curWeek);
-
-  ensureDashboardSkillPill();
-  const sp = computeSkillPointsAvailable(finalEntries);
-  if ($("skillPointsAvail")) $("skillPointsAvail").textContent = sp.available;
-  renderSkillTrees(finalEntries, stats2.curWeek);
-
-  await updateLogUI(finalEntries);
-  renderAllEntriesList(finalEntries);
-
-  if ($("countEntries")) $("countEntries").textContent = finalEntries.length;
-
-  const thr = getStarThresholdsForWeek(stats2.curWeek, finalEntries);
-  const rew = rewardActiveForWeek(stats2.curWeek) ? "Reward +5% aktiv" : "Reward —";
-  if ($("appStatus")) $("appStatus").textContent = `OK • ⭐ ${thr.one} • ⭐⭐ ${thr.two} • ⭐⭐⭐ ${thr.three} • ${rew}`;
-
-  renderAnalytics(finalEntries, stats2.curWeek);
+  });
 }
 
 /* =========================
-   INIT + EVENTS + PWA UPDATE
+   SW AUTO-UPDATE (Home Screen)
 ========================= */
-async function init(){
+function setupServiceWorkerAutoUpdate(){
+  if (!("serviceWorker" in navigator)) return;
+
+  navigator.serviceWorker.register("sw.js").then(function (reg) {
+    // Suche aktiv nach Updates
+    if (reg.update) reg.update();
+
+    // Wenn ein neuer SW gefunden wurde:
+    reg.addEventListener("updatefound", function () {
+      var newWorker = reg.installing;
+      if (!newWorker) return;
+
+      newWorker.addEventListener("statechange", function () {
+        // installed => wenn schon ein SW aktiv ist, dann update vorhanden
+        if (newWorker.state === "installed" && navigator.serviceWorker.controller) {
+          // sag dem neuen SW: skip waiting
+          try { newWorker.postMessage({ type: "SKIP_WAITING" }); } catch (e) {}
+        }
+      });
+    });
+
+    // Wenn SW Kontrolle wechselt => reload (damit Home Screen sofort neue app.js bekommt)
+    navigator.serviceWorker.addEventListener("controllerchange", function () {
+      window.location.reload();
+    });
+  }).catch(function (e) {
+    console.warn("SW register failed", e);
+  });
+}
+
+/* =========================
+   INIT + EVENTS
+========================= */
+function init(){
   try {
     if ($("date")) $("date").value = isoDate(new Date());
     ensureStartDate();
@@ -2118,141 +2258,138 @@ async function init(){
     resetEditMode();
     removeBonusCheckboxes();
 
-    $("calPrev")?.addEventListener("click", async ()=>{
-      const st = loadCalendarState();
+    var prevBtn = $("calPrev");
+    if (prevBtn) prevBtn.addEventListener("click", function () {
+      var st = loadCalendarState();
       st.weekOffset = (st.weekOffset || 0) - 1;
       saveCalendarState(st);
-      await renderAll();
+      renderAll();
     });
-    $("calNext")?.addEventListener("click", async ()=>{
-      const st = loadCalendarState();
+
+    var nextBtn = $("calNext");
+    if (nextBtn) nextBtn.addEventListener("click", function () {
+      var st = loadCalendarState();
       st.weekOffset = (st.weekOffset || 0) + 1;
       saveCalendarState(st);
-      await renderAll();
+      renderAll();
     });
 
-    $("saveStartDash")?.addEventListener("click", async () => {
-      const newStart = $("startDateDash")?.value;
+    var saveStart = $("saveStartDash");
+    if (saveStart) saveStart.addEventListener("click", function () {
+      var newStart = $("startDateDash") ? $("startDateDash").value : "";
       if (!newStart) return alert("Bitte ein Startdatum wählen.");
 
-      const oldStart = ensureStartDate();
+      var oldStart = ensureStartDate();
       if (newStart === oldStart) return alert("Startdatum unverändert.");
 
-      const ok = confirm(
+      var ok = confirm(
         "Startdatum rückwirkend ändern?\n\n" +
         "✅ Alle Trainingseinträge werden neu in Wochen einsortiert.\n" +
         "⚠️ Boss/Achievements/Mutations werden zurückgesetzt.\n"
       );
-      if (!ok) { $("startDateDash").value = oldStart; return; }
+      if (!ok) { if ($("startDateDash")) $("startDateDash").value = oldStart; return; }
 
       setStartDateLocal(newStart);
       resetWeekBoundSystems();
-      await recalcAllEntryWeeks();
-      saveCalendarState({ weekOffset: 0, selectedDate: isoDate(new Date()) });
 
-      await renderAll();
-      alert("Startdatum gespeichert & Einträge neu berechnet ✅");
+      recalcAllEntryWeeks().then(function () {
+        saveCalendarState({ weekOffset: 0, selectedDate: isoDate(new Date()) });
+        return renderAll();
+      }).then(function () {
+        alert("Startdatum gespeichert & Einträge neu berechnet ✅");
+      });
     });
 
-    $("date")?.addEventListener("change", async () => {
-      const st = loadCalendarState();
-      st.selectedDate = $("date").value;
+    var dateEl = $("date");
+    if (dateEl) dateEl.addEventListener("change", function () {
+      var st = loadCalendarState();
+      st.selectedDate = dateEl.value;
       saveCalendarState(st);
-      await renderAll();
+      renderAll();
     });
 
-    $("exercise")?.addEventListener("change", async () => { await renderAll(); });
+    var exEl = $("exercise");
+    if (exEl) exEl.addEventListener("change", function () { renderAll(); });
 
-    ["sets","reps","walkMin"].forEach(id=>{
-      const el = $(id);
+    ["sets","reps","walkMin"].forEach(function (id) {
+      var el = $(id);
       if (!el) return;
-      el.addEventListener("input", async ()=>{
-        const d = ($("date") && $("date").value) ? $("date").value : isoDate(new Date());
-        const w = currentWeekFor(d);
-        const mut = getMutationForWeek(w);
+      el.addEventListener("input", function () {
+        var d = ($("date") && $("date").value) ? $("date").value : isoDate(new Date());
+        var w = currentWeekFor(d);
+        var mut = getMutationForWeek(w);
         updateCalcPreview(w, mut);
         autosaveLogDraft();
       });
-      el.addEventListener("change", async ()=>{
+      el.addEventListener("change", function () {
         autosaveLogDraft();
-        await renderAll();
+        renderAll();
       });
     });
 
-    ["exercise","date","walkMin"].forEach(id => {
-      const el = $(id);
+    ["exercise","date","walkMin"].forEach(function (id) {
+      var el = $(id);
       if (!el) return;
       el.addEventListener("input", autosaveLogDraft);
       el.addEventListener("change", autosaveLogDraft);
     });
 
-    $("add")?.addEventListener("click", saveOrUpdateEntry);
+    var addBtn = $("add");
+    if (addBtn) addBtn.addEventListener("click", function () { saveOrUpdateEntry(); });
 
-    $("cancelEdit")?.addEventListener("click", async ()=>{
+    var cancelBtn = $("cancelEdit");
+    if (cancelBtn) cancelBtn.addEventListener("click", function () {
       resetEditMode();
-      await renderAll();
+      renderAll();
     });
 
-    $("clear")?.addEventListener("click", async () => {
+    var clearBtn = $("clear");
+    if (clearBtn) clearBtn.addEventListener("click", function () {
       if (confirm("Wirklich ALLE Einträge löschen?")) {
-        await idbClear();
-        await renderAll();
+        idbClear().then(function () { return renderAll(); });
       }
     });
 
-    $("resetBoss")?.addEventListener("click", async () => {
+    var resetBossBtn = $("resetBoss");
+    if (resetBossBtn) resetBossBtn.addEventListener("click", function () {
       if (confirm("Boss-Fight Status & Checks zurücksetzen?")) {
         localStorage.removeItem(KEY_BOSS);
         localStorage.removeItem(KEY_BOSSCHK);
-        await renderAll();
+        renderAll();
       }
     });
 
-    $("exportCsv")?.addEventListener("click", async () => {
-      const entries = sortEntriesDesc(await idbGetAll());
-      if (!entries.length) return alert("Keine Einträge zum Exportieren.");
-      downloadCSV("ironquest_export.csv", toCSV(entries));
+    var exportBtn = $("exportCsv");
+    if (exportBtn) exportBtn.addEventListener("click", function () {
+      idbGetAll().then(function (raw) {
+        var entries = sortEntriesDesc(raw);
+        if (!entries.length) return alert("Keine Einträge zum Exportieren.");
+        downloadCSV("ironquest_export.csv", toCSV(entries));
+      });
     });
 
-    $("resetSkills")?.addEventListener("click", async ()=>{
+    var resetSkillsBtn = $("resetSkills");
+    if (resetSkillsBtn) resetSkillsBtn.addEventListener("click", function () {
       if (confirm("Skilltree zurücksetzen?")) {
-        const st = loadSkillState();
+        var st = loadSkillState();
         st.spent = 0;
-        st.nodes = Object.fromEntries(TREES.map(t => [t.key, defaultNodesForTree(t.key)]));
+        var nodes = {};
+        TREES.forEach(function (t){ nodes[t.key] = defaultNodesForTree(t.key); });
+        st.nodes = nodes;
         saveSkillState(st);
-        await renderAll();
+        renderAll();
       }
     });
 
-    // ✅ Service Worker + Auto-Update (Home Screen)
-    if ("serviceWorker" in navigator) {
-      navigator.serviceWorker.register("sw.js").then((reg) => {
-        // If an update is found, tell the waiting SW to activate immediately
-        reg.addEventListener("updatefound", () => {
-          const nw = reg.installing;
-          if (!nw) return;
-          nw.addEventListener("statechange", () => {
-            if (nw.state === "installed" && navigator.serviceWorker.controller) {
-              // new version waiting
-              if (reg.waiting) reg.waiting.postMessage({ type: "SKIP_WAITING" });
-            }
-          });
-        });
-      });
+    // ✅ Service Worker Auto-Update
+    setupServiceWorkerAutoUpdate();
 
-      // Reload once when the new SW takes control
-      let reloaded = false;
-      navigator.serviceWorker.addEventListener("controllerchange", () => {
-        if (reloaded) return;
-        reloaded = true;
-        window.location.reload();
-      });
-    }
+    recalcAllEntryWeeks().then(function () {
+      return renderAll();
+    }).then(function () {
+      restoreLogDraft();
+    });
 
-    await recalcAllEntryWeeks();
-    await renderAll();
-
-    restoreLogDraft();
   } catch (e) {
     console.error(e);
     if ($("appStatus")) $("appStatus").textContent = "ERROR (siehe Konsole)";
@@ -2263,12 +2400,12 @@ async function init(){
 /* =========================
    LOG DRAFT AUTOSAVE
 ========================= */
-const LOG_DRAFT_KEY = "ironquest_log_draft_v1";
+var LOG_DRAFT_KEY = "ironquest_log_draft_v1";
 
 function loadLogDraft(){
   try {
     return JSON.parse(localStorage.getItem(LOG_DRAFT_KEY)) || {};
-  } catch {
+  } catch (e) {
     return {};
   }
 }
@@ -2276,32 +2413,32 @@ function saveLogDraft(draft){
   localStorage.setItem(LOG_DRAFT_KEY, JSON.stringify(draft));
 }
 function clearLogDraft(dateISO){
-  const draft = loadLogDraft();
+  var draft = loadLogDraft();
   if (draft[dateISO]) {
     delete draft[dateISO];
     saveLogDraft(draft);
   }
 }
 function autosaveLogDraft(){
-  const dateISO = $("date")?.value;
+  var dateISO = ($("date") && $("date").value) ? $("date").value : "";
   if (!dateISO) return;
 
-  const draft = loadLogDraft();
+  var draft = loadLogDraft();
   draft[dateISO] = {
     date: dateISO,
-    exercise: $("exercise")?.value || "",
-    sets: $("sets")?.value || "",
-    reps: $("reps")?.value || "",
-    walkMin: $("walkMin")?.value || ""
+    exercise: ($("exercise") && $("exercise").value) ? $("exercise").value : "",
+    sets: ($("sets") && $("sets").value) ? $("sets").value : "",
+    reps: ($("reps") && $("reps").value) ? $("reps").value : "",
+    walkMin: ($("walkMin") && $("walkMin").value) ? $("walkMin").value : ""
   };
   saveLogDraft(draft);
 }
 function restoreLogDraft(){
-  const dateISO = $("date")?.value;
+  var dateISO = ($("date") && $("date").value) ? $("date").value : "";
   if (!dateISO) return;
 
-  const draft = loadLogDraft();
-  const d = draft[dateISO];
+  var draft = loadLogDraft();
+  var d = draft[dateISO];
   if (!d) return;
 
   if ($("exercise") && d.exercise) $("exercise").value = d.exercise;
