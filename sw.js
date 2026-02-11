@@ -1,85 +1,51 @@
-/* IRON QUEST — sw.js (iOS/PWA stable)
-   ✅ cache version bump
-   ✅ skipWaiting + clients.claim
-   ✅ navigation network-first (updates), fallback cache
-   ✅ assets cache-first
-*/
-const SW_VERSION = "iq-v3.1.0";          // bei jedem Update erhöhen
+const SW_VERSION = "v4.0.0";
 const CACHE_NAME = `ironquest-${SW_VERSION}`;
 
 const ASSETS = [
   "./",
   "./index.html",
   "./style.css",
-  "./app.js",
-  "./utils.js",
-  "./db.js",
-  "./mutations.js",
-  "./skilltree.js",
-  "./prSystem.js",
-  "./statusIcons.js",
-  "./health.js",
-  "./analyticsPro.js",
-  "./cloud.js",
-  "./challenge.js",
-  "./streak.js",
-  "./exercises.js",
-  "./xpSystem.js",
-  "./progression.js",
   "./manifest.json",
-  "./sw.js"
+  "./sw.js",
+
+  "./js/db.js",
+  "./js/exercises.js",
+  "./js/xpSystem.js",
+  "./js/progression.js",
+  "./js/attributes.js",
+  "./js/skilltree.js",
+  "./js/analytics.js",
+  "./js/health.js",
+  "./js/boss.js",
+  "./js/challenges.js",
+  "./js/backup.js",
+  "./js/app.js"
 ];
 
-self.addEventListener("install", (event) => {
+self.addEventListener("install", e => {
   self.skipWaiting();
-  event.waitUntil(
-    caches.open(CACHE_NAME).then((cache) => cache.addAll(ASSETS))
+  e.waitUntil(
+    caches.open(CACHE_NAME).then(cache => cache.addAll(ASSETS))
   );
 });
 
-self.addEventListener("activate", (event) => {
-  event.waitUntil((async () => {
+self.addEventListener("activate", e => {
+  e.waitUntil((async () => {
     const keys = await caches.keys();
-    await Promise.all(keys.map((k) => {
+    await Promise.all(keys.map(k => {
       if (k !== CACHE_NAME) return caches.delete(k);
     }));
     await self.clients.claim();
   })());
 });
 
-self.addEventListener("message", (event) => {
-  if (event.data && event.data.type === "SKIP_WAITING") self.skipWaiting();
-});
+self.addEventListener("fetch", e => {
+  const req = e.request;
+  if (!req.url.startsWith(self.location.origin)) return;
 
-self.addEventListener("fetch", (event) => {
-  const req = event.request;
-  const url = new URL(req.url);
-
-  if (url.origin !== self.location.origin) return;
-
-  // HTML navigation: network-first
-  if (req.mode === "navigate" || (req.headers.get("accept") || "").includes("text/html")) {
-    event.respondWith((async () => {
-      try {
-        const fresh = await fetch(req);
-        const cache = await caches.open(CACHE_NAME);
-        cache.put("./index.html", fresh.clone());
-        return fresh;
-      } catch {
-        const cached = await caches.match("./index.html");
-        return cached || new Response("Offline", { status: 503, headers: { "Content-Type": "text/plain" } });
-      }
-    })());
-    return;
-  }
-
-  // assets: cache-first
-  event.respondWith((async () => {
-    const cached = await caches.match(req);
-    if (cached) return cached;
-    const fresh = await fetch(req);
-    const cache = await caches.open(CACHE_NAME);
-    cache.put(req, fresh.clone());
-    return fresh;
-  })());
+  e.respondWith(
+    caches.match(req).then(res => {
+      return res || fetch(req);
+    })
+  );
 });
