@@ -1,365 +1,59 @@
-<!doctype html>
+<!DOCTYPE html>
 <html lang="de">
 <head>
-  <meta charset="utf-8" />
-  <meta name="viewport" content="width=device-width, initial-scale=1" />
-  <title>IRON QUEST</title>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>IRON QUEST v4 PRO</title>
 
-  <link rel="manifest" href="manifest.json">
-  <link rel="stylesheet" href="style.css">
+<link rel="manifest" href="manifest.json">
+<link rel="stylesheet" href="style.css">
 
-  <meta name="theme-color" content="#111111" />
-  <meta name="apple-mobile-web-app-capable" content="yes">
-  <meta name="apple-mobile-web-app-status-bar-style" content="black-translucent">
+<meta name="theme-color" content="#0f0f0f">
+<meta name="apple-mobile-web-app-capable" content="yes">
+<meta name="apple-mobile-web-app-status-bar-style" content="black-translucent">
 </head>
 
 <body>
-  <header class="topbar">
-    <div>
-      <h1>IRON QUEST</h1>
-      <p class="sub">XP Tracker • Offline • IndexedDB</p>
-    </div>
 
-    <nav class="tabs" aria-label="Navigation">
-      <button type="button" class="tab active" data-tab="dash">Dashboard</button>
-      <button type="button" class="tab" data-tab="plan">Weekly Plan</button>
-      <button type="button" class="tab" data-tab="log">Log</button>
-      <button type="button" class="tab" data-tab="skills">Skilltrees</button>
-      <button type="button" class="tab" data-tab="boss">Bossfights</button>
-      <button type="button" class="tab" data-tab="export">Export</button>
-    </nav>
-  </header>
+<header>
+<h1>⚔ IRON QUEST v4 PRO</h1>
+<div id="playerInfo"></div>
+</header>
 
-  <main>
-    <!-- DASHBOARD -->
-    <section id="tab-dash" class="panel active">
-      <div class="card">
-        <h2>Challenge-Setup</h2>
-        <p class="hint">Startdatum ist die Referenz für Woche 1. Du kannst es rückwirkend ändern (Einträge werden neu in Wochen einsortiert).</p>
+<nav>
+<button data-tab="dashboard">Dashboard</button>
+<button data-tab="log">Log</button>
+<button data-tab="skills">Skilltree</button>
+<button data-tab="analytics">Analytics</button>
+<button data-tab="health">Health</button>
+<button data-tab="boss">Boss</button>
+<button data-tab="challenge">Challenge</button>
+</nav>
 
-        <label>Startdatum Woche 1
-          <input id="startDateDash" type="date">
-        </label>
-        <button id="saveStartDash" type="button" class="secondary">Startdatum speichern (rückwirkend)</button>
+<main>
 
-        <div class="row2">
-          <div class="pill"><b>Aktuelles Startdatum:</b> <span id="startDisplay">—</span></div>
-          <div class="pill"><b>Aktuelle Woche (heute):</b> <span id="weekNumber">—</span></div>
-        </div>
+<section id="dashboard" class="tab active"></section>
+<section id="log" class="tab"></section>
+<section id="skills" class="tab"></section>
+<section id="analytics" class="tab"></section>
+<section id="health" class="tab"></section>
+<section id="boss" class="tab"></section>
+<section id="challenge" class="tab"></section>
 
-        <div class="row2">
-          <div class="pill"><b>Block:</b> <span id="blockNow">—</span></div>
-          <div class="pill"><b>Hinweis:</b> <span id="blockHint">—</span></div>
-        </div>
-      </div>
+</main>
 
-      <div class="card">
-        <h2>Heute</h2>
-        <div class="row2">
-          <div class="pill"><b>Heute XP:</b> <span id="todayXp">0</span></div>
-          <div class="pill"><b>Tagessterne:</b> <span id="todayStars">—</span></div>
-        </div>
-        <div class="row2">
-          <div class="pill"><b>Woche XP:</b> <span id="weekXp">0</span></div>
-          <div class="pill"><b>Gesamt XP:</b> <span id="totalXp">0</span></div>
-        </div>
-        <div class="row2">
-          <div class="pill"><b>Level:</b> <span id="level">1</span> – <span id="title">Anfänger</span></div>
-          <div class="pill"><b>Status:</b> <span id="appStatus">OK</span></div>
-        </div>
-        <p class="hint">Sterne: 1200–1599 ⭐ • 1600–1999 ⭐⭐ • 2000+ ⭐⭐⭐</p>
-      </div>
+<script src="js/db.js"></script>
+<script src="js/exercises.js"></script>
+<script src="js/xpSystem.js"></script>
+<script src="js/progression.js"></script>
+<script src="js/attributes.js"></script>
+<script src="js/skilltree.js"></script>
+<script src="js/analytics.js"></script>
+<script src="js/health.js"></script>
+<script src="js/boss.js"></script>
+<script src="js/challenges.js"></script>
+<script src="js/backup.js"></script>
+<script src="js/app.js"></script>
 
-      <div class="card">
-        <h2>Weekly Mutation</h2>
-        <div class="mutationBox">
-          <div class="mutationTitle" id="mutationName">—</div>
-          <div class="mutationDesc" id="mutationDesc">—</div>
-          <div class="mutationHint" id="mutationEffect">—</div>
-        </div>
-        <p class="hint">Mutation ist fix pro Woche (RNG), beeinflusst XP & Empfehlungen.</p>
-      </div>
-
-      <div class="card">
-        <h2>Attribute</h2>
-        <p class="hint">Übungstypen geben Attribut-XP: STR/STA/END/MOB.</p>
-
-        <div class="attrGrid">
-          <div class="attrCard">
-            <div class="attrTop"><b>STR</b><span>Lv <span id="lvSTR">1</span></span></div>
-            <div class="bar"><div id="barSTR" class="fill"></div></div>
-            <div class="attrSub"><span id="xpSTR">0</span> XP • <span id="needSTR">0</span> bis nächstes Lv</div>
-          </div>
-          <div class="attrCard">
-            <div class="attrTop"><b>STA</b><span>Lv <span id="lvSTA">1</span></span></div>
-            <div class="bar"><div id="barSTA" class="fill"></div></div>
-            <div class="attrSub"><span id="xpSTA">0</span> XP • <span id="needSTA">0</span> bis nächstes Lv</div>
-          </div>
-          <div class="attrCard">
-            <div class="attrTop"><b>END</b><span>Lv <span id="lvEND">1</span></span></div>
-            <div class="bar"><div id="barEND" class="fill"></div></div>
-            <div class="attrSub"><span id="xpEND">0</span> XP • <span id="needEND">0</span> bis nächstes Lv</div>
-          </div>
-          <div class="attrCard">
-            <div class="attrTop"><b>MOB</b><span>Lv <span id="lvMOB">1</span></span></div>
-            <div class="bar"><div id="barMOB" class="fill"></div></div>
-            <div class="attrSub"><span id="xpMOB">0</span> XP • <span id="needMOB">0</span> bis nächstes Lv</div>
-          </div>
-        </div>
-      </div>
-
-      <div class="card">
-        <h2>Daily Quests</h2>
-        <p class="hint">Jede Quest gibt XP (1× pro Tag). Checkbox links, XP rechts.</p>
-        <ul id="questList" class="checklist"></ul>
-      </div>
-
-      <div class="card">
-        <h2>Wochenauswertung</h2>
-        <div class="row2">
-          <div class="pill"><b>Trainingstage (≥500 XP):</b> <span id="wkTrainDays">0</span></div>
-          <div class="pill"><b>⭐⭐⭐-Tage:</b> <span id="wkThreeStarDays">0</span></div>
-        </div>
-        <div class="row2">
-          <div class="pill"><b>Achievements (diese Woche):</b><br><span id="wkAchievements">—</span></div>
-          <div class="pill"><b>Adaptive:</b><br><span id="adaptiveHint">—</span></div>
-        </div>
-      </div>
-
-      <div class="card">
-        <h2>Letzte Einträge</h2>
-        <ul id="recentList"></ul>
-      </div>
-    </section>
-
-    <!-- WEEKLY PLAN -->
-    <section id="tab-plan" class="panel">
-      <div class="card">
-        <h2>Weekly Plan</h2>
-        <p class="hint">Tag 1–5 inkl. Sets/Reps abhängig von Startdatum/Woche. Boss/Quest/Mutation integriert.</p>
-
-        <div class="row2">
-          <div class="pill"><b>Startdatum:</b> <span id="planStart">—</span></div>
-          <div class="pill"><b>Woche (heute):</b> <span id="planWeek">—</span></div>
-        </div>
-
-        <div class="row2">
-          <div class="pill"><b>Block:</b> <span id="planBlock">—</span></div>
-          <div class="pill"><b>Mutation:</b> <span id="planMutation">—</span></div>
-        </div>
-
-        <div class="row2">
-          <div class="pill"><b>Adaptive:</b> <span id="planAdaptive">—</span></div>
-          <div class="pill"><b>Hinweis:</b> <span id="planHint">—</span></div>
-        </div>
-
-        <div class="divider"></div>
-        <div id="planContent"></div>
-      </div>
-    </section>
-
-    <!-- LOG -->
-    <section id="tab-log" class="panel">
-      <div class="card">
-        <h2>Wochenkalender</h2>
-        <p class="hint">Tippe auf einen Tag → Einträge dieses Tages. „Heute“ folgt automatisch deinem Startdatum/Wochenlogik.</p>
-
-        <div class="calHeader">
-          <button id="calPrev" type="button" class="secondary calBtn">◀</button>
-          <div class="calTitle">
-            <div><b id="calWeekTitle">Woche</b></div>
-            <div class="small" id="calRange">—</div>
-          </div>
-          <button id="calNext" type="button" class="secondary calBtn">▶</button>
-        </div>
-
-        <div id="calGrid" class="calGrid"></div>
-
-        <div class="divider"></div>
-
-        <h2 id="dayTitle">Tages-Einträge</h2>
-        <div class="row2">
-          <div class="pill"><b>Tages-XP:</b> <span id="dayXp">0</span></div>
-          <div class="pill"><b>Sterne:</b> <span id="dayStars">—</span></div>
-        </div>
-        <ul id="dayEntries"></ul>
-      </div>
-
-      <div class="card">
-        <h2 id="logFormTitle">Neuer Eintrag (rückwirkend möglich)</h2>
-        <input id="editId" type="hidden" value="">
-
-        <label>Datum
-          <input id="date" type="date">
-        </label>
-
-        <div class="row2">
-          <div class="pill"><b>Woche (aus Startdatum):</b> <span id="logWeek">—</span></div>
-          <div class="pill"><b>Startdatum:</b> <span id="logStart">—</span></div>
-        </div>
-
-        <label>Übung
-          <select id="exercise"></select>
-        </label>
-
-        <div class="row2">
-          <div class="pill"><b>Übungstyp:</b> <span id="autoType">—</span></div>
-          <div class="pill"><b>Empf. Sätze:</b> <span id="recommendedSets">—</span></div>
-        </div>
-
-        <div class="row2">
-          <div class="pill"><b>Empf. Reps:</b> <span id="recommendedReps">—</span></div>
-          <div class="pill"><b>Adaptive/Mutation:</b> <span id="logAdaptive">—</span></div>
-        </div>
-
-        <div id="setsRow">
-          <label>Sätze / Runden
-            <input id="sets" type="number" min="0" step="1" inputmode="numeric" placeholder="z. B. 4">
-          </label>
-        </div>
-
-        <div id="walkingRow" class="hide">
-          <label>Walking Minuten (3 km/h)
-            <input id="walkMin" type="number" min="1" step="1" inputmode="numeric" value="60">
-          </label>
-          <p class="hint">XP = Minuten × 5 (60 min = 300 XP) + Mutation Bonus (falls aktiv)</p>
-        </div>
-
-        <div class="row">
-          <label class="check"><input id="rpe9" type="checkbox"> RPE9 (+50)</label>
-          <label class="check"><input id="tech" type="checkbox"> Technik (+25)</label>
-          <label class="check"><input id="pause" type="checkbox"> Pausen (+25)</label>
-        </div>
-
-        <label>Zusatz XP (optional)
-          <input id="extraXp" type="number" step="1" inputmode="numeric" value="0">
-        </label>
-
-        <div class="row2">
-          <div class="pill"><b>Berechnete XP:</b> <span id="calcXp">0</span></div>
-          <div class="pill"><b>Info:</b> <span id="calcInfo">—</span></div>
-        </div>
-
-        <div class="row2">
-          <button id="add" type="button">Eintrag speichern</button>
-          <button id="cancelEdit" type="button" class="secondary">Bearbeiten abbrechen</button>
-        </div>
-
-        <div class="divider"></div>
-
-        <h2>Alle Einträge</h2>
-        <ul id="list"></ul>
-        <button id="clear" type="button" class="secondary">Alle Einträge löschen</button>
-      </div>
-    </section>
-
-    <!-- SKILLTREES -->
-    <section id="tab-skills" class="panel">
-      <div class="card">
-        <h2>Skilltrees</h2>
-        <p class="hint">Skillpunkte manuell (Motivation).</p>
-
-        <div class="grid2">
-          <div class="skillbox">
-            <h3>Mehrgelenkig (STR)</h3>
-            <p>Skillpunkte: <b><span id="sp-multi">0</span></b></p>
-            <button type="button" class="secondary" data-sp="multi">+1 Skillpunkt</button>
-            <ul class="skilllist" id="tree-multi"></ul>
-          </div>
-
-          <div class="skillbox">
-            <h3>Unilateral (STA)</h3>
-            <p>Skillpunkte: <b><span id="sp-uni">0</span></b></p>
-            <button type="button" class="secondary" data-sp="uni">+1 Skillpunkt</button>
-            <ul class="skilllist" id="tree-uni"></ul>
-          </div>
-
-          <div class="skillbox">
-            <h3>Core (MOB/STA)</h3>
-            <p>Skillpunkte: <b><span id="sp-core">0</span></b></p>
-            <button type="button" class="secondary" data-sp="core">+1 Skillpunkt</button>
-            <ul class="skilllist" id="tree-core"></ul>
-          </div>
-
-          <div class="skillbox">
-            <h3>Conditioning (END)</h3>
-            <p>Skillpunkte: <b><span id="sp-cond">0</span></b></p>
-            <button type="button" class="secondary" data-sp="cond">+1 Skillpunkt</button>
-            <ul class="skilllist" id="tree-cond"></ul>
-          </div>
-
-          <div class="skillbox">
-            <h3>Komplexe (ELITE)</h3>
-            <p>Skillpunkte: <b><span id="sp-comp">0</span></b></p>
-            <button type="button" class="secondary" data-sp="comp">+1 Skillpunkt</button>
-            <ul class="skilllist" id="tree-comp"></ul>
-          </div>
-        </div>
-
-        <div class="divider"></div>
-        <button id="resetSkills" type="button" class="danger">Skilltrees zurücksetzen</button>
-      </div>
-    </section>
-
-    <!-- BOSSFIGHTS -->
-    <section id="tab-boss" class="panel">
-      <div class="card">
-        <h2>Boss-Fight-Kalender</h2>
-        <p class="hint">Clear ist nur in der richtigen Woche möglich UND wenn du die Boss-Checks abhakt.</p>
-
-        <div class="row2">
-          <div class="pill"><b>Aktuelle Woche (heute):</b> <span id="bossCurrentWeek">—</span></div>
-          <div class="pill"><b>Startdatum:</b> <span id="bossStartDisplay">—</span></div>
-        </div>
-
-        <ul id="bossList" class="bosslist"></ul>
-
-        <div class="divider"></div>
-        <button id="resetBoss" type="button" class="danger">Boss-Fights zurücksetzen</button>
-      </div>
-    </section>
-
-    <!-- EXPORT -->
-    <section id="tab-export" class="panel">
-      <div class="card">
-        <h2>Export</h2>
-        <p class="hint">CSV Export für Excel/Google Sheets.</p>
-        <button id="exportCsv" type="button">CSV herunterladen</button>
-
-        <div class="divider"></div>
-        <h2>Status</h2>
-        <p><b>Anzahl Einträge:</b> <span id="countEntries">0</span></p>
-      </div>
-    </section>
-  </main>
-
-  <footer>
-    <small>IRON QUEST – PWA • Offline via Service Worker</small>
-  </footer>
-
-  <script src="app.js"></script>
-
-  <!-- ✅ Tabs funktionieren IMMER -->
-  <script>
-    (function () {
-      function activate(tabId) {
-        document.querySelectorAll(".tab").forEach(b => b.classList.remove("active"));
-        document.querySelectorAll(".panel").forEach(p => p.classList.remove("active"));
-        const btn = document.querySelector(`.tab[data-tab="${tabId}"]`);
-        const panel = document.getElementById("tab-" + tabId);
-        if (btn) btn.classList.add("active");
-        if (panel) panel.classList.add("active");
-        if (tabId) location.hash = tabId;
-      }
-      document.addEventListener("click", (e) => {
-        const btn = e.target.closest(".tab");
-        if (!btn) return;
-        e.preventDefault();
-        activate(btn.getAttribute("data-tab"));
-      });
-      const initial = (location.hash || "#dash").replace("#", "");
-      activate(initial);
-    })();
-  </script>
 </body>
 </html>
