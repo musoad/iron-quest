@@ -1,4 +1,4 @@
-const SW_VERSION = "v4.0.1";
+const SW_VERSION = "v4.0.2";
 const CACHE_NAME = `ironquest-${SW_VERSION}`;
 
 const ASSETS = [
