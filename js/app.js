@@ -1,727 +1,680 @@
-// app.js (v3 PRO orchestrator)
-import { $, isoDate, loadJSON, saveJSON, todayISO, debounce } from "./utils.js";
-import { idbGetAll, idbAdd, idbPut, idbDelete, idbClear, sortEntriesDesc } from "./db.js";
-import { getMutationForWeek, mutationXpMultiplierForType, resetMutations } from "./mutations.js";
-import { ensurePRPanel, renderPRTop10, checkAndUpdatePR, showPRPopup } from "./prSystem.js";
-import { getStatus, setStatus, statusIcon, nextStatus } from "./statusIcons.js";
-import { ensureHealthPanel, renderHealth } from "./health.js";
-import { ensureBackupPanel } from "./cloud.js";
-import { ensureAnalyticsTab, renderAnalyticsPro } from "./analyticsPro.js";
-import { ensureChallengeState, challengeMultiplier, toggleChallenge, setChallengeMult } from "./challenge.js";
-import { getStreak, updateStreakOnTrainingDay } from "./streak.js";
-import { skillMultiplierForType, renderSkillTrees, computeSkillPointsAvailable, resetSkillTree } from "./skilltree.js";
+/* =========================
+   IRON QUEST v4 PRO – js/app.js (FULL)
+   ✅ Stabile App-Wiring Version (iOS/PWA-freundlich)
+   ✅ Tabs, Render Pipeline, DB Loading, Save Entry
+   ✅ Log: Übung + empfohlene Sets/Reps + tatsächliche Sets/Reps
+   ✅ Health: Blutdruck + Puls (im Log speicherbar)
+   ✅ Boss/Attributes/Analytics/Skilltree/Challenge/Backup Hooks
+   ✅ Defensive: crasht nicht wenn Module fehlen
+   ========================= */
 
-// ✅ Deine 3 Dateien:
-import { EXERCISES, buildExerciseDropdown, getExerciseMeta } from "./exercises.js";
-import { computeXP } from "./xpSystem.js";
-import { levelFromTotalXp, titleForLevel, getAdaptiveModifiers, getStarThresholdsForWeek, starsForDay } from "./progression.js";
+const $ = (sel) => document.querySelector(sel);
+const $$ = (sel) => Array.from(document.querySelectorAll(sel));
 
-/* ========= KEYS ========= */
-const KEY_START_V3 = "iq_startdate_v3";
-const KEY_CAL = "ironquest_calendar_v20";
-const KEY_PLANOVR = "ironquest_plan_overrides_v20";
+const isoDate = (d) => new Date(d).toISOString().slice(0, 10);
 
-/* ========= STARTDATE / WEEK ========= */
-function ensureStartDate(){
-  let start = localStorage.getItem(KEY_START_V3);
-  if (!start) {
-    // fallback migration
-    const old = localStorage.getItem("ironquest_startdate_v20") || localStorage.getItem("ironquest_startdate");
-    start = (old && /^\d{4}-\d{2}-\d{2}$/.test(old)) ? old : isoDate(new Date());
-    localStorage.setItem(KEY_START_V3, start);
+const KEY_START = "iq_startdate_v4";
+const KEY_TAB = "iq_active_tab_v4";
+
+function loadJSON(key, fallback) {
+  try { return JSON.parse(localStorage.getItem(key)) ?? fallback; }
+  catch { return fallback; }
+}
+function saveJSON(key, value) {
+  localStorage.setItem(key, JSON.stringify(value));
+}
+
+function getStartDate() {
+  let s = localStorage.getItem(KEY_START);
+  if (!s) {
+    s = isoDate(new Date());
+    localStorage.setItem(KEY_START, s);
   }
-  if ($("startDateDash")) $("startDateDash").value = start;
-  return start;
+  return s;
 }
-function setStartDateLocal(newISO){
-  localStorage.setItem(KEY_START_V3, newISO);
-  if ($("startDateDash")) $("startDateDash").value = newISO;
+
+function setStartDate(v) {
+  if (!v) return;
+  localStorage.setItem(KEY_START, v);
 }
-function daysBetween(aISO, bISO){
-  return Math.floor((new Date(bISO)-new Date(aISO))/86400000);
+
+function daysBetween(aISO, bISO) {
+  return Math.floor((new Date(bISO) - new Date(aISO)) / 86400000);
 }
-function getWeekNumber(startISO, dateISO){
+
+function clampWeek(w) {
+  return Math.max(1, Math.min(52, w || 1));
+}
+
+function getWeekNumber(startISO, dateISO) {
   const diff = daysBetween(startISO, dateISO);
-  return diff < 0 ? 0 : Math.floor(diff/7)+1;
-}
-function clampWeek(w){ return Math.max(1, Math.min(52, Number(w||1))); }
-function currentWeekFor(dateISO){
-  const start = ensureStartDate();
-  return clampWeek(getWeekNumber(start, dateISO));
-}
-async function recalcAllEntryWeeks(){
-  const start = ensureStartDate();
-  const all = await idbGetAll();
-  for (const e of all){
-    const nw = clampWeek(getWeekNumber(start, e.date));
-    if (e.week !== nw){
-      e.week = nw;
-      await idbPut(e);
-    }
-  }
-}
-function resetWeekBoundSystems(){
-  resetMutations();
-  localStorage.removeItem("ironquest_weeklyach_v20");
-  localStorage.removeItem("ironquest_boss_v20");
-  localStorage.removeItem("ironquest_boss_checks_v20");
+  if (diff < 0) return 1;
+  return clampWeek(Math.floor(diff / 7) + 1);
 }
 
-/* ========= UI: ensure missing panels ========= */
-function ensureProPanels(){
-  ensurePRPanel();
-  ensureHealthPanel();
-  ensureBackupPanel();
-  ensureAnalyticsTab();
+function safeText(s) {
+  return String(s ?? "").replace(/[<>&]/g, (c) => ({
+    "<":"&lt;", ">":"&gt;", "&":"&amp;"
+  }[c]));
 }
 
-/* ========= LOG DRAFT ========= */
-function loadDraft(){ return loadJSON("ironquest_log_draft_v3", {}); }
-function saveDraft(d){ saveJSON("ironquest_log_draft_v3", d); }
-function autosaveDraft(){
-  const date = $("date")?.value;
-  if (!date) return;
-  const d = loadDraft();
-  d[date] = {
-    date,
-    exercise: $("exercise")?.value || "",
-    sets: $("sets")?.value || "",
-    reps: $("reps")?.value || "",
-    load: $("load")?.value || "",
-    minutes: $("walkMin")?.value || "",
-    note: $("note")?.value || ""
-  };
-  saveDraft(d);
+/* =========================
+   Module getters (defensive)
+========================= */
+function DB() {
+  return window.IronQuestDB || window.DB || null;
 }
-function restoreDraft(){
-  const date = $("date")?.value;
-  if (!date) return;
-  const d = loadDraft()[date];
-  if (!d) return;
-  if ($("exercise") && d.exercise) $("exercise").value = d.exercise;
-  if ($("sets") && d.sets) $("sets").value = d.sets;
-  if ($("reps") && d.reps) $("reps").value = d.reps;
-  if ($("load") && d.load) $("load").value = d.load;
-  if ($("walkMin") && d.minutes) $("walkMin").value = d.minutes;
-  if ($("note") && d.note) $("note").value = d.note;
+function Exercises() {
+  // expect: window.IronQuestExercises or similar
+  return window.IronQuestExercises || window.EXERCISES || null;
+}
+function XpSystem() {
+  return window.IronQuestXP || window.XpSystem || window.XPSystem || null;
+}
+function Progression() {
+  return window.IronQuestProgression || window.Progression || null;
 }
 
-/* ========= EXTRA INPUTS (Load + Note) ========= */
-function ensureExtraInputs(){
-  // load field
-  if (!$("load")){
-    const setsRow = document.getElementById("setsRow");
-    if (setsRow){
-      const wrap = document.createElement("div");
-      wrap.innerHTML = `
-        <label>Gewicht / Load (optional)
-          <input id="load" type="number" step="0.5" inputmode="decimal" placeholder="z.B. 22.5">
-        </label>
-      `;
-      setsRow.appendChild(wrap);
-    }
-  }
-  // note
-  if (!$("note")){
-    const addBtn = $("add");
-    const card = addBtn?.closest(".card");
-    if (card){
-      const wrap = document.createElement("div");
-      wrap.innerHTML = `
-        <label>Notiz (optional)
-          <input id="note" type="text" placeholder="z.B. RPE 8, gutes Pump">
-        </label>
-      `;
-      const divider = card.querySelector(".divider");
-      if (divider) divider.insertAdjacentElement("beforebegin", wrap);
-      else card.appendChild(wrap);
-    }
-  }
-}
-
-/* ========= WEEKLY PLAN (keine neue HTML nötig) ========= */
-const PLAN_DEFAULT = {
-  "Mon": ["DB Floor Press (neutral)","Arnold Press","Deficit Push-Ups","Overhead Trizeps Extension","DB Lateral Raises"],
-  "Tue": ["1-Arm DB Row (Pause oben)","Renegade Rows","Reverse Flys (langsam)","DB Supinated Curl","Farmer’s Carry (DB)"],
-  "Wed": ["Ruhetag (Recovery + Mobility)"],
-  "Thu": ["Bulgarian Split Squats","DB Romanian Deadlift","Goblet Squat","Side Plank + Leg Raise","Standing DB Calf Raises"],
-  "Fri": ["Komplex: Deadlift","Komplex: Clean","Komplex: Front Squat","Komplex: Push Press","Plank Shoulder Taps"],
-  "Sat": ["Burpees","Mountain Climbers","High Knees","Russian Twists (DB)","Hollow Body Hold"],
-  "Sun": ["Ruhetag (Recovery + Mobility)"],
+/* =========================
+   App State
+========================= */
+const state = {
+  entries: [],
+  startDate: getStartDate(),
+  todayISO: isoDate(new Date()),
+  currentWeek: 1,
+  activeTab: localStorage.getItem(KEY_TAB) || "dashboard",
 };
 
-function loadPlanOverrides(){ return loadJSON(KEY_PLANOVR, {}); }
-function savePlanOverrides(x){ saveJSON(KEY_PLANOVR, x); }
-
-function getWeekPlan(week){
-  const ovr = loadPlanOverrides();
-  const w = String(week);
-  const base = structuredClone(PLAN_DEFAULT);
-  if (!ovr[w]) return base;
-  for (const k of Object.keys(ovr[w])) base[k] = ovr[w][k];
-  return base;
-}
-function groupForDayKey(dayKey){
-  if (dayKey === "Mon") return "Tag 1 – Push";
-  if (dayKey === "Tue") return "Tag 2 – Pull";
-  if (dayKey === "Thu") return "Tag 3 – Beine & Core";
-  if (dayKey === "Fri") return "Tag 4 – Ganzkörper";
-  if (dayKey === "Sat") return "Tag 5 – Conditioning & Core";
-  return "Ruhetag";
-}
-function exercisesForGroup(groupName){
-  return EXERCISES.filter(e => e.group === groupName && e.type !== "Rest");
+function computeDerived() {
+  state.todayISO = isoDate(new Date());
+  state.startDate = getStartDate();
+  state.currentWeek = getWeekNumber(state.startDate, state.todayISO);
 }
 
-function renderWeeklyPlan(curWeek, entries){
-  const content = $("planContent");
-  if (!content) return;
+async function loadEntries() {
+  const db = DB();
+  if (!db) throw new Error("DB fehlt: window.IronQuestDB");
 
-  const start = ensureStartDate();
-  const w = clampWeek(curWeek || 1);
-  const plan = getWeekPlan(w);
-  const mutation = getMutationForWeek(w);
-  const adaptive = getAdaptiveModifiers(entries, w);
+  // Standard-Funktionen (passt zu vielen db.js Implementierungen):
+  if (typeof db.getAllEntries === "function") return await db.getAllEntries();
+  if (typeof db.getAll === "function") return await db.getAll();
+  throw new Error("DB API fehlt: getAllEntries() oder getAll()");
+}
 
-  if ($("planStart")) $("planStart").textContent = start;
-  if ($("planWeek")) $("planWeek").textContent = `W${w}`;
-  if ($("planBlock")) $("planBlock").textContent = w <= 4 ? "Block 1" : (w<=8 ? "Block 2":"Block 3");
-  if ($("planMutation")) $("planMutation").textContent = `${mutation.name} – ${mutation.effect}`;
-  if ($("planAdaptive")) $("planAdaptive").textContent = `${adaptive.setDelta>=0?"+":""}${adaptive.setDelta} Sets, ${adaptive.repDelta>=0?"+":""}${adaptive.repDelta} Reps`;
-  if ($("planHint")) $("planHint").textContent = adaptive.note || "—";
+async function addEntry(entry) {
+  const db = DB();
+  if (!db) throw new Error("DB fehlt: window.IronQuestDB");
 
-  const dayNames = [
-    ["Mon","Montag (Tag 1 – Push)"],
-    ["Tue","Dienstag (Tag 2 – Pull)"],
-    ["Wed","Mittwoch (Ruhetag)"],
-    ["Thu","Donnerstag (Tag 3 – Beine & Core)"],
-    ["Fri","Freitag (Tag 4 – Ganzkörper)"],
-    ["Sat","Samstag (Tag 5 – Conditioning)"],
-    ["Sun","Sonntag (Ruhetag)"],
+  if (typeof db.addEntry === "function") return await db.addEntry(entry);
+  if (typeof db.add === "function") return await db.add(entry);
+  throw new Error("DB API fehlt: addEntry() / add()");
+}
+
+async function addMany(entries) {
+  const db = DB();
+  if (!db) throw new Error("DB fehlt: window.IronQuestDB");
+
+  if (typeof db.addMany === "function") return await db.addMany(entries);
+  // fallback
+  for (const e of entries) await addEntry(e);
+}
+
+/* =========================
+   Tabs
+========================= */
+function activateTab(tabId) {
+  state.activeTab = tabId;
+  localStorage.setItem(KEY_TAB, tabId);
+
+  $$("nav button[data-tab]").forEach(b => b.classList.toggle("active", b.dataset.tab === tabId));
+  $$(".tab").forEach(sec => sec.classList.toggle("active", sec.id === tabId));
+}
+
+function bindTabs() {
+  $$("nav button[data-tab]").forEach(btn => {
+    btn.addEventListener("click", () => activateTab(btn.dataset.tab));
+  });
+
+  // Restore last tab
+  activateTab(state.activeTab);
+}
+
+/* =========================
+   UI Blocks
+========================= */
+function renderPlayerInfo() {
+  const el = $("#playerInfo");
+  if (!el) return;
+
+  const totalXp = state.entries.reduce((s, e) => s + (Number(e.xp) || 0), 0);
+  const level = Progression()?.levelFromTotalXp ? Progression().levelFromTotalXp(totalXp) : null;
+
+  const lvlText = level?.lvl ? `Lv ${level.lvl}` : "Lv —";
+  el.innerHTML = `
+    <div class="pill"><b>Start:</b> ${safeText(state.startDate)}</div>
+    <div class="pill"><b>Woche:</b> W${state.currentWeek}</div>
+    <div class="pill"><b>Total XP:</b> ${Math.round(totalXp)}</div>
+    <div class="pill"><b>${safeText(lvlText)}</b></div>
+  `;
+}
+
+function renderDashboard() {
+  const el = $("#dashboard");
+  if (!el) return;
+
+  const todayXp = state.entries
+    .filter(e => e.date === state.todayISO)
+    .reduce((s, e) => s + (Number(e.xp) || 0), 0);
+
+  const weekXp = state.entries
+    .filter(e => Number(e.week) === state.currentWeek)
+    .reduce((s, e) => s + (Number(e.xp) || 0), 0);
+
+  el.innerHTML = `
+    <div class="card">
+      <h2>Dashboard</h2>
+      <p class="hint">Heute: <b>${safeText(state.todayISO)}</b> • Woche <b>W${state.currentWeek}</b></p>
+
+      <div class="row2">
+        <div class="pill"><b>Heute XP:</b> ${Math.round(todayXp)}</div>
+        <div class="pill"><b>Woche XP:</b> ${Math.round(weekXp)}</div>
+      </div>
+
+      <div class="divider"></div>
+
+      <h3>Startdatum</h3>
+      <div class="row2">
+        <input id="startDateInput" class="input" type="date" value="${safeText(state.startDate)}">
+        <button id="saveStartBtn" class="btn secondary">Startdatum speichern</button>
+      </div>
+      <p class="hint">Ändert die Wochen-Nummer (W1 ab Startdatum). Wenn du eine Recalc-Funktion in db.js hast, kann man später Weeks neu berechnen.</p>
+    </div>
+
+    <div class="card" id="dashAttrCard">
+      <h2>Attribute</h2>
+      <div class="hint">Wird aus Entries berechnet (STR/STA/END/MOB).</div>
+      <div id="dashAttrMount"></div>
+    </div>
+
+    <div class="card" id="dashAnalyticsCard">
+      <h2>Analytics</h2>
+      <div class="hint">Mini-Analytics (wenn analytics.js vorhanden ist).</div>
+      <div id="dashAnalyticsMount"></div>
+    </div>
+  `;
+
+  $("#saveStartBtn")?.addEventListener("click", async () => {
+    const v = $("#startDateInput")?.value;
+    if (!v) return alert("Bitte Datum wählen.");
+    setStartDate(v);
+    computeDerived();
+    await renderAll();
+    alert("Startdatum gespeichert ✅");
+  });
+
+  // Attributes
+  if (window.IronQuestAttributes?.render) {
+    window.IronQuestAttributes.render($("#dashAttrMount"), state.entries);
+  } else {
+    $("#dashAttrMount").innerHTML = `<div class="hint">attributes.js fehlt oder exportiert kein IronQuestAttributes.render()</div>`;
+  }
+
+  // Analytics mini
+  if (window.IronQuestAnalytics?.renderMini) {
+    window.IronQuestAnalytics.renderMini($("#dashAnalyticsMount"), state);
+  } else {
+    $("#dashAnalyticsMount").innerHTML = `<div class="hint">analytics.js optional (renderMini nicht gefunden)</div>`;
+  }
+}
+
+function buildExerciseOptions() {
+  const ex = Exercises();
+
+  // Minimal fallback falls exercises.js nicht geladen:
+  const fallback = [
+    { name: "DB Floor Press", type: "Mehrgelenkig", desc: "Brust/Trizeps", recSets: "3–4", recReps: "8–12" },
+    { name: "1-Arm DB Row", type: "Unilateral", desc: "Rücken", recSets: "3–4", recReps: "8–12" },
+    { name: "Goblet Squat", type: "Mehrgelenkig", desc: "Beine", recSets: "3–4", recReps: "8–12" },
+    { name: "Walking (NEAT)", type: "NEAT", desc: "LISS/Alltag", recSets: "—", recReps: "30–60 min" },
   ];
 
-  let html = "";
-  dayNames.forEach(([dayKey,label])=>{
-    const exList = plan[dayKey] || [];
-    html += `<div class="planDay"><h3>${label}</h3><ul class="planList">`;
+  const list = Array.isArray(ex?.list) ? ex.list : (Array.isArray(ex) ? ex : fallback);
+  return list;
+}
 
-    if (dayKey === "Wed" || dayKey === "Sun"){
-      html += `<li><b>Ruhetag</b><br><span class="small">10–20 Min Mobility + Spaziergang.</span></li></ul></div>`;
-      return;
+function renderLog() {
+  const el = $("#log");
+  if (!el) return;
+
+  const exList = buildExerciseOptions();
+
+  el.innerHTML = `
+    <div class="card">
+      <h2>Log</h2>
+      <p class="hint">Training + Health Tracking (Blutdruck + Puls). Empfohlene Werte kommen aus exercises.js (wenn vorhanden).</p>
+
+      <div class="row2">
+        <label class="stack">
+          <span class="hint">Datum</span>
+          <input id="logDate" class="input" type="date" value="${safeText(state.todayISO)}">
+        </label>
+        <div class="pill"><b>Woche:</b> <span id="logWeek">W${state.currentWeek}</span></div>
+      </div>
+
+      <label class="stack">
+        <span class="hint">Übung</span>
+        <select id="logExercise" class="input">
+          ${exList.map(x => `<option value="${safeText(x.name)}">${safeText(x.name)} (${safeText(x.type || "—")})</option>`).join("")}
+        </select>
+      </label>
+
+      <div class="row2">
+        <div class="pill"><b>Typ:</b> <span id="logType">—</span></div>
+        <div class="pill"><b>Empfehlung:</b> <span id="logRec">—</span></div>
+      </div>
+
+      <div class="divider"></div>
+
+      <h3>Tatsächliche Leistung</h3>
+      <div class="row2">
+        <label class="stack">
+          <span class="hint">Sätze</span>
+          <input id="logSets" class="input" type="number" min="0" step="1" inputmode="numeric" placeholder="z.B. 4">
+        </label>
+        <label class="stack">
+          <span class="hint">Reps / Satz</span>
+          <input id="logReps" class="input" type="number" min="0" step="1" inputmode="numeric" placeholder="z.B. 10">
+        </label>
+      </div>
+
+      <div class="row2">
+        <label class="stack">
+          <span class="hint">Gewicht (optional)</span>
+          <input id="logWeight" class="input" type="number" min="0" step="0.5" inputmode="decimal" placeholder="z.B. 20">
+        </label>
+        <label class="stack">
+          <span class="hint">Minuten (NEAT/Conditioning optional)</span>
+          <input id="logMinutes" class="input" type="number" min="0" step="1" inputmode="numeric" placeholder="z.B. 30">
+        </label>
+      </div>
+
+      <div class="divider"></div>
+
+      <h3>Health</h3>
+      <div class="row2">
+        <label class="stack">
+          <span class="hint">Blutdruck SYS</span>
+          <input id="bpSys" class="input" type="number" min="0" step="1" inputmode="numeric" placeholder="z.B. 125">
+        </label>
+        <label class="stack">
+          <span class="hint">Blutdruck DIA</span>
+          <input id="bpDia" class="input" type="number" min="0" step="1" inputmode="numeric" placeholder="z.B. 80">
+        </label>
+      </div>
+      <div class="row2">
+        <label class="stack">
+          <span class="hint">Puls (bpm)</span>
+          <input id="pulse" class="input" type="number" min="0" step="1" inputmode="numeric" placeholder="z.B. 65">
+        </label>
+        <label class="stack">
+          <span class="hint">Notiz (optional)</span>
+          <input id="logNote" class="input" placeholder="z.B. RPE9, Stress, Schlaf schlecht...">
+        </label>
+      </div>
+
+      <div class="row2">
+        <div class="pill"><b>XP Vorschau:</b> <span id="logXpPreview">—</span></div>
+        <button id="saveEntryBtn" class="btn">Speichern</button>
+      </div>
+    </div>
+
+    <div class="card">
+      <h2>Letzte Einträge</h2>
+      <div id="logEntriesList"></div>
+    </div>
+  `;
+
+  const updateWeek = () => {
+    const d = $("#logDate")?.value || state.todayISO;
+    const w = getWeekNumber(getStartDate(), d);
+    $("#logWeek").textContent = `W${w}`;
+  };
+
+  const findExercise = (name) => buildExerciseOptions().find(x => x.name === name) || null;
+
+  const updateRecommendation = () => {
+    const name = $("#logExercise")?.value;
+    const ex = findExercise(name);
+    $("#logType").textContent = ex?.type || "—";
+    const rec = (ex?.recSets || ex?.sets || "—") + " Sets • " + (ex?.recReps || ex?.reps || "—");
+    $("#logRec").textContent = rec;
+  };
+
+  const calcXpPreview = () => {
+    const d = $("#logDate")?.value || state.todayISO;
+    const w = getWeekNumber(getStartDate(), d);
+
+    const name = $("#logExercise")?.value;
+    const ex = findExercise(name);
+
+    const sets = Number($("#logSets")?.value || 0);
+    const reps = Number($("#logReps")?.value || 0);
+    const minutes = Number($("#logMinutes")?.value || 0);
+    const weight = Number($("#logWeight")?.value || 0);
+
+    let xp = 0;
+
+    // Preferred: xpSystem.js
+    if (window.IronQuestXP?.calcXP) {
+      xp = window.IronQuestXP.calcXP({
+        week: w,
+        exercise: ex,
+        actual: { sets, reps, minutes, weight }
+      });
+    } else if (XpSystem()?.calcXP) {
+      xp = XpSystem().calcXP({ week: w, exercise: ex, actual: { sets, reps, minutes, weight } });
+    } else {
+      // Fallback simple rule
+      const baseByType = {
+        "Mehrgelenkig": 180,
+        "Unilateral": 200,
+        "Core": 140,
+        "Conditioning": 240,
+        "Komplexe": 260,
+        "NEAT": 3,
+        "Rest": 0,
+      };
+      if ((ex?.type || "") === "NEAT") xp = Math.round(minutes * 3);
+      else xp = baseByType[ex?.type] ?? 150;
     }
 
-    const group = groupForDayKey(dayKey);
-    const options = exercisesForGroup(group);
+    $("#logXpPreview").textContent = String(Math.round(xp));
+    return Math.round(xp);
+  };
 
-    exList.forEach((exName, idx)=>{
-      const meta = getExerciseMeta(exName);
-      const type = meta?.type || "Mehrgelenkig";
-      const icon = statusIcon(getStatus(w, dayKey, idx));
-      const rec = meta?.recommended ? meta.recommended(w, adaptive) : { setsText:"—", repsText:"—" };
+  $("#logDate")?.addEventListener("change", () => { updateWeek(); calcXpPreview(); });
+  $("#logExercise")?.addEventListener("change", () => { updateRecommendation(); calcXpPreview(); });
 
-      let sel = `<select class="swapSel" data-day="${dayKey}" data-idx="${idx}">`;
-      options.forEach(o=>{
-        sel += `<option value="${o.name}" ${o.name===exName?"selected":""}>${o.name}</option>`;
-      });
-      sel += `</select>`;
-
-      html += `
-        <li class="planItem">
-          <button type="button" class="planStatusBtn" data-status-week="${w}" data-day="${dayKey}" data-idx="${idx}" title="Status toggeln">${icon}</button>
-          <div class="planMain">
-            <div><b>${exName}</b></div>
-            <div class="small">${type} • Empf: ${rec.setsText} / ${rec.repsText}</div>
-            <div class="small">${meta?.desc ? meta.desc : ""}</div>
-            <div class="small">Swap: ${sel}</div>
-          </div>
-        </li>
-      `;
-    });
-
-    html += `</ul></div>`;
+  ["logSets","logReps","logMinutes","logWeight"].forEach(id => {
+    $("#"+id)?.addEventListener("input", calcXpPreview);
   });
 
-  content.innerHTML = html;
+  updateWeek();
+  updateRecommendation();
+  calcXpPreview();
 
-  content.querySelectorAll("select.swapSel").forEach(sel=>{
-    sel.addEventListener("change", ()=>{
-      const day = sel.getAttribute("data-day");
-      const idx = parseInt(sel.getAttribute("data-idx"),10);
-      const val = sel.value;
-      const ovr = loadPlanOverrides();
-      const wk = String(w);
-      ovr[wk] ??= {};
-      ovr[wk][day] = (ovr[wk][day] || (PLAN_DEFAULT[day] || [])).slice();
-      ovr[wk][day][idx] = val;
-      savePlanOverrides(ovr);
-      document.dispatchEvent(new CustomEvent("iq:rerender"));
-    });
+  $("#saveEntryBtn")?.addEventListener("click", async () => {
+    const dateISO = $("#logDate")?.value || state.todayISO;
+    const week = getWeekNumber(getStartDate(), dateISO);
+
+    const name = $("#logExercise")?.value;
+    const ex = findExercise(name);
+
+    const sets = Number($("#logSets")?.value || 0);
+    const reps = Number($("#logReps")?.value || 0);
+    const minutes = Number($("#logMinutes")?.value || 0);
+    const weight = Number($("#logWeight")?.value || 0);
+
+    const bpSys = Number($("#bpSys")?.value || 0);
+    const bpDia = Number($("#bpDia")?.value || 0);
+    const pulse = Number($("#pulse")?.value || 0);
+
+    const note = $("#logNote")?.value?.trim() || "";
+
+    const xp = calcXpPreview();
+
+    const recSets = ex?.recSets || ex?.sets || "—";
+    const recReps = ex?.recReps || ex?.reps || "—";
+
+    // detail string: recommended + actual + health
+    const detailParts = [
+      `Empf: ${recSets} / ${recReps}`,
+      `Ist: Sets ${sets || 0}, Reps ${reps || 0}`,
+    ];
+
+    if (weight) detailParts.push(`Gewicht: ${weight}`);
+    if (minutes) detailParts.push(`Min: ${minutes}`);
+
+    if (bpSys && bpDia) detailParts.push(`BP: ${bpSys}/${bpDia}`);
+    if (pulse) detailParts.push(`Puls: ${pulse} bpm`);
+    if (note) detailParts.push(`Note: ${note}`);
+
+    // Optional: exercise description
+    if (ex?.desc) detailParts.push(`Desc: ${ex.desc}`);
+
+    const entry = {
+      date: dateISO,
+      week,
+      exercise: ex?.name || name || "Unbekannt",
+      type: ex?.type || "Other",
+      detail: detailParts.join(" • "),
+      xp
+    };
+
+    try {
+      await addEntry(entry);
+
+      // Optional: PR System hook (wenn prSystem.js vorhanden)
+      if (window.IronQuestPR?.checkPR) {
+        window.IronQuestPR.checkPR(entry);
+      }
+
+      // Optional: streak hook (wenn streak.js vorhanden)
+      if (window.IronQuestStreak?.update) {
+        window.IronQuestStreak.update(state.entries.concat([entry]));
+      }
+
+      alert(`Gespeichert ✅ +${xp} XP`);
+      await renderAll();
+    } catch (e) {
+      console.error(e);
+      alert("Speichern fehlgeschlagen (Konsole prüfen).");
+    }
   });
 
-  content.querySelectorAll("button.planStatusBtn").forEach(btn=>{
-    btn.addEventListener("click", ()=>{
-      const week = parseInt(btn.getAttribute("data-status-week"),10);
-      const day = btn.getAttribute("data-day");
-      const idx = parseInt(btn.getAttribute("data-idx"),10);
-      const cur = getStatus(week, day, idx);
-      const nxt = nextStatus(cur);
-      setStatus(week, day, idx, nxt);
-      btn.textContent = statusIcon(nxt);
-    });
-  });
+  renderLogEntriesList();
 }
 
-/* ========= Calendar (minimal: nutzt vorhandene DOM) ========= */
-function loadCalendarState(){
-  return loadJSON(KEY_CAL, { weekOffset: 0, selectedDate: isoDate(new Date()) });
-}
-function saveCalendarState(st){ saveJSON(KEY_CAL, st); }
+function renderLogEntriesList() {
+  const mount = $("#logEntriesList");
+  if (!mount) return;
 
-/* ========= Render ========= */
-async function computeStats(entries){
-  const startDate = ensureStartDate();
-  const today = todayISO();
-  const curWeek = clampWeek(getWeekNumber(startDate, today));
+  const recent = [...state.entries]
+    .sort((a, b) => (b.id ?? 0) - (a.id ?? 0))
+    .slice(0, 20);
 
-  let todayXp = 0, weekXp = 0, totalXp = 0;
-  for (const e of entries){
-    totalXp += e.xp || 0;
-    if (e.date === today) todayXp += e.xp || 0;
-    if ((e.week || currentWeekFor(e.date)) === curWeek) weekXp += e.xp || 0;
+  if (!recent.length) {
+    mount.innerHTML = `<div class="hint">Noch keine Einträge.</div>`;
+    return;
   }
-  return { todayXp, weekXp, totalXp, curWeek, startDate };
-}
 
-function renderDashboard(stats, entries){
-  if ($("startDisplay")) $("startDisplay").textContent = stats.startDate;
-  if ($("weekNumber")) $("weekNumber").textContent = `W${stats.curWeek}`;
-  if ($("todayXp")) $("todayXp").textContent = stats.todayXp;
-  if ($("weekXp")) $("weekXp").textContent = stats.weekXp;
-  if ($("totalXp")) $("totalXp").textContent = stats.totalXp;
-
-  const lv = levelFromTotalXp(stats.totalXp);
-  if ($("level")) $("level").textContent = lv.lvl;
-  if ($("title")) $("title").textContent = titleForLevel(lv.lvl);
-
-  const thr = getStarThresholdsForWeek(stats.curWeek, entries);
-  if ($("todayStars")) $("todayStars").textContent = starsForDay(stats.todayXp, thr);
-  if ($("appStatus")) $("appStatus").textContent = `OK • ⭐ ${thr.one} • ⭐⭐ ${thr.two} • ⭐⭐⭐ ${thr.three}`;
-
-  // streak display (inject pill)
-  const todayCard = document.querySelector("#tab-dash .card:nth-of-type(2)");
-  if (todayCard && !document.getElementById("streakPill")){
-    const row = todayCard.querySelector(".row2:last-of-type") || todayCard.querySelector(".row2");
-    const pill = document.createElement("div");
-    pill.className = "pill";
-    pill.id = "streakPill";
-    pill.innerHTML = `<b>Streak:</b> <span id="streakNow">0</span> (Best <span id="streakBest">0</span>)`;
-    row?.appendChild(pill);
-  }
-  const st = getStreak();
-  if ($("streakNow")) $("streakNow").textContent = st.current || 0;
-  if ($("streakBest")) $("streakBest").textContent = st.best || 0;
-}
-
-function renderRecent(entries){
-  const ul = $("recentList");
-  if (!ul) return;
-  const recent = entries.slice(0, 6);
-  ul.innerHTML = recent.length ? "" : "<li>Noch keine Einträge.</li>";
-  recent.forEach(e=>{
-    const li=document.createElement("li");
-    li.textContent = `${e.date} (W${e.week}) • ${e.exercise} • ${e.xp} XP`;
-    ul.appendChild(li);
-  });
-}
-
-function ensureRepsInput(){
-  if ($("reps")) return;
-  const setsRow = $("setsRow");
-  if (!setsRow) return;
-  const wrap = document.createElement("div");
-  wrap.innerHTML = `
-    <label>Wiederholungen pro Satz
-      <input id="reps" type="number" min="0" step="1" inputmode="numeric" placeholder="z. B. 10">
-    </label>
-  `;
-  setsRow.appendChild(wrap);
-}
-
-function toggleLogRowsByType(type){
-  const walkingRow = $("walkingRow");
-  const setsRow = $("setsRow");
-  if (!walkingRow || !setsRow) return;
-  const isWalk = type === "NEAT";
-  const isRest = type === "Rest";
-  walkingRow.classList.toggle("hide", !isWalk);
-  setsRow.classList.toggle("hide", isWalk || isRest);
-}
-
-async function renderAll(){
-  ensureProPanels();
-  ensureExtraInputs();
-  ensureRepsInput();
-
-  ensureStartDate();
-  ensureChallengeState();
-
-  buildExerciseDropdown("exercise"); // in exercises.js: build dropdown by id
-
-  const entries = sortEntriesDesc(await idbGetAll());
-  // ensure week field
-  entries.forEach(e=>{ if (!e.week) e.week = currentWeekFor(e.date); });
-
-  const stats = await computeStats(entries);
-  renderDashboard(stats, entries);
-  renderRecent(entries);
-
-  // Weekly Plan
-  renderWeeklyPlan(stats.curWeek, entries);
-
-  // PR screen
-  renderPRTop10();
-
-  // Health screen
-  renderHealth();
-
-  // Skilltrees
-  const sp = computeSkillPointsAvailable(entries, starsForDay, getStarThresholdsForWeek, (d)=>currentWeekFor(d));
-  const avail = sp.available;
-  if ($("skillPointsAvail")) $("skillPointsAvail").textContent = avail;
-  renderSkillTrees(entries, stats.curWeek, avail);
-
-  // Analytics pro
-  const thr = getStarThresholdsForWeek(stats.curWeek, entries);
-  renderAnalyticsPro(entries, stats.curWeek, thr, starsForDay, (d)=>currentWeekFor(d), stats.startDate);
-
-  // update log UI
-  await updateLogUI(entries, stats.curWeek);
-  renderEntriesList(entries);
-}
-
-/* ========= Log UI ========= */
-async function updateLogUI(entries, curWeek){
-  const date = $("date")?.value || todayISO();
-  const week = currentWeekFor(date);
-  if ($("logStart")) $("logStart").textContent = ensureStartDate();
-  if ($("logWeek")) $("logWeek").textContent = `W${week}`;
-
-  const exName = $("exercise")?.value || "";
-  const meta = getExerciseMeta(exName);
-  const type = meta?.type || "Mehrgelenkig";
-  if ($("autoType")) $("autoType").textContent = type;
-
-  const mutation = getMutationForWeek(week);
-  const adaptive = getAdaptiveModifiers(entries, week);
-
-  const rec = meta?.recommended ? meta.recommended(week, adaptive) : { setsText:"—", repsText:"—", setsValue:null, repsValue:null };
-  if ($("recommendedSets")) $("recommendedSets").textContent = rec.setsText || "—";
-  if ($("recommendedReps")) $("recommendedReps").textContent = rec.repsText || "—";
-
-  toggleLogRowsByType(type);
-
-  // preview XP
-  const sets = Number($("sets")?.value || 0) || 0;
-  const reps = Number($("reps")?.value || 0) || 0;
-  const load = Number($("load")?.value || 0) || 0;
-  const minutes = Number($("walkMin")?.value || 0) || 0;
-
-  const skillMult = skillMultiplierForType(type);
-  const mutMult = mutationXpMultiplierForType(type, mutation);
-  const challMult = challengeMultiplier();
-
-  const xp = computeXP({
-    dateISO: date,
-    week,
-    exercise: exName,
-    type,
-    sets, reps, load, minutes,
-    mutationMultiplier: mutMult,
-    skillMultiplier: skillMult,
-    challengeMultiplier: challMult
-  });
-
-  if ($("calcXp")) $("calcXp").textContent = xp;
-  if ($("calcInfo")) $("calcInfo").textContent =
-    `Mut x${mutMult.toFixed(2)} • Skill x${skillMult.toFixed(2)} • Challenge x${challMult.toFixed(2)}`;
-}
-
-function renderEntriesList(entries){
-  const list = $("list");
-  if (!list) return;
-  list.innerHTML = entries.length ? "" : "<li>Noch keine Einträge.</li>";
-
-  entries.forEach(e=>{
-    const li=document.createElement("li");
-    li.innerHTML = `
-      <div class="entryRow">
-        <div style="min-width:0;">
-          <div class="entryTitle"><b>${e.date}</b> (W${e.week}) • <b>${e.exercise}</b></div>
-          <div class="hint">${e.type} • ${e.detail || ""}</div>
-        </div>
-        <div class="row" style="margin:0; align-items:flex-start;">
-          <span class="badge">${e.xp} XP</span>
-          <button class="secondary" style="width:auto; padding:10px 12px;" data-edit="${e.id}">Edit</button>
-          <button class="danger" style="width:auto; padding:10px 12px;" data-del="${e.id}">Delete</button>
-        </div>
+  mount.innerHTML = recent.map(e => `
+    <div class="entryRow">
+      <div style="min-width:0;">
+        <div><b>${safeText(e.date)}</b> (W${safeText(e.week)}) • <b>${safeText(e.exercise)}</b></div>
+        <div class="hint">${safeText(e.type)} • ${safeText(e.detail || "")}</div>
       </div>
-    `;
-    list.appendChild(li);
-  });
-
-  list.querySelectorAll("button[data-del]").forEach(btn=>{
-    btn.addEventListener("click", async ()=>{
-      const id = Number(btn.getAttribute("data-del"));
-      if (!confirm("Diesen Eintrag wirklich löschen?")) return;
-      await idbDelete(id);
-      document.dispatchEvent(new CustomEvent("iq:rerender"));
-    });
-  });
-
-  list.querySelectorAll("button[data-edit]").forEach(btn=>{
-    btn.addEventListener("click", async ()=>{
-      const id = Number(btn.getAttribute("data-edit"));
-      const all = await idbGetAll();
-      const e = all.find(x=>x.id===id);
-      if (!e) return;
-
-      $("editId").value = String(e.id);
-      if ($("date")) $("date").value = e.date;
-      if ($("exercise")) $("exercise").value = e.exercise;
-
-      // try parse stored meta
-      const mSets = (e.detail||"").match(/Sets:\s*(\d+)/i);
-      const mReps = (e.detail||"").match(/Reps:\s*(\d+)/i);
-      const mLoad = (e.detail||"").match(/Load:\s*([0-9.]+)/i);
-      const mMin  = (e.detail||"").match(/Min:\s*(\d+)/i);
-
-      if ($("sets") && mSets) $("sets").value = mSets[1];
-      if ($("reps") && mReps) $("reps").value = mReps[1];
-      if ($("load") && mLoad) $("load").value = mLoad[1];
-      if ($("walkMin") && mMin) $("walkMin").value = mMin[1];
-
-      if ($("add")) $("add").textContent = "Änderungen speichern";
-      $("cancelEdit")?.classList.remove("hide");
-
-      document.dispatchEvent(new CustomEvent("iq:rerender"));
-    });
-  });
+      <div class="badge">${Math.round(Number(e.xp) || 0)} XP</div>
+    </div>
+  `).join("");
 }
 
-/* ========= SAVE ENTRY ========= */
-async function saveOrUpdateEntry(){
-  const date = $("date")?.value || todayISO();
-  const week = currentWeekFor(date);
+function renderSkills() {
+  const el = $("#skills");
+  if (!el) return;
 
-  const exName = $("exercise")?.value || "Unbekannt";
-  const meta = getExerciseMeta(exName);
-  const type = meta?.type || "Mehrgelenkig";
+  el.innerHTML = `
+    <div class="card">
+      <h2>Skilltree</h2>
+      <div id="skillsMount"></div>
+    </div>
+  `;
 
-  const entries = sortEntriesDesc(await idbGetAll());
-  const adaptive = getAdaptiveModifiers(entries, week);
-  const mutation = getMutationForWeek(week);
-
-  const sets = Number($("sets")?.value || 0) || 0;
-  const reps = Number($("reps")?.value || 0) || 0;
-  const load = Number($("load")?.value || 0) || 0;
-  const minutes = Number($("walkMin")?.value || 0) || 0;
-
-  const rec = meta?.recommended ? meta.recommended(week, adaptive) : { setsText:"—", repsText:"—" };
-
-  const skillMult = skillMultiplierForType(type);
-  const mutMult = mutationXpMultiplierForType(type, mutation);
-  const challMult = challengeMultiplier();
-
-  const xp = computeXP({
-    dateISO: date,
-    week,
-    exercise: exName,
-    type,
-    sets, reps, load, minutes,
-    mutationMultiplier: mutMult,
-    skillMultiplier: skillMult,
-    challengeMultiplier: challMult
-  });
-
-  let detailParts = [];
-  detailParts.push(`Empf: ${rec.setsText} / ${rec.repsText}`);
-  if (type === "NEAT") detailParts.push(`Min: ${minutes||0}`);
-  if (type !== "NEAT" && type !== "Rest") {
-    if (sets) detailParts.push(`Sets: ${sets}`);
-    if (reps) detailParts.push(`Reps: ${reps}`);
-    if (load) detailParts.push(`Load: ${load}`);
-  }
-  const note = ($("note")?.value || "").trim();
-  if (note) detailParts.push(`Note: ${note}`);
-  detailParts.push(`Mut x${mutMult.toFixed(2)} • Skill x${skillMult.toFixed(2)} • Challenge x${challMult.toFixed(2)}`);
-  const detail = detailParts.join(" • ");
-
-  const editId = Number(($("editId")?.value || "").trim() || 0);
-
-  const entry = { date, week, exercise: exName, type, detail, xp };
-
-  if (editId) {
-    await idbPut({ id: editId, ...entry });
+  if (window.IronQuestSkilltree?.render) {
+    window.IronQuestSkilltree.render($("#skillsMount"), state);
   } else {
-    await idbAdd(entry);
+    $("#skillsMount").innerHTML = `<div class="hint">skilltree.js fehlt oder exportiert kein IronQuestSkilltree.render()</div>`;
   }
-
-  // PR check + bonus
-  const prRes = checkAndUpdatePR(entry, { sets, reps, load, minutes });
-  const prBonus = showPRPopup(prRes);
-  if (prBonus?.bonusXp) {
-    await idbAdd({ date, week, exercise:`PR Bonus: ${exName}`, type:"PR", detail:"Bonus XP", xp: prBonus.bonusXp });
-  }
-
-  // Streak update: zählt wenn echtes Training (nicht Rest/Quest)
-  if (!["Rest","Quest","Reward"].includes(type)) {
-    updateStreakOnTrainingDay(date);
-  }
-
-  // Reset edit mode
-  $("editId").value = "";
-  if ($("add")) $("add").textContent = "Eintrag speichern";
-  $("cancelEdit")?.classList.add("hide");
-
-  alert(`Gespeichert: ${date} • +${xp} XP ✅`);
-  document.dispatchEvent(new CustomEvent("iq:rerender"));
 }
 
-/* ========= SW Update: iOS Home Screen safe ========= */
-async function registerSW(){
-  if (!("serviceWorker" in navigator)) return;
+function renderAnalytics() {
+  const el = $("#analytics");
+  if (!el) return;
+
+  el.innerHTML = `
+    <div class="card">
+      <h2>Analytics</h2>
+      <div id="analyticsMount"></div>
+    </div>
+  `;
+
+  if (window.IronQuestAnalytics?.render) {
+    window.IronQuestAnalytics.render($("#analyticsMount"), state);
+  } else {
+    $("#analyticsMount").innerHTML = `<div class="hint">analytics.js fehlt oder exportiert kein IronQuestAnalytics.render()</div>`;
+  }
+}
+
+function renderHealth() {
+  const el = $("#health");
+  if (!el) return;
+
+  el.innerHTML = `
+    <div class="card">
+      <h2>Health</h2>
+      <div id="healthMount"></div>
+      <p class="hint">Health wird aktuell beim Log-Eintrag mit gespeichert (BP + Puls). Optional kann health.js daraus Trends bauen.</p>
+    </div>
+  `;
+
+  if (window.IronQuestHealth?.render) {
+    window.IronQuestHealth.render($("#healthMount"), state);
+  } else {
+    $("#healthMount").innerHTML = `<div class="hint">health.js optional (render nicht gefunden). Aktuell werden BP/Puls im Log gespeichert.</div>`;
+  }
+}
+
+function renderBoss() {
+  const el = $("#boss");
+  if (!el) return;
+
+  el.innerHTML = `
+    <div class="card">
+      <h2>Boss</h2>
+      <div id="bossMount"></div>
+    </div>
+  `;
+
+  if (window.IronQuestBoss?.render) {
+    window.IronQuestBoss.render($("#bossMount"), {
+      currentWeek: state.currentWeek,
+      todayISO: state.todayISO
+    });
+  } else {
+    $("#bossMount").innerHTML = `<div class="hint">boss.js fehlt oder exportiert kein IronQuestBoss.render()</div>`;
+  }
+}
+
+function renderChallenge() {
+  const el = $("#challenge");
+  if (!el) return;
+
+  el.innerHTML = `
+    <div class="card">
+      <h2>Challenge Mode</h2>
+      <div id="challengeMount"></div>
+    </div>
+
+    <div class="card">
+      <h2>Backup & Sync</h2>
+      <div id="backupMount"></div>
+    </div>
+  `;
+
+  if (window.IronQuestChallenges?.render) {
+    window.IronQuestChallenges.render($("#challengeMount"), state);
+  } else {
+    $("#challengeMount").innerHTML = `<div class="hint">challenges.js fehlt oder exportiert kein IronQuestChallenges.render()</div>`;
+  }
+
+  if (window.IronQuestBackup?.render) {
+    window.IronQuestBackup.render($("#backupMount"));
+  } else {
+    $("#backupMount").innerHTML = `<div class="hint">backup.js fehlt oder exportiert kein IronQuestBackup.render()</div>`;
+  }
+}
+
+/* =========================
+   Render Pipeline
+========================= */
+async function renderAll() {
+  computeDerived();
 
   try {
-    const reg = await navigator.serviceWorker.register("./sw.js");
-
-    // Force update checks
-    reg.update?.();
-
-    // If new SW waiting -> activate + reload
-    if (reg.waiting) {
-      reg.waiting.postMessage({ type:"SKIP_WAITING" });
-    }
-
-    navigator.serviceWorker.addEventListener("controllerchange", () => {
-      // reload once controller updated
-      window.location.reload();
-    });
-
-    // Periodic update check
-    setInterval(() => reg.update?.(), 30 * 1000);
-
+    state.entries = await loadEntries();
   } catch (e) {
-    console.warn("SW register failed", e);
+    console.error(e);
+    // Show minimal UI but do not crash
+    state.entries = [];
+  }
+
+  renderPlayerInfo();
+
+  // Render tabs
+  renderDashboard();
+  renderLog();
+  renderSkills();
+  renderAnalytics();
+  renderHealth();
+  renderBoss();
+  renderChallenge();
+}
+
+/* =========================
+   Service Worker (iOS stable pattern)
+========================= */
+function registerSW() {
+  if (!("serviceWorker" in navigator)) return;
+
+  navigator.serviceWorker.register("./sw.js").then((reg) => {
+    // Listen for updates
+    reg.addEventListener("updatefound", () => {
+      const sw = reg.installing;
+      if (!sw) return;
+      sw.addEventListener("statechange", () => {
+        if (sw.state === "installed" && navigator.serviceWorker.controller) {
+          // New version available
+          console.log("SW update available ✅");
+          // Optional: auto-reload after update
+          // location.reload();
+        }
+      });
+    });
+  }).catch((err) => {
+    console.warn("SW register failed", err);
+  });
+}
+
+/* =========================
+   Public API (optional)
+========================= */
+window.IronQuestApp = {
+  renderAll
+};
+
+/* =========================
+   Init
+========================= */
+async function init() {
+  try {
+    bindTabs();
+    registerSW();
+    await renderAll();
+  } catch (e) {
+    console.error(e);
+    alert("Fehler in js/app.js – bitte Konsole prüfen.");
   }
 }
 
-/* ========= EVENTS + INIT ========= */
-async function init(){
-  ensureProPanels();
-  ensureExtraInputs();
-  ensureRepsInput();
-
-  if ($("date")) $("date").value = todayISO();
-  ensureStartDate();
-
-  buildExerciseDropdown("exercise");
-
-  // rerender bus
-  document.addEventListener("iq:rerender", debounce(()=>renderAll(), 80));
-
-  // start date save
-  $("saveStartDash")?.addEventListener("click", async ()=>{
-    const newStart = $("startDateDash")?.value;
-    if (!newStart) return alert("Bitte ein Startdatum wählen.");
-
-    const oldStart = ensureStartDate();
-    if (newStart === oldStart) return alert("Startdatum unverändert.");
-
-    if (!confirm("Startdatum rückwirkend ändern?\n✅ Einträge werden neu in Wochen einsortiert\n⚠️ Boss/Achievements/Mutations reset")) {
-      $("startDateDash").value = oldStart;
-      return;
-    }
-    setStartDateLocal(newStart);
-    resetWeekBoundSystems();
-    await recalcAllEntryWeeks();
-    alert("Startdatum gespeichert ✅");
-    document.dispatchEvent(new CustomEvent("iq:rerender"));
-  });
-
-  $("exercise")?.addEventListener("change", ()=>{ autosaveDraft(); document.dispatchEvent(new CustomEvent("iq:rerender")); });
-  $("date")?.addEventListener("change", ()=>{ autosaveDraft(); restoreDraft(); document.dispatchEvent(new CustomEvent("iq:rerender")); });
-
-  ["sets","reps","load","walkMin","note"].forEach(id=>{
-    const el = $(id);
-    if (!el) return;
-    el.addEventListener("input", debounce(()=>{ autosaveDraft(); document.dispatchEvent(new CustomEvent("iq:rerender")); }, 80));
-  });
-
-  $("add")?.addEventListener("click", saveOrUpdateEntry);
-
-  $("cancelEdit")?.addEventListener("click", ()=>{
-    $("editId").value = "";
-    $("cancelEdit")?.classList.add("hide");
-    if ($("add")) $("add").textContent = "Eintrag speichern";
-    document.dispatchEvent(new CustomEvent("iq:rerender"));
-  });
-
-  $("clear")?.addEventListener("click", async ()=>{
-    if (!confirm("Wirklich ALLE Einträge löschen?")) return;
-    await idbClear();
-    document.dispatchEvent(new CustomEvent("iq:rerender"));
-  });
-
-  $("resetSkills")?.addEventListener("click", ()=>{
-    if (!confirm("Skilltrees zurücksetzen?")) return;
-    resetSkillTree();
-    document.dispatchEvent(new CustomEvent("iq:rerender"));
-  });
-
-  // Challenge toggle pill on dashboard (inject)
-  const dash = document.getElementById("tab-dash");
-  if (dash && !document.getElementById("challengeCard")){
-    const cards = dash.querySelectorAll(".card");
-    const after = cards?.[1] || null;
-    const card = document.createElement("div");
-    card.className="card";
-    card.id="challengeCard";
-    card.innerHTML = `
-      <h2>Challenge Mode</h2>
-      <div class="row2">
-        <div class="pill"><b>Status:</b> <span id="chState">—</span></div>
-        <div class="pill"><b>Multiplier:</b> <span id="chMult">—</span></div>
-      </div>
-      <div class="row2">
-        <button id="chToggle" type="button" class="secondary">Toggle</button>
-        <button id="ch115" type="button" class="secondary">Set x1.15</button>
-      </div>
-      <p class="hint">Challenge gibt mehr XP – aber du willst den Streak halten.</p>
-    `;
-    if (after) after.insertAdjacentElement("afterend", card);
-    else dash.appendChild(card);
-
-    $("#chToggle")?.addEventListener("click", ()=>{
-      const st = toggleChallenge();
-      $("#chState").textContent = st.enabled ? "ON" : "OFF";
-      $("#chMult").textContent = (st.mult||1.15).toFixed(2);
-      document.dispatchEvent(new CustomEvent("iq:rerender"));
-    });
-    $("#ch115")?.addEventListener("click", ()=>{
-      const st = setChallengeMult(1.15);
-      $("#chMult").textContent = (st.mult||1.15).toFixed(2);
-      document.dispatchEvent(new CustomEvent("iq:rerender"));
-    });
-  }
-
-  await registerSW();
-
-  await recalcAllEntryWeeks();
-  await renderAll();
-  restoreDraft();
-}
-
-init().catch((e)=>{
-  console.error(e);
-  alert("Fehler in app.js. Bitte Screenshot der Konsole schicken.");
-});
+init();
