@@ -1,102 +1,101 @@
-import { loadJSON, saveJSON } from "./utils.js";
+/* =========================
+   IRON QUEST – skilltree.js (Classic)
+   Exposes:
+   - window.IronQuestSkilltree.render(state)
+   - window.IQ.getSkillMultiplier(type)
+========================= */
 
-const KEY = "iq_skilltree_v4";
+(function () {
+  const KEY = "ironquest_skilltree_v1";
+  window.IQ = window.IQ || {};
 
-const TREES = [
-  { key:"multi", name:"Mehrgelenkig (STR)", type:"Mehrgelenkig" },
-  { key:"uni",   name:"Unilateral (STA)",   type:"Unilateral" },
-  { key:"core",  name:"Core (MOB)",         type:"Core" },
-  { key:"cond",  name:"Conditioning (END)", type:"Conditioning" },
-  { key:"comp",  name:"Komplexe (ELITE)",   type:"Komplexe" },
-];
+  const TYPES = ["Mehrgelenkig", "Unilateral", "Core", "Conditioning", "Komplexe", "NEAT"];
 
-function defaultState() {
-  const nodes = {};
-  for (const t of TREES) {
-    nodes[t.key] = [
-      { id:`${t.key}_1`, name:"Foundation I", cost:1, unlocked:false },
-      { id:`${t.key}_2`, name:"Foundation II", cost:1, unlocked:false },
-      { id:`${t.key}_3`, name:"Advanced", cost:2, unlocked:false },
-      { id:`${t.key}_4`, name:"Mastery", cost:3, unlocked:false },
-      { id:`${t.key}_cap`, name:"Capstone", cost:5, unlocked:false },
-    ];
-  }
-  return { spent:0, nodes };
-}
-
-export function loadSkill() {
-  const st = loadJSON(KEY, defaultState());
-  if (!st.nodes) return defaultState();
-  return st;
-}
-
-export function saveSkill(st) {
-  saveJSON(KEY, st);
-}
-
-export function skillMultiplierForType(type) {
-  const st = loadSkill();
-  const key =
-    type === "Mehrgelenkig" ? "multi" :
-    type === "Unilateral" ? "uni" :
-    type === "Core" ? "core" :
-    type === "Conditioning" ? "cond" :
-    type === "Komplexe" ? "comp" : null;
-
-  if (!key) return 1;
-
-  const nodes = st.nodes[key] || [];
-  const unlocked = nodes.filter(n => n.unlocked).length;
-  const cap = nodes.find(n => n.id.endsWith("_cap"))?.unlocked === true;
-
-  let mult = 1 + unlocked * 0.02;
-  if (cap) mult += 0.05;
-  return mult;
-}
-
-export function computeSkillPoints(entries) {
-  // Punkte: pro Tag 0..3 nach Sternen; Boss/Challenge können später addiert werden
-  const dayXP = {};
-  for (const e of entries) dayXP[e.date] = (dayXP[e.date] || 0) + (e.xp || 0);
-
-  let earned = 0;
-  for (const d of Object.keys(dayXP)) {
-    const xp = dayXP[d];
-    if (xp >= 2000) earned += 3;
-    else if (xp >= 1600) earned += 2;
-    else if (xp >= 1200) earned += 1;
+  function load() {
+    try {
+      const st = JSON.parse(localStorage.getItem(KEY));
+      if (st && st.nodes) return st;
+    } catch {}
+    const nodes = {};
+    TYPES.forEach(t => nodes[t] = 0); // points per type
+    return { nodes };
   }
 
-  const st = loadSkill();
-  const spent = Number(st.spent || 0);
-  return { earned, spent, available: Math.max(0, earned - spent) };
-}
-
-export function skillTrees() {
-  return TREES;
-}
-
-export function unlockNode(nodeId, entries) {
-  const st = loadSkill();
-  const sp = computeSkillPoints(entries);
-
-  for (const t of TREES) {
-    const nodes = st.nodes[t.key] || [];
-    const node = nodes.find(n => n.id === nodeId);
-    if (!node) continue;
-
-    if (node.unlocked) return { ok:false, msg:"Schon freigeschaltet." };
-    if (sp.available < node.cost) return { ok:false, msg:"Nicht genug Skillpunkte." };
-
-    node.unlocked = true;
-    st.spent = (st.spent || 0) + node.cost;
-    saveSkill(st);
-    return { ok:true, msg:"Unlocked ✅" };
+  function save(st) {
+    localStorage.setItem(KEY, JSON.stringify(st));
   }
 
-  return { ok:false, msg:"Node nicht gefunden." };
-}
+  // Each point = +2% XP, cap at 30% (15 points)
+  function getMultiplier(type) {
+    const st = load();
+    const pts = Math.max(0, Math.min(15, Number(st.nodes[type] || 0)));
+    return 1 + pts * 0.02;
+  }
 
-export function resetSkill() {
-  saveSkill(defaultState());
-}
+  window.IQ.getSkillMultiplier = function (type) {
+    return getMultiplier(type);
+  };
+
+  function render(state) {
+    const sec = document.getElementById("skills");
+    if (!sec) return;
+
+    const st = load();
+
+    sec.innerHTML = `
+      <h2>🌳 Skilltree</h2>
+      <p class="hint">Pro Typ kannst du Punkte vergeben. Jeder Punkt gibt +2% XP (max 30%).</p>
+
+      <div class="card">
+        <div id="skList"></div>
+        <button id="skReset" class="danger">Skilltree Reset</button>
+      </div>
+    `;
+
+    const wrap = document.getElementById("skList");
+    if (!wrap) return;
+
+    wrap.innerHTML = TYPES.map(t => {
+      const pts = Number(st.nodes[t] || 0);
+      const mult = getMultiplier(t).toFixed(2);
+      return `
+        <div class="row2" style="align-items:center;margin:10px 0;">
+          <div class="pill" style="flex:1;">
+            <b>${t}</b><br><span class="hint">Punkte: ${pts} • Mult: x${mult}</span>
+          </div>
+          <button data-add="${t}" class="secondary">+1</button>
+          <button data-sub="${t}" class="secondary">-1</button>
+        </div>
+      `;
+    }).join("");
+
+    wrap.querySelectorAll("button[data-add]").forEach(btn => {
+      btn.addEventListener("click", () => {
+        const t = btn.getAttribute("data-add");
+        const st2 = load();
+        st2.nodes[t] = Math.min(15, Number(st2.nodes[t] || 0) + 1);
+        save(st2);
+        render(state);
+      });
+    });
+
+    wrap.querySelectorAll("button[data-sub]").forEach(btn => {
+      btn.addEventListener("click", () => {
+        const t = btn.getAttribute("data-sub");
+        const st2 = load();
+        st2.nodes[t] = Math.max(0, Number(st2.nodes[t] || 0) - 1);
+        save(st2);
+        render(state);
+      });
+    });
+
+    document.getElementById("skReset")?.addEventListener("click", () => {
+      if (confirm("Skilltree wirklich zurücksetzen?")) {
+        localStorage.removeItem(KEY);
+        render(state);
+      }
+    });
+  }
+
+  window.IronQuestSkilltree = { render };
+})();
