@@ -1,91 +1,176 @@
-/* boss.js – minimal boss system (ES Module) */
+/* IRON QUEST – boss.js (classic)
+   ✅ Boss Liste
+   ✅ Clear nur in Woche
+   ✅ Bei Clear → DB Einträge addMany
+*/
+(function () {
+  const BOSSES = [
+    { week: 2, name: "The Foundation Beast", xp: 650, reward: "Titel: Foundation Slayer",
+      workout: ["Goblet Squat – 5×10 (3s runter)","DB Floor Press – 5×8","DB Row – 5×10 (Pause oben)","Pause strikt 90s"] },
+    { week: 4, name: "The Asymmetry Lord", xp: 800, reward: "+1 STA (Flavor)",
+      workout: ["Bulgarian Split Squat – 4×8/Seite","1-Arm Row – 4×10/Seite","Side Plank – 3×45s/Seite","Schwache Seite startet"] },
+    { week: 8, name: "The Conditioning Reaper", xp: 1100, reward: "END Boost (Flavor)",
+      workout: ["5 Runden: 30s Burpees","30s Mountain Climbers","30s High Knees","Pause 60s"] },
+    { week: 12, name: "FINAL: Iron Overlord", xp: 2400, reward: "Titel: IRON OVERLORD SLAYER",
+      workout: ["Goblet Squat – 4×12","DB Floor Press – 4×10","1-Arm Row – 4×10","Bulgarian Split Squat – 3×8","Plank – 3×60s"] },
+  ];
 
-import { isoDate, loadJSON, saveJSON } from "./utils.js";
+  const KEY_BOSS = "ironquest_boss_v4";
+  const KEY_BOSSCHK = "ironquest_boss_checks_v4";
 
-const KEY_BOSS = "iq_boss_v4";
+  function loadJSON(key, fallback){ return window.IQ.loadJSON(key, fallback); }
+  function saveJSON(key, v){ return window.IQ.saveJSON(key, v); }
 
-const BOSSES = [
-  { week: 2,  name: "The Foundation Beast", xp: 650 },
-  { week: 4,  name: "The Asymmetry Lord",   xp: 800 },
-  { week: 6,  name: "The Core Guardian",    xp: 900 },
-  { week: 8,  name: "The Conditioning Reaper", xp: 1100 },
-  { week: 10, name: "The Iron Champion",    xp: 1400 },
-  { week: 12, name: "FINAL: Iron Overlord", xp: 2400 },
-];
+  function defaultBossState(){
+    const s = {};
+    BOSSES.forEach(b => s[b.week] = { cleared:false, clearedAt:null });
+    return s;
+  }
 
-function getBossState() {
-  const base = {};
-  BOSSES.forEach(b => base[b.week] = { cleared: false, at: null });
-  const st = loadJSON(KEY_BOSS, base);
-  for (const b of BOSSES) st[b.week] ??= { cleared: false, at: null };
-  return st;
-}
-function saveBossState(st) {
-  saveJSON(KEY_BOSS, st);
-}
+  function loadBoss(){ return loadJSON(KEY_BOSS, defaultBossState()); }
+  function saveBoss(s){ saveJSON(KEY_BOSS, s); }
 
-export function renderBossPanel(container, player, entries, onClearBoss) {
-  if (!container) return;
-  const st = getBossState();
-  const curW = player.week || 1;
+  function loadChecks(){ return loadJSON(KEY_BOSSCHK, {}); }
+  function saveChecks(s){ saveJSON(KEY_BOSSCHK, s); }
 
-  container.innerHTML = `
-    <div class="card">
-      <h2>Boss</h2>
-      <p class="hint">Boss kann nur in der richtigen Woche gecleared werden.</p>
-      <div class="pill"><b>Aktuelle Woche:</b> W${curW}</div>
-    </div>
+  function checkKey(week, dateISO){ return `${week}|${dateISO}`; }
 
-    <div class="card">
-      <ul id="bossList" class="skilllist"></ul>
-      <button class="danger" id="bossReset">Boss-Status reset</button>
-    </div>
-  `;
+  function splitXP(total, n){
+    const base = Math.floor(total / n);
+    const rem = total - base*n;
+    const a = Array(n).fill(base);
+    a[n-1] += rem;
+    return a;
+  }
 
-  const ul = container.querySelector("#bossList");
-  ul.innerHTML = "";
+  async function render(state){
+    const host = document.getElementById("boss");
+    if (!host) return;
 
-  BOSSES.forEach(b => {
-    const s = st[b.week];
-    const locked = curW !== b.week;
-    const li = document.createElement("li");
-    li.innerHTML = `
-      <div class="entryRow">
-        <div style="min-width:0;">
-          <div class="entryTitle"><b>W${b.week}:</b> ${b.name}</div>
-          <div class="hint">Reward XP: +${b.xp} • Status: ${s.cleared ? "✅ CLEARED" : locked ? "🔒 LOCKED" : "🟢 OPEN"}</div>
-          ${s.at ? `<div class="hint">Cleared am: ${s.at}</div>` : ""}
-        </div>
-        <div class="row" style="margin:0;">
-          <button class="secondary" data-clear="${b.week}" ${locked || s.cleared ? "disabled":""}>Clear</button>
-        </div>
+    const today = window.IQ.isoDate(new Date());
+    const curWeek = state.curWeek;
+
+    const bossState = loadBoss();
+    const checks = loadChecks();
+
+    host.innerHTML = `
+      <div class="card">
+        <h2>Bossfights</h2>
+        <p class="hint">Clear nur in der Boss-Woche. Erst Checkliste abhaken.</p>
+        <div class="pill"><b>Aktuelle Woche:</b> W${curWeek}</div>
+      </div>
+      <div id="bossList"></div>
+      <div class="card">
+        <button id="resetBoss" class="danger" type="button">Boss-Status zurücksetzen</button>
       </div>
     `;
-    ul.appendChild(li);
-  });
 
-  ul.querySelectorAll("[data-clear]").forEach(btn => {
-    btn.addEventListener("click", () => {
-      const w = parseInt(btn.getAttribute("data-clear"), 10);
-      if (w !== curW) return alert("Locked – nicht die richtige Woche.");
-      const boss = BOSSES.find(x => x.week === w);
-      if (!boss) return;
+    const list = host.querySelector("#bossList");
+    list.innerHTML = "";
 
-      // callback: app adds entries
-      onClearBoss?.(boss);
+    BOSSES.forEach((b) => {
+      const st = bossState[b.week] || { cleared:false, clearedAt:null };
+      const locked = curWeek !== b.week;
+      const k = checkKey(b.week, today);
+      const chk = checks[k] || {};
+      const xpParts = splitXP(b.xp, b.workout.length);
 
-      const st2 = getBossState();
-      st2[w] = { cleared: true, at: isoDate(new Date()) };
-      saveBossState(st2);
+      const doneAll = b.workout.every((_, idx) => chk[idx] === true);
+      const canClear = (!locked && doneAll && !st.cleared);
 
-      renderBossPanel(container, player, entries, onClearBoss);
-      alert(`Boss cleared! +${boss.xp} XP ✅`);
+      const card = document.createElement("div");
+      card.className = "card";
+      card.innerHTML = `
+        <h3>Week ${b.week}: ${b.name}</h3>
+        <div class="hint">Reward: ${b.reward} • +${b.xp} XP</div>
+        <div class="hint">${locked ? "🔒 Locked" : "✅ Aktiv"} ${st.clearedAt ? `• Cleared: ${st.clearedAt}` : ""}</div>
+
+        <ul class="checklist" style="margin-top:10px;">
+          ${b.workout.map((line, idx) => `
+            <li class="checkItem">
+              <input type="checkbox" data-w="${b.week}" data-i="${idx}" ${chk[idx] ? "checked":""} ${locked ? "disabled":""}/>
+              <div class="checkMain">
+                <div class="checkTitle">${line}</div>
+                <div class="checkSub">${b.name}</div>
+              </div>
+              <div class="xpBadge">+${xpParts[idx]} XP</div>
+            </li>
+          `).join("")}
+        </ul>
+
+        <button type="button" class="secondary" data-clear="${b.week}" ${canClear ? "" : "disabled"}>
+          ${st.cleared ? "CLEARED" : "Clear Boss"}
+        </button>
+      `;
+      list.appendChild(card);
     });
-  });
 
-  container.querySelector("#bossReset")?.addEventListener("click", () => {
-    if (!confirm("Boss-Status resetten?")) return;
-    localStorage.removeItem(KEY_BOSS);
-    renderBossPanel(container, player, entries, onClearBoss);
-  });
-}
+    // checkbox change
+    host.querySelectorAll('input[type="checkbox"][data-w]').forEach(cb => {
+      cb.addEventListener("change", () => {
+        const w = Number(cb.getAttribute("data-w"));
+        const i = Number(cb.getAttribute("data-i"));
+        const k = checkKey(w, today);
+        const all = loadChecks();
+        all[k] = all[k] || {};
+        all[k][i] = cb.checked;
+        saveChecks(all);
+        // cheap rerender via custom event
+        document.dispatchEvent(new CustomEvent("iq:refresh"));
+      });
+    });
+
+    // clear boss
+    host.querySelectorAll("button[data-clear]").forEach(btn => {
+      btn.addEventListener("click", async () => {
+        const week = Number(btn.getAttribute("data-clear"));
+        if (week !== state.curWeek) return alert("Locked: falsche Woche.");
+
+        const boss = BOSSES.find(x => x.week === week);
+        if (!boss) return;
+
+        const k = checkKey(week, today);
+        const chk = loadChecks()[k] || {};
+        const doneAll = boss.workout.every((_, idx) => chk[idx] === true);
+        if (!doneAll) return alert("Erst alle Checkboxen abhaken.");
+
+        const xpParts = splitXP(boss.xp, boss.workout.length);
+        const entriesToAdd = boss.workout.map((line, idx) => ({
+          date: today,
+          week: week,
+          exercise: `Boss W${week}: ${line}`,
+          type: "Boss-Workout",
+          detail: boss.name,
+          xp: xpParts[idx],
+        }));
+
+        entriesToAdd.push({
+          date: today,
+          week: week,
+          exercise: `Bossfight CLEARED: ${boss.name}`,
+          type: "Boss",
+          detail: boss.reward,
+          xp: 0,
+        });
+
+        await window.IronQuestDB.addMany(entriesToAdd);
+
+        const bs = loadBoss();
+        bs[week] = { cleared:true, clearedAt: today };
+        saveBoss(bs);
+
+        alert(`Boss cleared! +${boss.xp} XP ✅`);
+        document.dispatchEvent(new CustomEvent("iq:refresh"));
+      });
+    });
+
+    host.querySelector("#resetBoss")?.addEventListener("click", () => {
+      if (!confirm("Boss-Status & Checks zurücksetzen?")) return;
+      localStorage.removeItem(KEY_BOSS);
+      localStorage.removeItem(KEY_BOSSCHK);
+      document.dispatchEvent(new CustomEvent("iq:refresh"));
+    });
+  }
+
+  window.IronQuestBoss = { render };
+})();
