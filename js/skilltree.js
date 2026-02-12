@@ -1,94 +1,96 @@
-/* skilltree.js – minimal ES Module skilltree + multiplier */
+/* skilltree.js – CLASSIC SCRIPT
+   Exposes: window.IronQuestSkilltree
+*/
 
-import { loadJSON, saveJSON } from "./utils.js";
+(function () {
+  const KEY = "iq_skilltree_v4";
 
-const KEY_SKILL = "iq_skilltree_v4";
-
-const TYPES = ["Mehrgelenkig", "Unilateral", "Core", "Conditioning", "Komplexe", "NEAT"];
-const DEFAULT = {
-  spent: 0,
-  nodes: Object.fromEntries(TYPES.map(t => [t, { unlocked: 0 }]))
-};
-
-export function getSkillState() {
-  const st = loadJSON(KEY_SKILL, DEFAULT);
-  for (const t of TYPES) {
-    st.nodes[t] ??= { unlocked: 0 };
-    if (typeof st.nodes[t].unlocked !== "number") st.nodes[t].unlocked = 0;
+  function load() {
+    return (window.IQ?.loadJSON?.(KEY, null)) || {
+      spent: 0,
+      unlocked: { STR: 0, STA: 0, END: 0, MOB: 0 }, // each point = +2%
+    };
   }
-  if (typeof st.spent !== "number") st.spent = 0;
-  return st;
-}
 
-export function saveSkillState(st) {
-  saveJSON(KEY_SKILL, st);
-}
+  function save(st) {
+    window.IQ?.saveJSON?.(KEY, st);
+  }
 
-// simple: each unlock = +2% xp for that type
-export function skillMultiplierForType(type) {
-  const st = getSkillState();
-  const u = st.nodes?.[type]?.unlocked || 0;
-  return 1 + u * 0.02;
-}
+  function getMultiplier(type) {
+    const st = load();
+    // map exercise type -> attribute bucket
+    const bucket =
+      type === "Mehrgelenkig" ? "STR" :
+      type === "Unilateral" ? "STA" :
+      type === "Conditioning" ? "END" :
+      type === "Core" ? "MOB" : null;
 
-export function renderSkilltreePanel(container, player, entries) {
-  if (!container) return;
-  const st = getSkillState();
+    if (!bucket) return 1;
+    const pts = st.unlocked[bucket] || 0;
+    return 1 + pts * 0.02;
+  }
 
-  // earned points: 1 point per 1000 total xp (simple + stable)
-  const earned = Math.floor((player.totalXp || 0) / 1000);
-  const available = Math.max(0, earned - (st.spent || 0));
+  function renderSkilltreePanel(targetSelector) {
+    const root = document.querySelector(targetSelector);
+    if (!root) return;
 
-  container.innerHTML = `
-    <div class="card">
-      <h2>Skilltree</h2>
-      <p class="hint">Einfaches System: 1 Skillpunkt pro 1000 Gesamt-XP. Jeder Unlock: +2% XP für den Typ.</p>
-      <div class="row2">
-        <div class="pill"><b>Earned:</b> ${earned}</div>
-        <div class="pill"><b>Spent:</b> ${st.spent}</div>
-        <div class="pill"><b>Available:</b> ${available}</div>
+    const st = load();
+    const rows = ["STR", "STA", "END", "MOB"].map((k) => {
+      const pts = st.unlocked[k] || 0;
+      const mult = (1 + pts * 0.02).toFixed(2);
+      return `
+        <div class="card">
+          <h3>${k}</h3>
+          <div class="row2">
+            <div class="pill"><b>Punkte:</b> ${pts}</div>
+            <div class="pill"><b>XP Mult:</b> x${mult}</div>
+          </div>
+          <div class="row2">
+            <button class="secondary" data-add="${k}">+1 Punkt</button>
+            <button class="danger" data-sub="${k}">-1 Punkt</button>
+          </div>
+          <p class="hint">Jeder Punkt = +2% XP für passende Übungen.</p>
+        </div>
+      `;
+    }).join("");
+
+    root.innerHTML = `
+      <div class="card">
+        <h2>Skilltree</h2>
+        <p class="hint">Einfaches System (stabil): STR/STA/END/MOB Punkte → XP Bonus.</p>
       </div>
-    </div>
-
-    <div class="card">
-      <h2>Unlocks</h2>
-      <div class="grid2" id="skillGrid"></div>
-      <button class="danger" id="skillReset">Skilltree reset</button>
-    </div>
-  `;
-
-  const grid = container.querySelector("#skillGrid");
-  TYPES.forEach(t => {
-    const u = st.nodes[t].unlocked || 0;
-    const mult = skillMultiplierForType(t);
-    const div = document.createElement("div");
-    div.className = "skillbox";
-    div.innerHTML = `
-      <h3>${t}</h3>
-      <p>Unlocked: <b>${u}</b></p>
-      <p>Multiplier: <b>x${mult.toFixed(2)}</b></p>
-      <button class="secondary" data-up="${t}" ${available <= 0 ? "disabled":""}>+1 Unlock (1 SP)</button>
+      ${rows}
+      <div class="card">
+        <button class="danger" id="resetSkill">Reset Skilltree</button>
+      </div>
     `;
-    grid.appendChild(div);
-  });
 
-  container.querySelectorAll("[data-up]").forEach(btn => {
-    btn.addEventListener("click", () => {
-      const t = btn.getAttribute("data-up");
-      const st2 = getSkillState();
-      const earned2 = Math.floor((player.totalXp || 0) / 1000);
-      const available2 = Math.max(0, earned2 - (st2.spent || 0));
-      if (available2 <= 0) return alert("Keine Skillpunkte verfügbar.");
-      st2.nodes[t].unlocked = (st2.nodes[t].unlocked || 0) + 1;
-      st2.spent = (st2.spent || 0) + 1;
-      saveSkillState(st2);
-      renderSkilltreePanel(container, player, entries);
+    root.querySelectorAll("[data-add]").forEach((btn) => {
+      btn.onclick = () => {
+        const k = btn.getAttribute("data-add");
+        const s = load();
+        s.unlocked[k] = (s.unlocked[k] || 0) + 1;
+        save(s);
+        renderSkilltreePanel(targetSelector);
+      };
     });
-  });
 
-  container.querySelector("#skillReset")?.addEventListener("click", () => {
-    if (!confirm("Skilltree wirklich resetten?")) return;
-    saveSkillState(DEFAULT);
-    renderSkilltreePanel(container, player, entries);
-  });
-}
+    root.querySelectorAll("[data-sub]").forEach((btn) => {
+      btn.onclick = () => {
+        const k = btn.getAttribute("data-sub");
+        const s = load();
+        s.unlocked[k] = Math.max(0, (s.unlocked[k] || 0) - 1);
+        save(s);
+        renderSkilltreePanel(targetSelector);
+      };
+    });
+
+    root.querySelector("#resetSkill").onclick = () => {
+      if (!confirm("Skilltree wirklich resetten?")) return;
+      save({ spent: 0, unlocked: { STR: 0, STA: 0, END: 0, MOB: 0 } });
+      renderSkilltreePanel(targetSelector);
+    };
+  }
+
+  window.IronQuestSkilltree = { getMultiplier, renderSkilltreePanel };
+})();
