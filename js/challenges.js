@@ -1,103 +1,73 @@
-import { loadJSON, saveJSON, fmt } from "./utils.js";
+/* =========================
+   IRON QUEST – challenges.js (Classic)
+   Exposes:
+   - window.IronQuestChallenges.render(state)
+   - window.IQ.getChallengeMultiplier()
+========================= */
 
-const KEY = "iq_challenges_v4";
+(function () {
+  const KEY = "ironquest_challenge_v1";
+  window.IQ = window.IQ || {};
 
-const DEFAULT = {
-  active: true,
-  weeklyTargetXP: 7000,
-  weeklyTrainingDays: 5,
-  bonusMultiplier: 1.05, // Bonus XP Multiplier wenn Ziel erreicht (für die Woche)
-};
-
-export function loadChallenge() {
-  return loadJSON(KEY, DEFAULT);
-}
-export function saveChallenge(st) {
-  saveJSON(KEY, st);
-}
-
-export function challengeMultiplier(entries, currentWeek) {
-  const st = loadChallenge();
-  if (!st.active) return 1.0;
-
-  let weekXP = 0;
-  const days = new Set();
-
-  for (const e of entries) {
-    if (e.week !== currentWeek) continue;
-    weekXP += (e.xp || 0);
-    if ((e.type || "") !== "Rest" && (e.xp || 0) > 0) days.add(e.date);
+  function load() {
+    try { return JSON.parse(localStorage.getItem(KEY)) || { active:false, mode:"none" }; }
+    catch { return { active:false, mode:"none" }; }
   }
+  function save(st) { localStorage.setItem(KEY, JSON.stringify(st)); }
 
-  const okXP = weekXP >= st.weeklyTargetXP;
-  const okDays = days.size >= st.weeklyTrainingDays;
+  const MODES = [
+    { id:"none", name:"Aus", mult:1.00, desc:"Kein Bonus." },
+    { id:"hard", name:"Hard Mode", mult:1.05, desc:"+5% XP wenn aktiv." },
+    { id:"iron", name:"IRON Mode", mult:1.10, desc:"+10% XP wenn aktiv." }
+  ];
 
-  return (okXP && okDays) ? st.bonusMultiplier : 1.0;
-}
+  window.IQ.getChallengeMultiplier = function () {
+    const st = load();
+    if (!st.active) return 1.0;
+    const m = MODES.find(x => x.id === st.mode) || MODES[0];
+    return m.mult;
+  };
 
-export function renderChallengePanel(container, entries, currentWeek) {
-  const st = loadChallenge();
-  let weekXP = 0;
-  const days = new Set();
-  for (const e of entries) {
-    if (e.week !== currentWeek) continue;
-    weekXP += (e.xp || 0);
-    if ((e.type || "") !== "Rest" && (e.xp || 0) > 0) days.add(e.date);
-  }
+  function render(_state) {
+    const sec = document.getElementById("challenge");
+    if (!sec) return;
 
-  const okXP = weekXP >= st.weeklyTargetXP;
-  const okDays = days.size >= st.weeklyTrainingDays;
+    const st = load();
+    const current = MODES.find(x => x.id === st.mode) || MODES[0];
 
-  container.innerHTML = `
-    <div class="card">
+    sec.innerHTML = `
       <h2>🏆 Challenge Mode</h2>
-      <p class="hint">Erfüllst du beide Ziele, bekommst du diese Woche +${Math.round((st.bonusMultiplier-1)*100)}% XP Multiplier.</p>
+      <p class="hint">Aktivierbar – gibt XP Multiplikator.</p>
 
-      <div class="row2">
-        <div class="pill"><b>Aktiv:</b> ${st.active ? "✅" : "—"}</div>
-        <div class="pill"><b>Woche:</b> W${currentWeek}</div>
-      </div>
+      <div class="card">
+        <div class="row2">
+          <div class="pill"><b>Status:</b> ${st.active ? "✅ aktiv" : "— aus"}</div>
+          <div class="pill"><b>Aktueller Modus:</b> ${current.name} (x${current.mult.toFixed(2)})</div>
+        </div>
 
-      <div class="divider"></div>
+        <label>
+          <input id="chActive" type="checkbox" ${st.active ? "checked":""}>
+          Challenge aktiv
+        </label>
 
-      <div class="row2">
-        <div class="pill"><b>Wochen-XP:</b> ${fmt(weekXP)} / ${fmt(st.weeklyTargetXP)} ${okXP ? "✅" : ""}</div>
-        <div class="pill"><b>Trainingstage:</b> ${fmt(days.size)} / ${fmt(st.weeklyTrainingDays)} ${okDays ? "✅" : ""}</div>
-      </div>
+        <label>Mode
+          <select id="chMode">
+            ${MODES.map(m => `<option value="${m.id}" ${m.id===st.mode?"selected":""}>${m.name} — ${m.desc}</option>`).join("")}
+          </select>
+        </label>
 
-      <div class="divider"></div>
-
-      <h3>Einstellungen</h3>
-      <label>Weekly Target XP
-        <input id="chXP" inputmode="numeric" value="${st.weeklyTargetXP}">
-      </label>
-      <label>Weekly Training Days
-        <input id="chDays" inputmode="numeric" value="${st.weeklyTrainingDays}">
-      </label>
-      <label>Bonus Multiplier (z.B. 1.05)
-        <input id="chMult" inputmode="decimal" value="${st.bonusMultiplier}">
-      </label>
-
-      <div class="row2">
         <button id="chSave">Speichern</button>
-        <button id="chToggle" class="secondary">${st.active ? "Deaktivieren" : "Aktivieren"}</button>
       </div>
-    </div>
-  `;
+    `;
 
-  document.getElementById("chSave").onclick = () => {
-    const next = loadChallenge();
-    next.weeklyTargetXP = Number(document.getElementById("chXP").value || 0) || 0;
-    next.weeklyTrainingDays = Number(document.getElementById("chDays").value || 0) || 0;
-    next.bonusMultiplier = Number(document.getElementById("chMult").value || 1.0) || 1.0;
-    saveChallenge(next);
-    window.dispatchEvent(new Event("iq:refresh"));
-  };
+    document.getElementById("chSave")?.addEventListener("click", () => {
+      const active = !!document.getElementById("chActive").checked;
+      const mode = document.getElementById("chMode").value;
+      save({ active, mode });
+      alert("Challenge gespeichert ✅");
+      render({});
+    });
+  }
 
-  document.getElementById("chToggle").onclick = () => {
-    const next = loadChallenge();
-    next.active = !next.active;
-    saveChallenge(next);
-    window.dispatchEvent(new Event("iq:refresh"));
-  };
-}
+  window.IronQuestChallenges = { render };
+})();
