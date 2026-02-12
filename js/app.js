@@ -1,190 +1,354 @@
-/* =========================
-   IRON QUEST v4 PRO – js/app.js (iOS SAFE)
-   ✅ Tabs funktionieren IMMER (auch wenn einzelne Module Fehler werfen)
-   ✅ Fehler werden im UI angezeigt (kein Mac/Safari-Konsole nötig)
-   ✅ Update Button: SW skipWaiting + hard reload
-========================= */
+/* IRON QUEST – app.js (classic, iOS-safe)
+   ✅ Tabs funktionieren
+   ✅ Rendert alle Screens
+   ✅ Log: echte Einträge + empfohlene Sets/Reps + tatsächliche Sets/Reps
+   ✅ Health: Puls + Blutdruck (falls health.js das anbietet)
+   ✅ Service Worker Update Button
+*/
+(function () {
+  const { $, isoDate } = window.IQ;
 
-import { $, $$ } from "./utils.js";
-import { getPlayer, setPlayer, ensurePlayer } from "./progression.js";
-import { getStreak, recomputeStreak } from "./streak.js";
-import { computeRecompIndex } from "./attributes.js";
-
-import { renderLogPanel } from "./db.js";
-import { renderSkilltreePanel } from "./skilltree.js";
-import { renderAnalyticsPanel } from "./analytics.js";
-import { renderHealthPanel } from "./health.js";
-import { renderBossPanel } from "./boss.js";
-import { renderChallengePanel } from "./challenges.js";
-import { renderBackupPanel } from "./backup.js";
-
-const APP_VERSION = "v4.0.0";
-
-function setStatus(text, isError = false) {
-  const el = $("#playerInfo");
-  if (!el) return;
-  el.textContent = text;
-  el.style.opacity = "0.9";
-  el.style.fontSize = "14px";
-  el.style.marginTop = "6px";
-  el.style.color = isError ? "#ff6b6b" : "#9effa5";
-}
-
-function showFatalUI(err) {
-  const msg = (err && (err.stack || err.message)) ? (err.stack || err.message) : String(err);
-  setStatus("JS ERROR – Details unten", true);
-
-  let box = $("#iqErrorBox");
-  if (!box) {
-    box = document.createElement("div");
-    box.id = "iqErrorBox";
-    box.style.cssText =
-      "margin:12px 0;padding:12px;border-radius:14px;background:rgba(255,0,0,.10);border:1px solid rgba(255,0,0,.25);color:#ffd0d0;font-size:12px;white-space:pre-wrap;word-break:break-word;";
-    const header = document.querySelector("header") || document.body;
-    header.appendChild(box);
+  function setStatus(text){
+    const el = document.getElementById("appStatus");
+    if (el) el.textContent = text;
   }
-  box.textContent = `IRON QUEST ${APP_VERSION}\n\n${msg}`;
-}
 
-function setActiveTab(tabId) {
-  // sections: <section id="dashboard" class="tab ...">
-  $$(".tab").forEach(sec => sec.classList.remove("active"));
-  const sec = document.getElementById(tabId);
-  if (sec) sec.classList.add("active");
+  function setupTabs(){
+    const buttons = Array.from(document.querySelectorAll("nav button[data-tab]"));
+    const tabs = Array.from(document.querySelectorAll("main .tab"));
 
-  // nav buttons
-  $$("nav button").forEach(b => b.classList.remove("active"));
-  const btn = document.querySelector(`nav button[data-tab="${tabId}"]`);
-  if (btn) btn.classList.add("active");
-}
+    function activate(id){
+      buttons.forEach(b => b.classList.toggle("active", b.getAttribute("data-tab") === id));
+      tabs.forEach(t => t.classList.toggle("active", t.id === id));
+    }
 
-function wireTabs() {
-  $$("nav button[data-tab]").forEach(btn => {
-    btn.addEventListener("click", () => {
-      const tab = btn.getAttribute("data-tab");
-      if (tab) setActiveTab(tab);
-    });
-  });
-
-  // Default tab
-  if (!document.querySelector(".tab.active")) {
-    setActiveTab("dashboard");
-  }
-}
-
-async function registerSW() {
-  if (!("serviceWorker" in navigator)) return;
-
-  try {
-    const reg = await navigator.serviceWorker.register("./sw.js");
-
-    // Wenn ein neuer SW wartet → Update UI aktivieren
-    reg.addEventListener("updatefound", () => {
-      setStatus(`Update gefunden… (${APP_VERSION})`, false);
+    document.addEventListener("click", (e) => {
+      const btn = e.target.closest("button[data-tab]");
+      if (!btn) return;
+      activate(btn.getAttribute("data-tab"));
     });
 
-    // Optional: wenn SW ready
-    await navigator.serviceWorker.ready;
-  } catch (e) {
-    // SW Fehler darf die App NICHT killen
-    console.warn("SW register failed", e);
+    activate("dashboard");
   }
-}
 
-function ensureUpdateButton() {
-  let btn = $("#iqUpdateBtn");
-  if (btn) return;
-
-  btn = document.createElement("button");
-  btn.id = "iqUpdateBtn";
-  btn.textContent = "Update";
-  btn.style.cssText =
-    "margin-top:10px; padding:10px 14px; border-radius:14px; border:1px solid rgba(255,255,255,.12); background:rgba(255,255,255,.06); color:#fff; font-weight:700;";
-
-  const header = document.querySelector("header") || document.body;
-  header.appendChild(btn);
-
-  btn.addEventListener("click", async () => {
-    try {
-      if ("serviceWorker" in navigator && navigator.serviceWorker.controller) {
-        navigator.serviceWorker.controller.postMessage({ type: "SKIP_WAITING" });
-      }
-    } catch (e) {}
-    // Hard reload (iOS-friendly)
-    location.reload();
-  });
-}
-
-function safeCall(name, fn) {
-  try {
-    fn();
-  } catch (e) {
-    console.error(`Render error in ${name}`, e);
-    showFatalUI(e);
+  function mutationMultMap(week){
+    // mutations.js liefert evtl. window.IronQuestMutations.getForWeek(week)
+    // fallback neutral:
+    const m = { Mehrgelenkig:1, Unilateral:1, Core:1, Conditioning:1, Komplexe:1, NEAT:1, Rest:1 };
+    if (window.IronQuestMutations?.multByTypeForWeek) {
+      return window.IronQuestMutations.multByTypeForWeek(week);
+    }
+    return m;
   }
-}
 
-async function boot() {
-  // Tabs + Update Button sollen IMMER gehen – auch wenn Render crasht
-  wireTabs();
-  ensureUpdateButton();
-  setStatus(`OK • ${APP_VERSION}`, false);
+  function skillMultMap(){
+    // skilltree.js kann z.B. window.IronQuestSkilltree.multByType() anbieten – fallback 1
+    if (window.IronQuestSkilltree?.multByType) return window.IronQuestSkilltree.multByType();
+    return { Mehrgelenkig:1, Unilateral:1, Core:1, Conditioning:1, Komplexe:1, NEAT:1, Rest:1 };
+  }
 
-  // Player init
-  ensurePlayer();
+  function computeTotals(entries){
+    const today = isoDate(new Date());
+    let total = 0, todayXP = 0;
+    for (const e of entries){
+      total += e.xp || 0;
+      if (e.date === today) todayXP += e.xp || 0;
+    }
+    return { total, todayXP };
+  }
 
-  // Dashboard render (minimal, damit du IMMER was siehst)
-  const dash = document.getElementById("dashboard");
-  if (dash) {
-    const p = getPlayer();
-    const st = getStreak();
-    const r = computeRecompIndex();
+  function renderDashboard(state){
+    const host = document.getElementById("dashboard");
+    if (!host) return;
 
-    dash.innerHTML = `
+    const totals = computeTotals(state.entries);
+    const lvl = window.IronQuestProgression.levelFromTotalXp(totals.total);
+    const title = window.IronQuestProgression.titleForLevel(lvl.lvl);
+
+    const thr = window.IronQuestProgression.thresholds();
+    const dayStars =
+      totals.todayXP >= thr.three ? "⭐⭐⭐" :
+      totals.todayXP >= thr.two ? "⭐⭐" :
+      totals.todayXP >= thr.one ? "⭐" : "—";
+
+    const streak = window.IronQuestStreak?.compute ? window.IronQuestStreak.compute(state.entries) : { current:0, best:0 };
+
+    host.innerHTML = `
       <div class="card">
-        <h2>Dashboard</h2>
-        <div class="grid2">
-          <div class="pill"><b>Level:</b> ${p.level} • <b>XP:</b> ${p.xp}</div>
-          <div class="pill"><b>Streak:</b> ${st.current} (best ${st.best})</div>
-          <div class="pill"><b>Recomp Index:</b> ${r.score}</div>
-          <div class="pill"><b>Status:</b> OK</div>
+        <h2>Player</h2>
+        <div class="row2">
+          <div class="pill"><b>Level:</b> ${lvl.lvl} (${title})</div>
+          <div class="pill"><b>Total XP:</b> ${totals.total}</div>
         </div>
-        <div class="divider"></div>
-        <div class="hint">Wenn Tabs nicht reagieren, steht der Fehler oben rot im Error-Block.</div>
+        <div class="row2">
+          <div class="pill"><b>Heute:</b> ${totals.todayXP} XP</div>
+          <div class="pill"><b>Stars:</b> ${dayStars}</div>
+        </div>
+        <div class="row2">
+          <div class="pill"><b>Streak:</b> ${streak.current} 🔥</div>
+          <div class="pill"><b>Best:</b> ${streak.best}</div>
+        </div>
+      </div>
+
+      <div class="card">
+        <h2>Update</h2>
+        <button id="btnUpdate" type="button">Update</button>
+        <p class="hint">Wenn du am Home-Screen bist: Tippe „Update“, dann App neu öffnen.</p>
       </div>
     `;
+
+    host.querySelector("#btnUpdate")?.addEventListener("click", async () => {
+      try {
+        if ("serviceWorker" in navigator) {
+          const reg = await navigator.serviceWorker.getRegistration();
+          if (reg?.waiting) reg.waiting.postMessage({ type:"SKIP_WAITING" });
+          await reg?.update();
+        }
+        alert("Update angestoßen ✅ Bitte App einmal komplett schließen & neu öffnen.");
+      } catch {
+        alert("Update nicht möglich.");
+      }
+    });
   }
 
-  // Andere Panels (einzeln abgesichert)
-  safeCall("Log", () => renderLogPanel(document.getElementById("log")));
-  safeCall("Skilltree", () => renderSkilltreePanel(document.getElementById("skills")));
-  safeCall("Analytics", () => renderAnalyticsPanel(document.getElementById("analytics")));
-  safeCall("Health", () => renderHealthPanel(document.getElementById("health")));
-  safeCall("Boss", () => renderBossPanel(document.getElementById("boss")));
-  safeCall("Challenge", () => renderChallengePanel(document.getElementById("challenge")));
+  function renderLog(state){
+    const host = document.getElementById("log");
+    if (!host) return;
 
-  // Backup Tab ist optional – falls du ihn im HTML nicht hast → nicht crashen
-  const backupEl = document.getElementById("backup");
-  if (backupEl) safeCall("Backup", () => renderBackupPanel(backupEl));
+    const exList = window.IronQuestExercises.list();
 
-  // Streak neu berechnen (safe)
-  try { await recomputeStreak(); } catch (e) { console.warn(e); }
+    host.innerHTML = `
+      <div class="card">
+        <h2>Neuer Eintrag</h2>
 
-  // Starttab
-  setActiveTab("dashboard");
-}
+        <label>Datum
+          <input id="logDate" type="date" value="${isoDate(new Date())}">
+        </label>
 
-// Global Error Hooks → iOS zeigt es dann oben an
-window.addEventListener("error", (e) => showFatalUI(e.error || e.message));
-window.addEventListener("unhandledrejection", (e) => showFatalUI(e.reason));
+        <label>Übung
+          <select id="logExercise"></select>
+        </label>
 
-// Init
-(async function init() {
-  try {
-    await registerSW();
-    await boot();
-  } catch (e) {
-    console.error(e);
-    showFatalUI(e);
+        <div class="row2">
+          <label>Sätze
+            <input id="logSets" type="number" min="0" step="1" inputmode="numeric" placeholder="z.B. 4">
+          </label>
+          <label>Reps
+            <input id="logReps" type="number" min="0" step="1" inputmode="numeric" placeholder="z.B. 10">
+          </label>
+        </div>
+
+        <label id="rowMinutes" class="hide">Walking Minuten
+          <input id="logMinutes" type="number" min="1" step="1" inputmode="numeric" value="60">
+        </label>
+
+        <div class="pill" id="logHint">—</div>
+        <button id="logSave" type="button">Speichern</button>
+      </div>
+
+      <div class="card">
+        <h2>Einträge</h2>
+        <ul id="logList"></ul>
+        <button id="logClear" class="danger" type="button">Alle Einträge löschen</button>
+      </div>
+    `;
+
+    const sel = host.querySelector("#logExercise");
+    exList.forEach(ex => {
+      const opt = document.createElement("option");
+      opt.value = ex.name;
+      opt.textContent = `${ex.name}`;
+      sel.appendChild(opt);
+    });
+
+    const updateHint = () => {
+      const dateISO = host.querySelector("#logDate").value || isoDate(new Date());
+      const week = window.IronQuestXP.weekFor(dateISO);
+      const exName = host.querySelector("#logExercise").value;
+      const type = window.IronQuestExercises.typeFor(exName);
+      const desc = window.IronQuestExercises.descFor(exName);
+      const rec = window.IronQuestExercises.recommended(type, week);
+
+      const isWalk = type === "NEAT";
+      host.querySelector("#rowMinutes").classList.toggle("hide", !isWalk);
+
+      // default sets/reps when empty
+      const setsEl = host.querySelector("#logSets");
+      const repsEl = host.querySelector("#logReps");
+
+      if (!isWalk && rec.setsDefault && !setsEl.value) setsEl.value = String(rec.setsDefault);
+      if (!isWalk && rec.repsDefault && !repsEl.value) repsEl.value = String(rec.repsDefault);
+
+      const ctx = {
+        mutationMultByType: mutationMultMap(week),
+        skillMultByType: skillMultMap()
+      };
+
+      const minutes = Number(host.querySelector("#logMinutes").value || 0);
+      const out = window.IronQuestXP.calcXP(
+        { exercise: exName, week, minutes },
+        ctx
+      );
+
+      host.querySelector("#logHint").innerHTML =
+        `<b>${type}</b> • ${desc}<br>` +
+        `Empf: ${rec.setsText} / ${rec.repsText} • XP: <b>${out.xp}</b>`;
+    };
+
+    host.querySelector("#logDate").addEventListener("change", updateHint);
+    host.querySelector("#logExercise").addEventListener("change", updateHint);
+    host.querySelector("#logMinutes").addEventListener("input", updateHint);
+
+    updateHint();
+
+    const renderList = () => {
+      const ul = host.querySelector("#logList");
+      ul.innerHTML = "";
+      const entries = state.entries.slice().sort((a,b)=> (a.date<b.date?1:-1) || ((b.id||0)-(a.id||0)));
+
+      if (!entries.length){
+        ul.innerHTML = `<li class="hint">Noch keine Einträge.</li>`;
+        return;
+      }
+
+      entries.forEach(e => {
+        const li = document.createElement("li");
+        li.innerHTML = `
+          <div class="entryRow">
+            <div style="min-width:0;">
+              <div class="entryTitle"><b>${e.date}</b> • ${e.exercise}</div>
+              <div class="hint">${e.type} • ${e.detail || ""}</div>
+            </div>
+            <div class="row" style="margin:0; align-items:flex-start;">
+              <span class="badge">${e.xp} XP</span>
+              <button class="danger" data-del="${e.id}" type="button">Del</button>
+            </div>
+          </div>
+        `;
+        ul.appendChild(li);
+      });
+
+      ul.querySelectorAll("button[data-del]").forEach(btn => {
+        btn.addEventListener("click", async () => {
+          const id = Number(btn.getAttribute("data-del"));
+          if (!confirm("Eintrag löschen?")) return;
+          await window.IronQuestDB.delete(id);
+          document.dispatchEvent(new CustomEvent("iq:refresh"));
+        });
+      });
+    };
+
+    renderList();
+
+    host.querySelector("#logSave").addEventListener("click", async () => {
+      const dateISO = host.querySelector("#logDate").value || isoDate(new Date());
+      const week = window.IronQuestXP.weekFor(dateISO);
+
+      const exName = host.querySelector("#logExercise").value;
+      const type = window.IronQuestExercises.typeFor(exName);
+      const rec = window.IronQuestExercises.recommended(type, week);
+
+      const sets = Number(host.querySelector("#logSets").value || 0);
+      const reps = Number(host.querySelector("#logReps").value || 0);
+      const minutes = Number(host.querySelector("#logMinutes").value || 0);
+
+      const ctx = {
+        mutationMultByType: mutationMultMap(week),
+        skillMultByType: skillMultMap()
+      };
+
+      const out = window.IronQuestXP.calcXP({ exercise: exName, week, minutes }, ctx);
+
+      let detail =
+        `Empf: ${rec.setsText}/${rec.repsText} • ` +
+        (type === "NEAT" ? `Min: ${minutes}` : `Ist: ${sets}x${reps}`);
+
+      // PR Hook (optional)
+      let prNote = "";
+      if (window.IronQuestPR?.checkAndStore) {
+        const pr = window.IronQuestPR.checkAndStore({ date:dateISO, exercise:exName, sets, reps, minutes, xp:out.xp });
+        if (pr?.isPR) prNote = ` • NEW PR ✅ (${pr.metric})`;
+      }
+
+      await window.IronQuestDB.add({
+        date: dateISO,
+        week,
+        exercise: exName,
+        type,
+        detail: detail + prNote,
+        xp: out.xp
+      });
+
+      alert(`Gespeichert: +${out.xp} XP ✅`);
+      document.dispatchEvent(new CustomEvent("iq:refresh"));
+    });
+
+    host.querySelector("#logClear").addEventListener("click", async () => {
+      if (!confirm("Wirklich ALLE Einträge löschen?")) return;
+      await window.IronQuestDB.clear();
+      document.dispatchEvent(new CustomEvent("iq:refresh"));
+    });
   }
+
+  async function buildState(){
+    const entries = await window.IronQuestDB.getAll();
+    const today = isoDate(new Date());
+    const curWeek = window.IronQuestXP.weekFor(today);
+
+    const attr = window.IronQuestAttributes.sum(entries);
+    return { entries, today, curWeek, attr };
+  }
+
+  async function renderAll(){
+    const state = await buildState();
+
+    // Header quick info
+    const totals = computeTotals(state.entries);
+    const lvl = window.IronQuestProgression.levelFromTotalXp(totals.total);
+    const title = window.IronQuestProgression.titleForLevel(lvl.lvl);
+    const pi = document.getElementById("playerInfo");
+    if (pi) pi.innerHTML = `<span class="hint">Lv ${lvl.lvl} (${title}) • ${totals.total} XP • W${state.curWeek}</span>`;
+
+    renderDashboard(state);
+    renderLog(state);
+
+    // Other screens (wenn vorhanden)
+    window.IronQuestSkilltree?.render?.(state);
+    window.IronQuestAnalytics?.render?.(state);
+    window.IronQuestHealth?.render?.(state);      // Puls + Blutdruck sind in health.js
+    window.IronQuestBoss?.render?.(state);
+    window.IronQuestChallenges?.render?.(state);
+    window.IronQuestBackup?.render?.(state);
+
+    setStatus("OK");
+  }
+
+  function setupServiceWorker(){
+    if (!("serviceWorker" in navigator)) return;
+    navigator.serviceWorker.register("./sw.js").catch(()=>{});
+    navigator.serviceWorker.addEventListener("controllerchange", () => {
+      // iOS: wenn neuer SW übernimmt
+      setStatus("Updated ✅ (bitte App neu öffnen)");
+    });
+  }
+
+  async function init(){
+    setupTabs();
+    setupServiceWorker();
+
+    // Global refresh event
+    document.addEventListener("iq:refresh", async () => {
+      try { await renderAll(); } catch (e) { setStatus("ERROR"); }
+    });
+
+    try {
+      await renderAll();
+    } catch (e) {
+      console.error(e);
+      setStatus("ERROR");
+      alert("Anzeige Fehler in JS.");
+    }
+  }
+
+  document.addEventListener("DOMContentLoaded", init);
 })();
