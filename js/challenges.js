@@ -1,52 +1,73 @@
-/* challenges.js – Challenge Mode (ES Module) */
+/* challenges.js – CLASSIC SCRIPT
+   Exposes: window.IronQuestChallenges
+*/
 
-import { loadJSON, saveJSON } from "./utils.js";
+(function () {
+  const KEY = "iq_challenges_v4";
 
-const KEY_CH = "iq_challenge_v4";
+  const CHALLENGES = [
+    { id: "c1", name: "5 Trainingstage diese Woche", desc: "Schaffe 5 Tage mit Trainingseinträgen." },
+    { id: "c2", name: "2x ⭐⭐⭐ Tage", desc: "Zwei Tage mit sehr hoher XP-Ausbeute." },
+    { id: "c3", name: "NEAT Streak 3 Tage", desc: "3 Tage Walking/NEAT hintereinander (oder täglich)." },
+  ];
 
-function getCh() {
-  return loadJSON(KEY_CH, { enabled: false, mult: 1.15 });
-}
-function saveCh(ch) {
-  saveJSON(KEY_CH, ch);
-}
+  function load() {
+    return (window.IQ?.loadJSON?.(KEY, {})) || {};
+  }
+  function save(st) {
+    window.IQ?.saveJSON?.(KEY, st);
+  }
 
-export function challengeMultiplier() {
-  const ch = getCh();
-  return ch.enabled ? (ch.mult || 1.15) : 1.0;
-}
+  function renderChallengePanel(targetSelector) {
+    const root = document.querySelector(targetSelector);
+    if (!root) return;
 
-export function renderChallengePanel(container, player) {
-  if (!container) return;
+    const st = load();
 
-  const ch = getCh();
-  container.innerHTML = `
-    <div class="card">
-      <h2>Challenge Mode</h2>
-      <p class="hint">Wenn aktiv: XP-Multiplier auf alle Einträge.</p>
-
-      <div class="row2">
-        <div class="pill"><b>Status:</b> ${ch.enabled ? "✅ ON" : "OFF"}</div>
-        <div class="pill"><b>Multiplier:</b> x${(ch.mult || 1.15).toFixed(2)}</div>
+    root.innerHTML = `
+      <div class="card">
+        <h2>Challenge Mode</h2>
+        <p class="hint">Einfach & stabil: Challenges abhaken → Motivation.</p>
+        <ul class="checklist" id="chList"></ul>
+        <div class="divider"></div>
+        <button class="danger" id="chReset">Reset</button>
       </div>
+    `;
 
-      <label class="check" style="margin-top:12px;">
-        <input id="chEnabled" type="checkbox" ${ch.enabled ? "checked":""}>
-        Challenge aktivieren
-      </label>
+    const ul = root.querySelector("#chList");
+    ul.innerHTML = "";
 
-      <label>Multiplier (z.B. 1.10 – 1.30)
-        <input id="chMult" type="number" step="0.01" value="${ch.mult || 1.15}">
-      </label>
+    CHALLENGES.forEach((c) => {
+      const done = st[c.id] === true;
+      const li = document.createElement("li");
+      li.innerHTML = `
+        <div class="checkItem">
+          <input type="checkbox" ${done ? "checked" : ""} data-id="${c.id}">
+          <div class="checkMain">
+            <div class="checkTitle">${c.name}</div>
+            <div class="checkSub">${c.desc}</div>
+          </div>
+          <div class="xpBadge">${done ? "DONE" : "OPEN"}</div>
+        </div>
+      `;
+      ul.appendChild(li);
+    });
 
-      <button id="chSave">Speichern</button>
-    </div>
-  `;
+    ul.querySelectorAll("input[type=checkbox]").forEach((cb) => {
+      cb.onchange = () => {
+        const id = cb.getAttribute("data-id");
+        const s = load();
+        s[id] = cb.checked;
+        save(s);
+      };
+    });
 
-  container.querySelector("#chSave")?.addEventListener("click", () => {
-    const enabled = !!container.querySelector("#chEnabled")?.checked;
-    const mult = parseFloat(container.querySelector("#chMult")?.value || "1.15");
-    saveCh({ enabled, mult: Number.isFinite(mult) ? mult : 1.15 });
-    renderChallengePanel(container, player);
-  });
-}
+    root.querySelector("#chReset").onclick = () => {
+      if (!confirm("Challenges zurücksetzen?")) return;
+      save({});
+      renderChallengePanel(targetSelector);
+    };
+  }
+
+  window.IronQuestChallenges = { renderChallengePanel };
+})();
