@@ -1,6 +1,7 @@
-// js/db.js (ES Module) – kompatibel mit bestehender IndexedDB
-const DB_NAME = "ironquestDB";   // <- NICHT ändern, sonst "wirkt" alles weg
-const DB_VERSION = 1;            // <- NICHT erhöhen, wenn du keine Migration brauchst
+/* db.js – IndexedDB (ES Module) */
+
+const DB_NAME = "ironquest_db_v4";
+const DB_VERSION = 1;
 const STORE = "entries";
 
 function openDB() {
@@ -10,9 +11,10 @@ function openDB() {
     req.onupgradeneeded = () => {
       const db = req.result;
       if (!db.objectStoreNames.contains(STORE)) {
-        const store = db.createObjectStore(STORE, { keyPath: "id", autoIncrement: true });
-        store.createIndex("date", "date", { unique: false });
-        store.createIndex("week", "week", { unique: false });
+        const st = db.createObjectStore(STORE, { keyPath: "id", autoIncrement: true });
+        st.createIndex("date", "date", { unique: false });
+        st.createIndex("week", "week", { unique: false });
+        st.createIndex("exercise", "exercise", { unique: false });
       }
     };
 
@@ -35,9 +37,9 @@ export async function entriesAdd(entry) {
   const db = await openDB();
   return new Promise((resolve, reject) => {
     const tx = db.transaction(STORE, "readwrite");
-    tx.objectStore(STORE).add(entry);
-    tx.oncomplete = () => resolve(true);
-    tx.onerror = () => reject(tx.error);
+    const req = tx.objectStore(STORE).add(entry);
+    req.onsuccess = () => resolve(req.result);
+    req.onerror = () => reject(req.error);
   });
 }
 
@@ -45,9 +47,9 @@ export async function entriesPut(entry) {
   const db = await openDB();
   return new Promise((resolve, reject) => {
     const tx = db.transaction(STORE, "readwrite");
-    tx.objectStore(STORE).put(entry);
-    tx.oncomplete = () => resolve(true);
-    tx.onerror = () => reject(tx.error);
+    const req = tx.objectStore(STORE).put(entry);
+    req.onsuccess = () => resolve(true);
+    req.onerror = () => reject(req.error);
   });
 }
 
@@ -55,9 +57,9 @@ export async function entriesDelete(id) {
   const db = await openDB();
   return new Promise((resolve, reject) => {
     const tx = db.transaction(STORE, "readwrite");
-    tx.objectStore(STORE).delete(id);
-    tx.oncomplete = () => resolve(true);
-    tx.onerror = () => reject(tx.error);
+    const req = tx.objectStore(STORE).delete(id);
+    req.onsuccess = () => resolve(true);
+    req.onerror = () => reject(req.error);
   });
 }
 
@@ -65,8 +67,8 @@ export async function entriesClear() {
   const db = await openDB();
   return new Promise((resolve, reject) => {
     const tx = db.transaction(STORE, "readwrite");
-    tx.objectStore(STORE).clear();
-    tx.oncomplete = () => resolve(true);
-    tx.onerror = () => reject(tx.error);
+    const req = tx.objectStore(STORE).clear();
+    req.onsuccess = () => resolve(true);
+    req.onerror = () => reject(req.error);
   });
 }
