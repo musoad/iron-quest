@@ -1,202 +1,134 @@
-import { $, fmt } from "./utils.js";
+/* =========================
+   IRON QUEST – analytics.js (Classic)
+   Exposes: window.IronQuestAnalytics.render(state)
+========================= */
 
-function drawBarChart(canvas, labels, values) {
-  if (!canvas) return;
-  const ctx = canvas.getContext("2d");
-  const W = canvas.width, H = canvas.height;
-  ctx.clearRect(0,0,W,H);
+(function () {
+  function $(id) { return document.getElementById(id); }
 
-  const pad = 28;
-  const innerW = W - pad*2;
-  const innerH = H - pad*2;
+  function drawBars(canvas, labels, values) {
+    if (!canvas) return;
+    const ctx = canvas.getContext("2d");
+    const W = canvas.width, H = canvas.height;
+    ctx.clearRect(0, 0, W, H);
 
-  const maxV = Math.max(1, ...values);
-  const n = values.length;
-  const gap = Math.max(8, Math.floor(innerW / (n*10)));
-  const barW = Math.floor((innerW - gap*(n-1)) / n);
+    const pad = 30;
+    const maxV = Math.max(1, ...values);
+    const innerW = W - pad * 2;
+    const innerH = H - pad * 2;
 
-  ctx.globalAlpha = 0.25;
-  ctx.fillRect(pad, H-pad, innerW, 2);
-  ctx.globalAlpha = 1;
-
-  for (let i=0;i<n;i++){
-    const v = values[i];
-    const h = Math.round((v/maxV) * (innerH-22));
-    const x = pad + i*(barW+gap);
-    const y = pad + (innerH - h);
-
-    ctx.fillRect(x, y, barW, h);
-
-    ctx.globalAlpha = 0.85;
-    ctx.font = "20px system-ui";
-    ctx.fillText(labels[i], x, H - 8);
+    // baseline
+    ctx.globalAlpha = 0.3;
+    ctx.fillRect(pad, H - pad, innerW, 2);
     ctx.globalAlpha = 1;
+
+    const n = values.length || 1;
+    const gap = Math.max(10, Math.floor(innerW / (n * 8)));
+    const barW = Math.floor((innerW - gap * (n - 1)) / n);
+
+    ctx.font = "18px system-ui, -apple-system, Segoe UI, Roboto";
+    for (let i = 0; i < n; i++) {
+      const v = values[i] || 0;
+      const h = Math.round((v / maxV) * (innerH - 20));
+      const x = pad + i * (barW + gap);
+      const y = pad + (innerH - h);
+
+      ctx.fillRect(x, y, barW, h);
+      ctx.globalAlpha = 0.9;
+      ctx.fillText(labels[i] || "", x, H - 6);
+      ctx.globalAlpha = 1;
+    }
   }
-}
 
-function drawLine(canvas, labels, values) {
-  if (!canvas) return;
-  const ctx = canvas.getContext("2d");
-  const W = canvas.width, H = canvas.height;
-  ctx.clearRect(0,0,W,H);
+  function weekXp(entries) {
+    const m = {};
+    for (const e of entries) {
+      const w = Number(e.week || 1);
+      m[w] = (m[w] || 0) + (Number(e.xp || 0));
+    }
+    return m;
+  }
 
-  const pad = 28;
-  const innerW = W - pad*2;
-  const innerH = H - pad*2;
+  function topExercises(entries, week) {
+    const m = {};
+    for (const e of entries) {
+      if (Number(e.week) !== Number(week)) continue;
+      const name = String(e.exercise || "—");
+      m[name] = (m[name] || 0) + (Number(e.xp || 0));
+    }
+    return Object.entries(m).sort((a, b) => b[1] - a[1]).slice(0, 10);
+  }
 
-  const maxV = Math.max(1, ...values);
-  const minV = Math.min(...values, 0);
-  const range = Math.max(1, maxV - minV);
+  function typeDist(entries, week) {
+    const m = {};
+    for (const e of entries) {
+      if (Number(e.week) !== Number(week)) continue;
+      const t = String(e.type || "Other");
+      m[t] = (m[t] || 0) + (Number(e.xp || 0));
+    }
+    return Object.entries(m).sort((a, b) => b[1] - a[1]);
+  }
 
-  const pts = values.map((v, i) => {
-    const x = pad + (i / Math.max(1, values.length - 1)) * innerW;
-    const y = pad + innerH - ((v - minV) / range) * innerH;
-    return {x,y};
-  });
+  function render(state) {
+    const sec = $("analytics");
+    if (!sec) return;
 
-  ctx.beginPath();
-  pts.forEach((p,i)=> i===0 ? ctx.moveTo(p.x,p.y) : ctx.lineTo(p.x,p.y));
-  ctx.strokeStyle = "#ffffff";
-  ctx.lineWidth = 3;
-  ctx.globalAlpha = 0.9;
-  ctx.stroke();
-  ctx.globalAlpha = 1;
+    const entries = state.entries || [];
+    const curWeek = state.currentWeek || 1;
 
-  pts.forEach(p=>{
-    ctx.beginPath();
-    ctx.arc(p.x,p.y,4,0,Math.PI*2);
-    ctx.fill();
-  });
+    const wmap = weekXp(entries);
+    const weeks = [];
+    for (let w = Math.max(1, curWeek - 7); w <= curWeek; w++) weeks.push(w);
+    const vals = weeks.map(w => wmap[w] || 0);
+    const labels = weeks.map(w => `W${w}`);
 
-  ctx.globalAlpha = 0.85;
-  ctx.font = "18px system-ui";
-  ctx.fillText(labels[0] || "", pad, 20);
-  ctx.globalAlpha = 1;
-}
+    const top10 = topExercises(entries, curWeek);
+    const dist = typeDist(entries, curWeek);
 
-export function renderAnalyticsPanel(container, entries, currentWeek) {
-  container.innerHTML = `
-    <div class="card">
-      <h2>📊 Advanced Analytics</h2>
-      <p class="hint">Echte Canvas-Charts (Offline). Fokus: Trend, Top-Übungen, Typ-Verteilung.</p>
+    sec.innerHTML = `
+      <h2>📊 Analytics</h2>
+      <p class="hint">Echte Canvas-Graphen: Wochen-XP + Top Übungen + Typ-Verteilung.</p>
 
-      <div class="row2">
-        <div class="pill"><b>Aktuelle Woche:</b> W${currentWeek}</div>
-        <div class="pill"><b>Einträge:</b> ${fmt(entries.length)}</div>
+      <div class="card">
+        <h3>Wochen-XP (letzte 8 Wochen)</h3>
+        <canvas id="anChart" width="900" height="260" style="width:100%;height:auto;border-radius:12px;"></canvas>
+        <p class="hint">Aktuell: W${curWeek} = <b>${wmap[curWeek] || 0} XP</b></p>
       </div>
-
-      <div class="divider"></div>
-
-      <h3>Wochen-XP (letzte 12 Wochen)</h3>
-      <div class="canvasBox"><canvas id="anWeekBar" width="900" height="260"></canvas></div>
-      <p class="hint" id="anWeekHint">—</p>
-
-      <div class="divider"></div>
 
       <div class="grid2">
         <div class="card">
-          <h3>Top 10 Übungen (nach XP)</h3>
-          <ul id="anTopEx" class="list"></ul>
+          <h3>Top 10 Übungen (W${curWeek})</h3>
+          <ul id="anTop" class="list"></ul>
         </div>
         <div class="card">
-          <h3>XP nach Typ</h3>
-          <ul id="anType" class="list"></ul>
+          <h3>XP nach Typ (W${curWeek})</h3>
+          <ul id="anTypes" class="list"></ul>
         </div>
       </div>
-    </div>
-  `;
+    `;
 
-  const weekMap = {};
-  for (const e of entries) {
-    const w = Number(e.week || 1);
-    weekMap[w] = (weekMap[w] || 0) + (e.xp || 0);
+    drawBars(document.getElementById("anChart"), labels, vals);
+
+    const ulTop = $("anTop");
+    if (ulTop) {
+      ulTop.innerHTML = top10.length ? "" : "<li>—</li>";
+      top10.forEach(([name, xp], i) => {
+        const li = document.createElement("li");
+        li.textContent = `${i + 1}. ${name} — ${Math.round(xp)} XP`;
+        ulTop.appendChild(li);
+      });
+    }
+
+    const ulTypes = $("anTypes");
+    if (ulTypes) {
+      ulTypes.innerHTML = dist.length ? "" : "<li>—</li>";
+      dist.forEach(([t, xp]) => {
+        const li = document.createElement("li");
+        li.textContent = `${t}: ${Math.round(xp)} XP`;
+        ulTypes.appendChild(li);
+      });
+    }
   }
 
-  const startW = Math.max(1, currentWeek - 11);
-  const weeks = [];
-  for (let w = startW; w <= currentWeek; w++) weeks.push(w);
-
-  const labels = weeks.map(w => `W${w}`);
-  const vals = weeks.map(w => weekMap[w] || 0);
-
-  drawBarChart($("#anWeekBar"), labels, vals);
-
-  const cur = weekMap[currentWeek] || 0;
-  const prev = weekMap[currentWeek-1] || 0;
-  const trend =
-    prev <= 0 && cur > 0 ? "↑ neu" :
-    prev <= 0 ? "—" :
-    `${Math.round(((cur-prev)/prev)*100)}%`;
-
-  $("#anWeekHint").textContent = `Trend vs. letzte Woche: ${trend} (W${currentWeek}: ${fmt(cur)} XP, W${currentWeek-1}: ${fmt(prev)} XP)`;
-
-  // Top Exercises
-  const exMap = {};
-  for (const e of entries) {
-    if (e.week !== currentWeek) continue;
-    const name = String(e.exercise || "—");
-    if (name.startsWith("Bossfight CLEARED")) continue;
-    exMap[name] = (exMap[name] || 0) + (e.xp || 0);
-  }
-  const top10 = Object.entries(exMap).sort((a,b)=>b[1]-a[1]).slice(0,10);
-
-  const ulTop = $("#anTopEx");
-  ulTop.innerHTML = top10.length ? "" : `<li>—</li>`;
-  top10.forEach(([name, xp], i) => {
-    const li = document.createElement("li");
-    li.innerHTML = `<div class="entryRow"><div><b>${i+1}.</b> ${name}</div><span class="badge">${fmt(Math.round(xp))} XP</span></div>`;
-    ulTop.appendChild(li);
-  });
-
-  // Type Dist
-  const typeMap = {};
-  for (const e of entries) {
-    if (e.week !== currentWeek) continue;
-    const t = e.type || "Other";
-    typeMap[t] = (typeMap[t] || 0) + (e.xp || 0);
-  }
-  const dist = Object.entries(typeMap).sort((a,b)=>b[1]-a[1]);
-  const total = dist.reduce((s,[_t,x])=>s+x,0) || 1;
-
-  const ulType = $("#anType");
-  ulType.innerHTML = dist.length ? "" : `<li>—</li>`;
-  dist.forEach(([t,x]) => {
-    const pct = Math.round((x/total)*100);
-    const li = document.createElement("li");
-    li.innerHTML = `<div class="entryRow"><div><b>${t}</b> <span class="small">(${pct}%)</span></div><span class="badge">${fmt(Math.round(x))} XP</span></div>`;
-    ulType.appendChild(li);
-  });
-}
-
-export function renderDashboardMiniAnalytics(container, entries, currentWeek) {
-  const weekMap = {};
-  for (const e of entries) weekMap[e.week] = (weekMap[e.week] || 0) + (e.xp || 0);
-
-  const cur = weekMap[currentWeek] || 0;
-  const prev = weekMap[currentWeek-1] || 0;
-  const trend =
-    prev <= 0 && cur > 0 ? "↑ neu" :
-    prev <= 0 ? "—" :
-    `${Math.round(((cur-prev)/prev)*100)}%`;
-
-  // Spark line: simple line chart
-  const weeks = [];
-  for (let w = Math.max(1, currentWeek-7); w <= currentWeek; w++) weeks.push(w);
-  const labels = weeks.map(w=>`W${w}`);
-  const vals = weeks.map(w=>weekMap[w]||0);
-
-  container.innerHTML = `
-    <div class="card">
-      <h2>Mini-Analytics</h2>
-      <div class="row2">
-        <div class="pill"><b>Trend:</b> ${trend} (${fmt(cur)} XP)</div>
-        <div class="pill"><b>Letzte Woche:</b> ${fmt(prev)} XP</div>
-      </div>
-      <div class="divider"></div>
-      <div class="canvasBox"><canvas id="dashLine" width="900" height="180"></canvas></div>
-      <p class="hint">Letzte 8 Wochen</p>
-    </div>
-  `;
-
-  drawLine($("#dashLine"), labels, vals);
-}
+  window.IronQuestAnalytics = { render };
+})();
