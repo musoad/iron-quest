@@ -1,12 +1,11 @@
 /* =========================
    IRON QUEST – sw.js (FULL)
    ✅ Offline Cache
-   ✅ iOS/PWA-friendly Update
    ✅ Auto-Update (skipWaiting + clients.claim)
    ✅ Cache bust via SW_VERSION
 ========================= */
 
-const SW_VERSION = "v4.0.3"; // <-- bei JEDEM Update hochzählen
+const SW_VERSION = "v4.0.0"; // <- bei jedem Release erhöhen
 const CACHE_NAME = `ironquest-${SW_VERSION}`;
 
 const ASSETS = [
@@ -16,9 +15,9 @@ const ASSETS = [
   "./manifest.json",
   "./sw.js",
 
-  // JS modules (anpassen, falls du andere Namen hast)
   "./js/app.js",
   "./js/utils.js",
+  "./js/urls.js",
   "./js/db.js",
   "./js/exercises.js",
   "./js/xpSystem.js",
@@ -29,7 +28,7 @@ const ASSETS = [
   "./js/health.js",
   "./js/boss.js",
   "./js/challenges.js",
-  "./js/backup.js"
+  "./js/backup.js",
 ];
 
 self.addEventListener("install", (event) => {
@@ -42,20 +41,16 @@ self.addEventListener("install", (event) => {
 self.addEventListener("activate", (event) => {
   event.waitUntil((async () => {
     const keys = await caches.keys();
-    await Promise.all(keys.map((k) => {
-      if (k !== CACHE_NAME) return caches.delete(k);
-    }));
+    await Promise.all(keys.map((k) => (k !== CACHE_NAME ? caches.delete(k) : null)));
     await self.clients.claim();
   })());
 });
 
 self.addEventListener("message", (event) => {
-  if (event.data && event.data.type === "SKIP_WAITING") {
-    self.skipWaiting();
-  }
+  if (event.data && event.data.type === "SKIP_WAITING") self.skipWaiting();
 });
 
-// Network-first for HTML (updates), cache-first for others (speed/offline)
+// HTML: network-first; assets: cache-first
 self.addEventListener("fetch", (event) => {
   const req = event.request;
   const url = new URL(req.url);
@@ -63,9 +58,9 @@ self.addEventListener("fetch", (event) => {
   if (url.origin !== self.location.origin) return;
 
   const accept = req.headers.get("accept") || "";
+  const isHTML = req.mode === "navigate" || accept.includes("text/html");
 
-  // HTML / navigation
-  if (req.mode === "navigate" || accept.includes("text/html")) {
+  if (isHTML) {
     event.respondWith((async () => {
       try {
         const fresh = await fetch(req);
@@ -80,11 +75,9 @@ self.addEventListener("fetch", (event) => {
     return;
   }
 
-  // Other assets
   event.respondWith((async () => {
     const cached = await caches.match(req);
     if (cached) return cached;
-
     const fresh = await fetch(req);
     const cache = await caches.open(CACHE_NAME);
     cache.put(req, fresh.clone());
