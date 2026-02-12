@@ -1,74 +1,41 @@
-/* db.js – IndexedDB (ES Module) */
+(function(){
 
-const DB_NAME = "ironquest_db_v4";
-const DB_VERSION = 1;
-const STORE = "entries";
+const DB_KEY = "ironquest_entries";
 
-function openDB() {
-  return new Promise((resolve, reject) => {
-    const req = indexedDB.open(DB_NAME, DB_VERSION);
-
-    req.onupgradeneeded = () => {
-      const db = req.result;
-      if (!db.objectStoreNames.contains(STORE)) {
-        const st = db.createObjectStore(STORE, { keyPath: "id", autoIncrement: true });
-        st.createIndex("date", "date", { unique: false });
-        st.createIndex("week", "week", { unique: false });
-        st.createIndex("exercise", "exercise", { unique: false });
-      }
-    };
-
-    req.onsuccess = () => resolve(req.result);
-    req.onerror = () => reject(req.error);
-  });
+function getAll(){
+  return JSON.parse(localStorage.getItem(DB_KEY) || "[]");
 }
 
-export async function entriesGetAll() {
-  const db = await openDB();
-  return new Promise((resolve, reject) => {
-    const tx = db.transaction(STORE, "readonly");
-    const req = tx.objectStore(STORE).getAll();
-    req.onsuccess = () => resolve(req.result || []);
-    req.onerror = () => reject(req.error);
-  });
+function saveAll(entries){
+  localStorage.setItem(DB_KEY, JSON.stringify(entries));
 }
 
-export async function entriesAdd(entry) {
-  const db = await openDB();
-  return new Promise((resolve, reject) => {
-    const tx = db.transaction(STORE, "readwrite");
-    const req = tx.objectStore(STORE).add(entry);
-    req.onsuccess = () => resolve(req.result);
-    req.onerror = () => reject(req.error);
-  });
+function add(entry){
+  const entries = getAll();
+  entry.id = Date.now();
+  entries.push(entry);
+  saveAll(entries);
 }
 
-export async function entriesPut(entry) {
-  const db = await openDB();
-  return new Promise((resolve, reject) => {
-    const tx = db.transaction(STORE, "readwrite");
-    const req = tx.objectStore(STORE).put(entry);
-    req.onsuccess = () => resolve(true);
-    req.onerror = () => reject(req.error);
-  });
+function update(entry){
+  const entries = getAll();
+  const i = entries.findIndex(e=>e.id===entry.id);
+  if(i>=0){
+    entries[i] = entry;
+    saveAll(entries);
+  }
 }
 
-export async function entriesDelete(id) {
-  const db = await openDB();
-  return new Promise((resolve, reject) => {
-    const tx = db.transaction(STORE, "readwrite");
-    const req = tx.objectStore(STORE).delete(id);
-    req.onsuccess = () => resolve(true);
-    req.onerror = () => reject(req.error);
-  });
+function remove(id){
+  const entries = getAll().filter(e=>e.id!==id);
+  saveAll(entries);
 }
 
-export async function entriesClear() {
-  const db = await openDB();
-  return new Promise((resolve, reject) => {
-    const tx = db.transaction(STORE, "readwrite");
-    const req = tx.objectStore(STORE).clear();
-    req.onsuccess = () => resolve(true);
-    req.onerror = () => reject(req.error);
-  });
-}
+window.IronQuestDB = {
+  getAll,
+  add,
+  update,
+  remove
+};
+
+})();
