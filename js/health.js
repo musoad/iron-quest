@@ -1,238 +1,175 @@
-// health.js
-import { $, loadJSON, saveJSON, isoDate, safeText } from "./utils.js";
+import { isoDate, fmt, safeText } from "./utils.js";
+import { healthAdd, healthGetAll, healthDelete } from "./db.js";
 
-const KEY_VITALS = "iq_vitals_v3";
+function recompIndex({ weightKg, waistCm, sys, dia, pulse }) {
+  // Ein einfacher motivierender Index (kein medizinisches Urteil):
+  // - niedrigerer Waist gut, stabiler BP gut, Puls moderat gut
+  const w = Number(weightKg || 0);
+  const waist = Number(waistCm || 0);
+  const s = Number(sys || 0);
+  const d = Number(dia || 0);
+  const p = Number(pulse || 0);
 
-function loadVitals(){ return loadJSON(KEY_VITALS, []); }
-function saveVitals(list){ saveJSON(KEY_VITALS, list); }
+  // Baseline: 100, minus waist Einfluss, plus BP/Puls Bonus
+  let score = 100;
+  if (waist > 0) score += (90 - waist) * 0.8; // waist runter => score rauf
+  if (w > 0) score += (80 - w) * 0.15;        // mild
 
-export function ensureHealthPanel(){
-  const nav = document.querySelector("nav.tabs");
-  const main = document.querySelector("main");
-  if (!nav || !main) return;
-
-  if (!document.querySelector('.tab[data-tab="health"]')) {
-    const btn = document.createElement("button");
-    btn.type = "button";
-    btn.className = "tab";
-    btn.setAttribute("data-tab", "health");
-    btn.textContent = "Health";
-    const exportBtn = nav.querySelector('.tab[data-tab="export"]');
-    if (exportBtn) nav.insertBefore(btn, exportBtn);
-    else nav.appendChild(btn);
+  if (s > 0 && d > 0) {
+    // ideal grob 120/80
+    score += (120 - s) * 0.25;
+    score += (80 - d) * 0.35;
   }
 
-  if (!document.getElementById("tab-health")) {
-    const sec = document.createElement("section");
-    sec.id = "tab-health";
-    sec.className = "panel";
-    sec.innerHTML = `
-      <div class="card">
-        <h2>Health Tracking</h2>
-        <p class="hint">Gewicht + Waist + Blutdruck + Puls → Recomposition Index (Trend).</p>
+  if (p > 0) score += (65 - p) * 0.25;
 
-        <div class="grid2">
+  // clamp
+  score = Math.max(0, Math.min(200, Math.round(score)));
+  return score;
+}
+
+export async function renderHealthPanel(container) {
+  const rows = (await healthGetAll()).sort((a,b)=> (a.date < b.date ? 1 : -1));
+
+  container.innerHTML = `
+    <div class="card">
+      <h2>🫀 Health Tracking</h2>
+      <p class="hint">Gewicht + Waist + Blutdruck + Puls. Recomp-Index ist ein Motivation-Score.</p>
+
+      <div class="grid2">
+        <div class="card">
+          <h3>Neuer Health-Eintrag</h3>
+
           <label>Datum
-            <input id="vDate" type="date">
+            <input id="hDate" type="date" value="${isoDate()}">
           </label>
 
-          <label>Gewicht (kg)
-            <input id="vWeight" type="number" step="0.1" inputmode="decimal" placeholder="z.B. 84.2">
-          </label>
-
-          <label>Waist (cm)
-            <input id="vWaist" type="number" step="0.1" inputmode="decimal" placeholder="z.B. 88.0">
-          </label>
-
-          <label>Blutdruck (SYS/DIA)
-            <div class="row2">
-              <input id="vSys" type="number" step="1" inputmode="numeric" placeholder="SYS">
-              <input id="vDia" type="number" step="1" inputmode="numeric" placeholder="DIA">
+          <div class="row2">
+            <div>
+              <label>Gewicht (kg)
+                <input id="hWeight" inputmode="decimal" placeholder="z.B. 82.4">
+              </label>
             </div>
-          </label>
+            <div>
+              <label>Waist (cm)
+                <input id="hWaist" inputmode="decimal" placeholder="z.B. 86">
+              </label>
+            </div>
+          </div>
+
+          <div class="row2">
+            <div>
+              <label>Blutdruck SYS
+                <input id="hSys" inputmode="numeric" placeholder="z.B. 122">
+              </label>
+            </div>
+            <div>
+              <label>Blutdruck DIA
+                <input id="hDia" inputmode="numeric" placeholder="z.B. 78">
+              </label>
+            </div>
+          </div>
 
           <label>Puls (bpm)
-            <input id="vPulse" type="number" step="1" inputmode="numeric" placeholder="z.B. 62">
+            <input id="hPulse" inputmode="numeric" placeholder="z.B. 62">
           </label>
 
-          <label>Notiz
-            <input id="vNote" type="text" placeholder="optional">
+          <label>Notiz (optional)
+            <input id="hNote" placeholder="z.B. schlecht geschlafen">
           </label>
+
+          <div class="row2">
+            <button id="hSave">Speichern</button>
+            <button id="hClear" class="secondary">Felder leeren</button>
+          </div>
+
+          <div class="divider"></div>
+          <div class="pill"><b>Recomp-Index Preview:</b> <span id="hPreview">—</span></div>
         </div>
 
-        <div class="row2">
-          <button id="vSave" type="button">Speichern</button>
-          <button id="vClear" type="button" class="secondary">Reset Felder</button>
+        <div class="card">
+          <h3>Letzte Werte</h3>
+          <div id="hLatest" class="hint">—</div>
+          <div class="divider"></div>
+          <h3>History</h3>
+          <ul id="hList" class="list"></ul>
         </div>
+      </div>
+    </div>
+  `;
 
-        <div class="divider"></div>
+  function preview(){
+    const weightKg = Number(document.getElementById("hWeight")?.value || 0);
+    const waistCm  = Number(document.getElementById("hWaist")?.value || 0);
+    const sys      = Number(document.getElementById("hSys")?.value || 0);
+    const dia      = Number(document.getElementById("hDia")?.value || 0);
+    const pulse    = Number(document.getElementById("hPulse")?.value || 0);
+    const score = recompIndex({ weightKg, waistCm, sys, dia, pulse });
+    document.getElementById("hPreview").textContent = score ? String(score) : "—";
+  }
 
-        <div class="row2">
-          <div class="pill"><b>Recomp Index (7d Trend):</b> <span id="recompIdx">—</span></div>
-          <div class="pill"><b>Letzter Eintrag:</b> <span id="vLast">—</span></div>
+  ["hWeight","hWaist","hSys","hDia","hPulse"].forEach(id=>{
+    document.getElementById(id)?.addEventListener("input", preview);
+  });
+
+  const latest = rows[0];
+  document.getElementById("hLatest").innerHTML = latest
+    ? `
+      <div><b>${safeText(latest.date)}</b> • Recomp: <b>${latest.recomp}</b></div>
+      <div>Gewicht: ${fmt(latest.weightKg)} kg • Waist: ${fmt(latest.waistCm)} cm</div>
+      <div>BP: ${fmt(latest.sys)}/${fmt(latest.dia)} • Puls: ${fmt(latest.pulse)} bpm</div>
+      <div class="hint">${safeText(latest.note || "")}</div>
+    `
+    : "Noch keine Health-Einträge.";
+
+  const ul = document.getElementById("hList");
+  ul.innerHTML = rows.length ? "" : `<li>—</li>`;
+  rows.slice(0, 25).forEach(r=>{
+    const li = document.createElement("li");
+    li.innerHTML = `
+      <div class="entryRow">
+        <div>
+          <div class="entryTitle">${safeText(r.date)} • Recomp <b>${r.recomp}</b></div>
+          <div class="small">W ${fmt(r.weightKg)} kg • Waist ${fmt(r.waistCm)} cm • BP ${fmt(r.sys)}/${fmt(r.dia)} • Puls ${fmt(r.pulse)}</div>
+          <div class="hint">${safeText(r.note||"")}</div>
         </div>
-
-        <canvas id="vChart" width="900" height="240" style="width:100%; height:auto; border-radius:12px;"></canvas>
-        <p class="hint">Chart: Gewicht & Waist (vereinfachter Trend).</p>
-
-        <div class="divider"></div>
-        <h2>Letzte Einträge</h2>
-        <ul id="vList" class="skilllist"></ul>
-        <button id="vExport" type="button" class="secondary">Vitals Export (JSON)</button>
-        <button id="vResetAll" type="button" class="danger">Vitals löschen</button>
+        <button class="danger" data-del="${r.id}">Löschen</button>
       </div>
     `;
-    main.appendChild(sec);
+    ul.appendChild(li);
+  });
 
-    $("#vDate").value = isoDate(new Date());
-
-    $("#vSave")?.addEventListener("click", () => {
-      const list = loadVitals();
-      const entry = {
-        date: $("#vDate")?.value || isoDate(new Date()),
-        weight: Number($("#vWeight")?.value || 0) || null,
-        waist: Number($("#vWaist")?.value || 0) || null,
-        sys: Number($("#vSys")?.value || 0) || null,
-        dia: Number($("#vDia")?.value || 0) || null,
-        pulse: Number($("#vPulse")?.value || 0) || null,
-        note: ($("#vNote")?.value || "").trim()
-      };
-      list.push(entry);
-      list.sort((a,b)=> a.date < b.date ? 1 : -1);
-      saveVitals(list);
-      renderHealth();
-      document.dispatchEvent(new CustomEvent("iq:rerender"));
-      alert("Vitals gespeichert ✅");
+  ul.querySelectorAll("button[data-del]").forEach(btn=>{
+    btn.addEventListener("click", async ()=>{
+      const id = Number(btn.getAttribute("data-del"));
+      await healthDelete(id);
+      // re-render via custom event
+      window.dispatchEvent(new Event("iq:refresh"));
     });
+  });
 
-    $("#vClear")?.addEventListener("click", () => {
-      ["vWeight","vWaist","vSys","vDia","vPulse","vNote"].forEach(id => { const el=$(id); if(el) el.value=""; });
+  document.getElementById("hClear").onclick = ()=>{
+    ["hWeight","hWaist","hSys","hDia","hPulse","hNote"].forEach(id=>{
+      const el = document.getElementById(id);
+      if (el) el.value = "";
     });
+    preview();
+  };
 
-    $("#vResetAll")?.addEventListener("click", () => {
-      if (!confirm("Wirklich alle Vitals löschen?")) return;
-      localStorage.removeItem(KEY_VITALS);
-      renderHealth();
-    });
+  document.getElementById("hSave").onclick = async ()=>{
+    const date = document.getElementById("hDate")?.value || isoDate();
+    const weightKg = Number(document.getElementById("hWeight")?.value || 0);
+    const waistCm  = Number(document.getElementById("hWaist")?.value || 0);
+    const sys      = Number(document.getElementById("hSys")?.value || 0);
+    const dia      = Number(document.getElementById("hDia")?.value || 0);
+    const pulse    = Number(document.getElementById("hPulse")?.value || 0);
+    const note     = String(document.getElementById("hNote")?.value || "");
 
-    $("#vExport")?.addEventListener("click", () => {
-      const data = JSON.stringify(loadVitals(), null, 2);
-      const blob = new Blob([data], { type:"application/json" });
-      const url = URL.createObjectURL(blob);
-      const a = document.createElement("a");
-      a.href = url;
-      a.download = "ironquest_vitals.json";
-      document.body.appendChild(a);
-      a.click();
-      a.remove();
-      setTimeout(()=>URL.revokeObjectURL(url), 1000);
-    });
-  }
-}
+    const recomp = recompIndex({ weightKg, waistCm, sys, dia, pulse });
 
-function recompositionIndex(list){
-  // Simple: wenn Waist ↓ und Gewicht ↔/↓ => positiv
-  const last7 = list.slice(0, 7).reverse();
-  if (last7.length < 2) return null;
+    await healthAdd({ date, weightKg, waistCm, sys, dia, pulse, note, recomp });
+    window.dispatchEvent(new Event("iq:refresh"));
+  };
 
-  const w0 = last7[0];
-  const w1 = last7[last7.length-1];
-
-  const dWaist = (w1.waist ?? w0.waist) - (w0.waist ?? w1.waist);
-  const dWeight = (w1.weight ?? w0.weight) - (w0.weight ?? w1.weight);
-
-  // normalize rough
-  const score = (-dWaist * 2) + (-dWeight * 1);
-  return Math.round(score * 10) / 10;
-}
-
-function drawVitalsChart(canvas, list){
-  if (!canvas) return;
-  const ctx = canvas.getContext("2d");
-  const W = canvas.width, H = canvas.height;
-  ctx.clearRect(0,0,W,H);
-
-  const data = list.slice(0, 14).reverse(); // oldest -> newest
-  if (data.length < 2) {
-    ctx.globalAlpha = 0.7;
-    ctx.font = "24px system-ui";
-    ctx.fillText("Noch zu wenige Daten.", 24, 60);
-    ctx.globalAlpha = 1;
-    return;
-  }
-
-  const pad = 24;
-  const innerW = W - pad*2;
-  const innerH = H - pad*2;
-
-  const weights = data.map(x=>x.weight).filter(v=>typeof v==="number" && v>0);
-  const waists  = data.map(x=>x.waist).filter(v=>typeof v==="number" && v>0);
-
-  const minV = Math.min(...weights, ...waists);
-  const maxV = Math.max(...weights, ...waists);
-  const range = Math.max(1, maxV - minV);
-
-  function pt(i, val){
-    const x = pad + (i/(data.length-1))*innerW;
-    const y = pad + innerH - ((val-minV)/range)*innerH;
-    return {x,y};
-  }
-
-  function drawLine(values){
-    ctx.beginPath();
-    values.forEach((v,i)=>{
-      if (!(typeof v==="number" && v>0)) return;
-      const p = pt(i, v);
-      if (i===0) ctx.moveTo(p.x,p.y); else ctx.lineTo(p.x,p.y);
-    });
-    ctx.lineWidth = 3;
-    ctx.globalAlpha = 0.9;
-    ctx.stroke();
-    ctx.globalAlpha = 1;
-  }
-
-  // weight line (default color)
-  drawLine(data.map(x=>x.weight));
-  // waist line: dashed
-  ctx.setLineDash([8,6]);
-  drawLine(data.map(x=>x.waist));
-  ctx.setLineDash([]);
-
-  ctx.globalAlpha = 0.7;
-  ctx.font = "20px system-ui";
-  ctx.fillText("Linie: Gewicht | gestrichelt: Waist", 24, H-12);
-  ctx.globalAlpha = 1;
-}
-
-export function renderHealth(){
-  ensureHealthPanel();
-  const list = loadVitals();
-
-  const last = list[0];
-  if ($("#vLast")) {
-    $("#vLast").textContent = last ? `${last.date} • ${last.weight??"—"}kg • ${last.waist??"—"}cm • BP ${last.sys??"—"}/${last.dia??"—"} • Puls ${last.pulse??"—"}` : "—";
-  }
-
-  const idx = recompositionIndex(list);
-  if ($("#recompIdx")) $("#recompIdx").textContent = (idx == null) ? "—" : String(idx);
-
-  const ul = $("#vList");
-  if (ul){
-    ul.innerHTML = list.length ? "" : "<li>—</li>";
-    list.slice(0, 10).forEach(v=>{
-      const li = document.createElement("li");
-      li.innerHTML = `
-        <div class="entryRow">
-          <div style="min-width:0;">
-            <div><b>${safeText(v.date)}</b> • Gewicht: ${v.weight??"—"}kg • Waist: ${v.waist??"—"}cm</div>
-            <div class="hint">BP: ${v.sys??"—"}/${v.dia??"—"} • Puls: ${v.pulse??"—"} • ${safeText(v.note||"")}</div>
-          </div>
-          <span class="badge">HP</span>
-        </div>
-      `;
-      ul.appendChild(li);
-    });
-  }
-
-  drawVitalsChart($("#vChart"), list);
+  preview();
 }
