@@ -1,31 +1,53 @@
+/* =========================
+   IRON QUEST – utils.js (FULL)
+   Fix:
+   - exports: clamp, loadJSON, saveJSON (werden von progression.js etc. gebraucht)
+   - plus: $, isoDate, fmt, safeText
+========================= */
+
 export const $ = (id) => document.getElementById(id);
 
-export function isoDate(d = new Date()) {
-  return new Date(d).toISOString().slice(0, 10);
-}
+export const isoDate = (d = new Date()) => {
+  try { return new Date(d).toISOString().slice(0, 10); }
+  catch { return new Date().toISOString().slice(0, 10); }
+};
 
-export function clamp(n, a, b) {
-  return Math.max(a, Math.min(b, n));
-}
+export const clamp = (n, min, max) => {
+  const x = Number(n);
+  if (Number.isNaN(x)) return min;
+  return Math.max(min, Math.min(max, x));
+};
 
 export function loadJSON(key, fallback) {
-  try { return JSON.parse(localStorage.getItem(key)) ?? fallback; }
-  catch { return fallback; }
+  try {
+    const raw = localStorage.getItem(key);
+    if (raw == null) return fallback;
+    const v = JSON.parse(raw);
+    return v ?? fallback;
+  } catch {
+    return fallback;
+  }
 }
 
 export function saveJSON(key, value) {
-  localStorage.setItem(key, JSON.stringify(value));
+  try {
+    localStorage.setItem(key, JSON.stringify(value));
+  } catch {
+    // ignore (private mode / quota)
+  }
 }
 
-export function fmt(n) {
-  const x = Number(n || 0);
-  return x.toLocaleString("de-DE");
-}
+export const fmt = (n) => {
+  const x = Number(n);
+  if (Number.isNaN(x)) return "0";
+  return Math.round(x).toLocaleString("de-DE");
+};
 
 export function safeText(s) {
-  return String(s ?? "").replaceAll("<", "&lt;").replaceAll(">", "&gt;");
-}
-
-export function sum(arr) {
-  return arr.reduce((a, b) => a + (Number(b) || 0), 0);
+  return String(s ?? "")
+    .replaceAll("&", "&amp;")
+    .replaceAll("<", "&lt;")
+    .replaceAll(">", "&gt;")
+    .replaceAll('"', "&quot;")
+    .replaceAll("'", "&#039;");
 }
