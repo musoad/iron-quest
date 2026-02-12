@@ -1,54 +1,52 @@
-// js/challenges.js (ES Module)
-import { isoDate } from "./utils.js";
+/* challenges.js – Challenge Mode (ES Module) */
 
-const KEY = "iq_challenge_v1";
+import { loadJSON, saveJSON } from "./utils.js";
 
-// simple daily challenge: enabled => +10% XP
-function load() {
-  try { return JSON.parse(localStorage.getItem(KEY)) || { enabled:false, since:null }; }
-  catch { return { enabled:false, since:null }; }
+const KEY_CH = "iq_challenge_v4";
+
+function getCh() {
+  return loadJSON(KEY_CH, { enabled: false, mult: 1.15 });
 }
-function save(s) { localStorage.setItem(KEY, JSON.stringify(s)); }
-
-export function challengeMultiplier(_dateISO) {
-  const s = load();
-  return s.enabled ? 1.10 : 1.00;
+function saveCh(ch) {
+  saveJSON(KEY_CH, ch);
 }
 
-export function renderChallengePanel(container) {
+export function challengeMultiplier() {
+  const ch = getCh();
+  return ch.enabled ? (ch.mult || 1.15) : 1.0;
+}
+
+export function renderChallengePanel(container, player) {
   if (!container) return;
-  const s = load();
+
+  const ch = getCh();
   container.innerHTML = `
     <div class="card">
       <h2>Challenge Mode</h2>
-      <p class="hint">Wenn aktiv: <b>+10% XP</b> auf alle Einträge.</p>
+      <p class="hint">Wenn aktiv: XP-Multiplier auf alle Einträge.</p>
 
       <div class="row2">
-        <div class="pill"><b>Status:</b> ${s.enabled ? "✅ Aktiv" : "— Inaktiv"}</div>
-        <div class="pill"><b>Seit:</b> ${s.since || "—"}</div>
+        <div class="pill"><b>Status:</b> ${ch.enabled ? "✅ ON" : "OFF"}</div>
+        <div class="pill"><b>Multiplier:</b> x${(ch.mult || 1.15).toFixed(2)}</div>
       </div>
 
-      <div class="row2">
-        <button id="chToggle">${s.enabled ? "Challenge deaktivieren" : "Challenge aktivieren"}</button>
-        <button id="chReset" class="secondary">Reset</button>
-      </div>
+      <label class="check" style="margin-top:12px;">
+        <input id="chEnabled" type="checkbox" ${ch.enabled ? "checked":""}>
+        Challenge aktivieren
+      </label>
 
-      <div class="divider"></div>
-      <p class="hint">Nice: Kombiniere Challenge + Streak + PR-System für maximale Motivation.</p>
+      <label>Multiplier (z.B. 1.10 – 1.30)
+        <input id="chMult" type="number" step="0.01" value="${ch.mult || 1.15}">
+      </label>
+
+      <button id="chSave">Speichern</button>
     </div>
   `;
 
-  container.querySelector("#chToggle").onclick = () => {
-    const next = load();
-    next.enabled = !next.enabled;
-    next.since = next.enabled ? isoDate(new Date()) : null;
-    save(next);
-    renderChallengePanel(container);
-  };
-
-  container.querySelector("#chReset").onclick = () => {
-    if (!confirm("Challenge Reset?")) return;
-    localStorage.removeItem(KEY);
-    renderChallengePanel(container);
-  };
+  container.querySelector("#chSave")?.addEventListener("click", () => {
+    const enabled = !!container.querySelector("#chEnabled")?.checked;
+    const mult = parseFloat(container.querySelector("#chMult")?.value || "1.15");
+    saveCh({ enabled, mult: Number.isFinite(mult) ? mult : 1.15 });
+    renderChallengePanel(container, player);
+  });
 }
