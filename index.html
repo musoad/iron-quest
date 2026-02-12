@@ -1,56 +1,69 @@
 <!DOCTYPE html>
 <html lang="de">
 <head>
-  <meta charset="UTF-8" />
-  <meta name="viewport" content="width=device-width, initial-scale=1.0" />
-  <title>IRON QUEST v4 PRO</title>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>IRON QUEST v4 PRO</title>
 
-  <link rel="manifest" href="manifest.json" />
-  <link rel="stylesheet" href="style.css" />
+<link rel="manifest" href="manifest.json">
+<link rel="stylesheet" href="style.css">
 
-  <meta name="theme-color" content="#0f0f0f" />
-  <meta name="apple-mobile-web-app-capable" content="yes" />
-  <meta name="apple-mobile-web-app-status-bar-style" content="black-translucent" />
+<meta name="theme-color" content="#0f0f0f">
+<meta name="apple-mobile-web-app-capable" content="yes">
+<meta name="apple-mobile-web-app-status-bar-style" content="black-translucent">
 </head>
 
 <body>
-  <header class="topbar">
-    <div>
-      <h1>⚔ IRON QUEST v4 PRO</h1>
-      <div id="playerInfo" class="sub"></div>
-    </div>
-    <div class="topActions">
-      <button id="forceUpdateBtn" class="secondary">Update</button>
-    </div>
-  </header>
 
-  <nav class="tabs" aria-label="Navigation">
-    <button class="tabbtn active" data-tab="dashboard">Dashboard</button>
-    <button class="tabbtn" data-tab="log">Log</button>
-    <button class="tabbtn" data-tab="skills">Skilltree</button>
-    <button class="tabbtn" data-tab="analytics">Analytics</button>
-    <button class="tabbtn" data-tab="health">Health</button>
-    <button class="tabbtn" data-tab="boss">Boss</button>
-    <button class="tabbtn" data-tab="challenge">Challenge</button>
-    <button class="tabbtn" data-tab="backup">Backup</button>
-  </nav>
+<header>
+  <h1>⚔ IRON QUEST v4 PRO</h1>
+  <div id="playerInfo"></div>
+</header>
 
-  <main class="main">
-    <section id="dashboard" class="panel active"></section>
-    <section id="log" class="panel"></section>
-    <section id="skills" class="panel"></section>
-    <section id="analytics" class="panel"></section>
-    <section id="health" class="panel"></section>
-    <section id="boss" class="panel"></section>
-    <section id="challenge" class="panel"></section>
-    <section id="backup" class="panel"></section>
-  </main>
+<nav>
+  <button data-tab="dashboard">Dashboard</button>
+  <button data-tab="log">Log</button>
+  <button data-tab="skills">Skilltree</button>
+  <button data-tab="analytics">Analytics</button>
+  <button data-tab="health">Health</button>
+  <button data-tab="boss">Boss</button>
+  <button data-tab="challenge">Challenge</button>
+</nav>
 
-  <footer class="footer">
-    <small id="appStatus">OK</small>
-  </footer>
+<main>
+  <section id="dashboard" class="tab active"></section>
+  <section id="log" class="tab"></section>
+  <section id="skills" class="tab"></section>
+  <section id="analytics" class="tab"></section>
+  <section id="health" class="tab"></section>
+  <section id="boss" class="tab"></section>
+  <section id="challenge" class="tab"></section>
+</main>
 
-  <!-- ✅ nur noch EIN entrypoint als ES-Module -->
-  <script type="module" src="js/app.js"></script>
+<!-- Classic Scripts (KEINE Module!) -->
+<script src="js/db.js"></script>
+<script src="js/utils.js"></script>
+
+<script src="js/exercises.js"></script>
+<script src="js/xpSystem.js"></script>
+<script src="js/progression.js"></script>
+
+<script src="js/attributes.js"></script>
+<script src="js/skilltree.js"></script>
+<script src="js/analytics.js"></script>
+<script src="js/health.js"></script>
+<script src="js/boss.js"></script>
+<script src="js/challenges.js"></script>
+<script src="js/backup.js"></script>
+
+<script src="js/app.js"></script>
+
+<script>
+  // Service Worker
+  if ("serviceWorker" in navigator) {
+    navigator.serviceWorker.register("./sw.js").catch(()=>{});
+  }
+</script>
+
 </body>
 </html>
