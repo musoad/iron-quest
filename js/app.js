@@ -1,501 +1,257 @@
-import { $, isoDate, fmt, safeText } from "./utils.js";
-import { entriesGetAll, entriesAdd, entriesPut, entriesDelete } from "./db.js";
-import { listExerciseNames, getExercise } from "./exercises.js";
+// js/app.js (ES Module)
+import { isoDate } from "./utils.js";
+import { entriesGetAll, entriesAdd } from "./db.js";
+import { EXERCISES, getExercise } from "./exercises.js";
 import { calcEntryXP } from "./xpSystem.js";
-import { ensureStartDate, setStartDate, getWeekNumber, clampWeek, levelFromTotalXp, titleForLevel, computeStreak, streakMultiplier, adaptiveHint } from "./progression.js";
-import { attrFromEntry, attrLevelFromXp } from "./attributes.js";
-import { computeSkillPoints, skillTrees, loadSkill, unlockNode, resetSkill, skillMultiplierForType } from "./skilltree.js";
-import { renderAnalyticsPanel, renderDashboardMiniAnalytics } from "./analytics.js";
+import { getPlayerState, computeWeekFromStart, ensureStartDate } from "./progression.js";
+import { renderSkilltreePanel, skillMultiplierForType } from "./skilltree.js";
+import { renderAnalyticsPanel } from "./analytics.js";
 import { renderHealthPanel } from "./health.js";
-import { renderBossPanel, resetBoss } from "./boss.js";
+import { renderBossPanel } from "./boss.js";
 import { renderChallengePanel, challengeMultiplier } from "./challenges.js";
 import { renderBackupPanel } from "./backup.js";
 
-/* =========================
-   APP BOOT
-========================= */
+function $(id){ return document.getElementById(id); }
 
-function sortEntriesDesc(entries) {
-  return entries.sort((a,b)=>{
-    if (a.date !== b.date) return a.date < b.date ? 1 : -1;
-    return (b.id||0) - (a.id||0);
+function setActiveTab(tabId) {
+  document.querySelectorAll("nav button[data-tab]").forEach(b => {
+    b.classList.toggle("active", b.getAttribute("data-tab") === tabId);
   });
-}
-
-function bindTabs() {
-  document.querySelectorAll(".tabbtn").forEach(btn=>{
-    btn.addEventListener("click", ()=>{
-      activateTab(btn.getAttribute("data-tab"));
-    });
+  document.querySelectorAll("main section.tab").forEach(s => {
+    s.classList.toggle("active", s.id === tabId);
   });
-
-  const hash = (location.hash || "#dashboard").replace("#","");
-  activateTab(hash);
-}
-
-function activateTab(tabId) {
-  document.querySelectorAll(".tabbtn").forEach(b=>b.classList.remove("active"));
-  document.querySelectorAll(".panel").forEach(p=>p.classList.remove("active"));
-
-  const btn = document.querySelector(`.tabbtn[data-tab="${tabId}"]`);
-  const panel = document.getElementById(tabId);
-
-  if (btn) btn.classList.add("active");
-  if (panel) panel.classList.add("active");
-
   location.hash = tabId;
 }
 
-function renderPlayerInfo({ totalXp, level, title, streak }) {
-  const el = $("playerInfo");
-  if (!el) return;
-  el.innerHTML = `
-    <span class="badge">XP: <b>${fmt(totalXp)}</b></span>
-    <span class="badge">Lv <b>${level}</b> (${safeText(title)})</span>
-    <span class="badge ${streak>=7 ? "ok":""}">🔥 Streak: <b>${streak}</b></span>
-  `;
+function bindTabs() {
+  document.addEventListener("click", (e) => {
+    const btn = e.target.closest("nav button[data-tab]");
+    if (!btn) return;
+    e.preventDefault();
+    setActiveTab(btn.getAttribute("data-tab"));
+  });
+
+  const initial = (location.hash || "#dashboard").replace("#","");
+  setActiveTab(initial);
 }
 
-function renderDashboard(container, entries, currentWeek) {
-  const start = ensureStartDate();
+function sortEntriesDesc(entries){
+  return [...entries].sort((a,b)=>{
+    if (a.date !== b.date) return a.date < b.date ? 1 : -1;
+    return (b.id||0)-(a.id||0);
+  });
+}
 
-  let todayXP = 0, weekXP = 0, totalXP = 0;
-  const today = isoDate();
+function renderDashboard(container, entries, curWeek, player) {
+  if (!container) return;
 
-  const attr = { STR:0, STA:0, END:0, MOB:0 };
-
-  for (const e of entries) {
-    totalXP += (e.xp || 0);
-    if (e.date === today) todayXP += (e.xp || 0);
-    if (e.week === currentWeek) weekXP += (e.xp || 0);
-
-    const a = attrFromEntry(e);
-    attr.STR += a.STR; attr.STA += a.STA; attr.END += a.END; attr.MOB += a.MOB;
-  }
-
-  const st = computeStreak(entries);
-  const lv = levelFromTotalXp(totalXP);
-
-  renderPlayerInfo({ totalXp: totalXP, level: lv.lvl, title: titleForLevel(lv.lvl), streak: st.current || 0 });
-
-  const ad = adaptiveHint(entries, currentWeek);
+  const today = isoDate(new Date());
+  const todayXp = entries.filter(e=>e.date===today).reduce((s,e)=>s+(e.xp||0),0);
+  const weekXp  = entries.filter(e=>Number(e.week)===Number(curWeek)).reduce((s,e)=>s+(e.xp||0),0);
 
   container.innerHTML = `
     <div class="card">
       <h2>Dashboard</h2>
-      <p class="hint">Startdatum bestimmt Woche 1. Änderungen wirken sofort auf Wochen-Zuordnung.</p>
-
       <div class="row2">
-        <div class="pill"><b>Startdatum:</b> <span id="dStart">${start}</span></div>
-        <div class="pill"><b>Aktuelle Woche:</b> W${currentWeek}</div>
+        <div class="pill"><b>Woche:</b> W${curWeek}</div>
+        <div class="pill"><b>Heute XP:</b> ${todayXp}</div>
       </div>
-
-      <label>Startdatum ändern
-        <input id="startInput" type="date" value="${start}">
-      </label>
-      <button id="startSave" class="secondary">Startdatum speichern</button>
-
+      <div class="row2">
+        <div class="pill"><b>Woche XP:</b> ${weekXp}</div>
+        <div class="pill"><b>Einträge:</b> ${entries.length}</div>
+      </div>
       <div class="divider"></div>
-
-      <div class="row2">
-        <div class="pill"><b>Heute:</b> ${fmt(todayXP)} XP</div>
-        <div class="pill"><b>Woche:</b> ${fmt(weekXP)} XP</div>
-      </div>
-
-      <div class="pill" style="margin-top:10px;">
-        <b>🧬 KI-Adaptive Progression:</b> ${safeText(ad.text)}
-      </div>
-    </div>
-
-    <div id="dashMini"></div>
-
-    <div class="card">
-      <h2>Attribute</h2>
-      <div class="row2">
-        ${renderAttrPill("STR", attr.STR)}
-        ${renderAttrPill("STA", attr.STA)}
-      </div>
-      <div class="row2">
-        ${renderAttrPill("END", attr.END)}
-        ${renderAttrPill("MOB", attr.MOB)}
-      </div>
-    </div>
-
-    <div class="card">
-      <h2>Letzte Einträge</h2>
-      <ul class="list">
-        ${entries.slice(0,8).map(e=>`
-          <li>
-            <div class="entryRow">
-              <div>
-                <div class="entryTitle">${safeText(e.date)} • ${safeText(e.exercise)}</div>
-                <div class="small">W${e.week} • ${safeText(e.type)} • ${safeText(e.detail||"")}</div>
-              </div>
-              <span class="badge">${fmt(e.xp)} XP</span>
-            </div>
-          </li>
-        `).join("") || "<li>—</li>"}
-      </ul>
-    </div>
-  `;
-
-  renderDashboardMiniAnalytics(document.getElementById("dashMini"), entries, currentWeek);
-
-  document.getElementById("startSave").onclick = async ()=>{
-    const v = document.getElementById("startInput").value;
-    if (!v) return alert("Bitte Startdatum wählen.");
-
-    const ok = confirm("Startdatum ändern? Wochen-Zuordnung wird neu gerechnet.");
-    if (!ok) return;
-
-    setStartDate(v);
-    // Weeks neu berechnen:
-    const all = await entriesGetAll();
-    for (const e of all) {
-      const nw = clampWeek(getWeekNumber(e.date));
-      if (e.week !== nw) {
-        e.week = nw;
-        await entriesPut(e);
-      }
-    }
-    window.dispatchEvent(new Event("iq:refresh"));
-  };
-}
-
-function renderAttrPill(key, xp) {
-  const val = Math.round(Number(xp||0));
-  const lv = attrLevelFromXp(val);
-  return `
-    <div class="pill">
-      <b>${key}</b> • Lv ${lv.lvl}<br>
-      <span class="small">${fmt(val)} XP • ${fmt(Math.max(0, lv.need - lv.into))} bis nächstes Lv</span>
+      <div class="hint">Nutze Log → Eintrag speichern. Analytics zeigt Trends.</div>
     </div>
   `;
 }
 
-/* ---------- LOG ---------- */
-function renderLog(container, entries, currentWeek) {
-  const names = listExerciseNames();
-  const today = isoDate();
+function renderLog(container, entries, curWeek) {
+  if (!container) return;
+
+  const exOptions = EXERCISES.map(ex => `<option value="${ex.name}">${ex.name}</option>`).join("");
 
   container.innerHTML = `
     <div class="card">
       <h2>Log</h2>
-      <p class="hint">Speichert in IndexedDB (offline). Sätze/Reps = „tatsächlich“, Empfehlungen stehen bei der Übung.</p>
-
-      <input id="editId" type="hidden" value="">
-
-      <label>Datum
-        <input id="lDate" type="date" value="${today}">
-      </label>
-
-      <label>Übung
-        <select id="lEx">
-          ${names.map(n=>`<option value="${safeText(n)}">${safeText(n)}</option>`).join("")}
-        </select>
-      </label>
 
       <div class="row2">
-        <div>
-          <label>Tatsächliche Sets
-            <input id="lSets" inputmode="numeric" placeholder="z.B. 4">
-          </label>
-        </div>
-        <div>
-          <label>Tatsächliche Reps
-            <input id="lReps" inputmode="numeric" placeholder="z.B. 10">
-          </label>
-        </div>
-      </div>
+        <label>Datum
+          <input id="logDate" type="date" value="${isoDate(new Date())}">
+        </label>
 
-      <label>NEAT Minuten (nur bei Walking)
-        <input id="lMin" inputmode="numeric" placeholder="z.B. 60">
-      </label>
-
-      <label>Notiz (optional)
-        <input id="lNote" placeholder="z.B. schwer, gute Form">
-      </label>
-
-      <div class="row2">
-        <div class="pill"><b>Empfehlung:</b> <span id="lRec">—</span></div>
-        <div class="pill"><b>XP Preview:</b> <span id="lXP">—</span></div>
+        <label>Übung
+          <select id="logExercise">${exOptions}</select>
+        </label>
       </div>
 
       <div class="row2">
-        <button id="lSave">Speichern</button>
-        <button id="lCancel" class="secondary" disabled>Abbrechen</button>
+        <label>Sätze
+          <input id="logSets" type="number" min="0" step="1" inputmode="numeric" placeholder="z.B. 4">
+        </label>
+        <label>Reps pro Satz
+          <input id="logReps" type="number" min="0" step="1" inputmode="numeric" placeholder="z.B. 10">
+        </label>
+      </div>
+
+      <div class="row2">
+        <label>Walking Minuten (NEAT)
+          <input id="logMin" type="number" min="0" step="1" inputmode="numeric" placeholder="z.B. 60">
+        </label>
+        <div class="pill"><b>Preview XP:</b> <span id="logXP">—</span></div>
+      </div>
+
+      <div class="row2">
+        <button id="logSave">Eintrag speichern</button>
+        <button id="logClearPreview" class="secondary">Reset</button>
       </div>
 
       <div class="divider"></div>
 
-      <h3>Einträge</h3>
-      <ul class="list" id="lList"></ul>
-      <button id="lClear" class="danger">Alle Einträge löschen</button>
+      <h3>Letzte 15 Einträge</h3>
+      <ul id="logList"></ul>
     </div>
   `;
 
-  const exSel = document.getElementById("lEx");
-  const dateEl = document.getElementById("lDate");
+  const exSel = container.querySelector("#logExercise");
+  const dateEl = container.querySelector("#logDate");
+  const setsEl = container.querySelector("#logSets");
+  const repsEl = container.querySelector("#logReps");
+  const minEl  = container.querySelector("#logMin");
+  const xpEl   = container.querySelector("#logXP");
 
-  const updatePreview = () => {
-    const date = dateEl.value || today;
-    const week = clampWeek(getWeekNumber(date));
-    const name = exSel.value;
-    const ex = getExercise(name);
+  function computePreview(){
+    const dateISO = dateEl.value || isoDate(new Date());
+    const w = computeWeekFromStart(ensureStartDate(), dateISO);
+    const exName = exSel.value;
 
-    const rec = ex?.rec ? `${ex.rec.sets} Sets • ${ex.rec.reps} Reps` : "—";
-    document.getElementById("lRec").textContent = rec;
+    const ex = getExercise(exName);
+    const type = ex?.type || "Other";
 
-    const skill = skillMultiplierForType(ex?.type);
-    const ch = challengeMultiplier(entries, week);
-    const streak = streakMultiplier((computeStreak(entries).current || 0));
+    const mult = {
+      skill: skillMultiplierForType(type),
+      challenge: challengeMultiplier(dateISO),
+    };
 
-    const { xp } = calcEntryXP(
-      { exerciseName: name, minutes: Number(document.getElementById("lMin").value || 0) },
-      { skill, challenge: ch, streak }
-    );
+    const minutes = Number(minEl.value || 0) || 0;
 
-    document.getElementById("lXP").textContent = `${fmt(xp)} XP • W${week}`;
-  };
+    const xp = calcEntryXP({ exerciseName: exName, minutes }, mult);
+    xpEl.textContent = `${xp} XP (W${w})`;
+    return { xp, w, dateISO, exName, type };
+  }
 
-  ["lEx","lDate","lSets","lReps","lMin"].forEach(id=>{
-    document.getElementById(id)?.addEventListener("input", updatePreview);
-    document.getElementById(id)?.addEventListener("change", updatePreview);
+  ["change","input"].forEach(ev=>{
+    [exSel, dateEl, setsEl, repsEl, minEl].forEach(el=> el.addEventListener(ev, computePreview));
   });
 
-  updatePreview();
+  computePreview();
 
-  // list
-  const ul = document.getElementById("lList");
-  ul.innerHTML = entries.length ? "" : `<li>—</li>`;
-  entries.slice(0, 80).forEach(e=>{
+  container.querySelector("#logSave").onclick = async () => {
+    const { xp, w, dateISO, exName, type } = computePreview();
+    const sets = Number(setsEl.value || 0) || null;
+    const reps = Number(repsEl.value || 0) || null;
+    const minutes = Number(minEl.value || 0) || null;
+
+    const ex = getExercise(exName);
+    const rec = ex?.recommended || null;
+
+    const detailParts = [];
+    if (rec?.sets) detailParts.push(`Empf Sets: ${rec.sets}`);
+    if (rec?.reps) detailParts.push(`Empf Reps: ${rec.reps}`);
+    if (sets != null) detailParts.push(`Ist Sets: ${sets}`);
+    if (reps != null) detailParts.push(`Ist Reps: ${reps}`);
+    if (minutes != null && minutes > 0) detailParts.push(`Min: ${minutes}`);
+    if (ex?.desc) detailParts.push(ex.desc);
+
+    await entriesAdd({
+      date: dateISO,
+      week: w,
+      exercise: exName,
+      type,
+      detail: detailParts.join(" • "),
+      xp
+    });
+
+    await boot(); // rerender alles
+    alert(`Gespeichert: +${xp} XP ✅`);
+  };
+
+  container.querySelector("#logClearPreview").onclick = () => {
+    setsEl.value = "";
+    repsEl.value = "";
+    minEl.value = "";
+    computePreview();
+  };
+
+  const ul = container.querySelector("#logList");
+  const recent = sortEntriesDesc(entries).slice(0,15);
+  ul.innerHTML = recent.length ? "" : "<li>—</li>";
+  recent.forEach(e=>{
     const li = document.createElement("li");
-    li.innerHTML = `
-      <div class="entryRow">
-        <div>
-          <div class="entryTitle">${safeText(e.date)} • ${safeText(e.exercise)}</div>
-          <div class="small">W${e.week} • ${safeText(e.type)} • ${safeText(e.detail||"")}</div>
-        </div>
-        <div class="row" style="margin:0">
-          <span class="badge">${fmt(e.xp)} XP</span>
-          <button class="secondary" data-edit="${e.id}">Edit</button>
-          <button class="danger" data-del="${e.id}">Del</button>
-        </div>
-      </div>
-    `;
+    li.innerHTML = `<div class="entryRow"><div style="min-width:0;"><b>${e.date}</b> • ${e.exercise}<div class="hint">${e.type} • ${e.detail||""}</div></div><span class="badge">${e.xp} XP</span></div>`;
     ul.appendChild(li);
   });
-
-  ul.querySelectorAll("button[data-del]").forEach(btn=>{
-    btn.addEventListener("click", async ()=>{
-      const id = Number(btn.getAttribute("data-del"));
-      if (!confirm("Eintrag löschen?")) return;
-      await entriesDelete(id);
-      window.dispatchEvent(new Event("iq:refresh"));
-    });
-  });
-
-  ul.querySelectorAll("button[data-edit]").forEach(btn=>{
-    btn.addEventListener("click", async ()=>{
-      const id = Number(btn.getAttribute("data-edit"));
-      const e = entries.find(x=>x.id===id);
-      if (!e) return;
-
-      document.getElementById("editId").value = String(id);
-      document.getElementById("lDate").value = e.date;
-      document.getElementById("lEx").value = e.exercise;
-
-      const mSets = (e.detail||"").match(/Sets:\s*(\d+)/i);
-      const mReps = (e.detail||"").match(/Reps:\s*(\d+)/i);
-      const mMin  = (e.detail||"").match(/Min:\s*(\d+)/i);
-
-      document.getElementById("lSets").value = mSets ? mSets[1] : "";
-      document.getElementById("lReps").value = mReps ? mReps[1] : "";
-      document.getElementById("lMin").value = mMin ? mMin[1] : "";
-
-      document.getElementById("lCancel").disabled = false;
-      updatePreview();
-    });
-  });
-
-  document.getElementById("lCancel").onclick = ()=>{
-    document.getElementById("editId").value = "";
-    document.getElementById("lCancel").disabled = true;
-    document.getElementById("lSets").value = "";
-    document.getElementById("lReps").value = "";
-    document.getElementById("lMin").value = "";
-    document.getElementById("lNote").value = "";
-    updatePreview();
-  };
-
-  document.getElementById("lSave").onclick = async ()=>{
-    const editId = Number(document.getElementById("editId").value || 0);
-    const date = document.getElementById("lDate").value || today;
-    const week = clampWeek(getWeekNumber(date));
-    const name = document.getElementById("lEx").value;
-    const ex = getExercise(name);
-
-    const sets = Number(document.getElementById("lSets").value || 0);
-    const reps = Number(document.getElementById("lReps").value || 0);
-    const min  = Number(document.getElementById("lMin").value || 0);
-    const note = String(document.getElementById("lNote").value || "");
-
-    const skill = skillMultiplierForType(ex?.type);
-    const ch = challengeMultiplier(entries, week);
-    const streak = streakMultiplier((computeStreak(entries).current || 0));
-
-    const { xp, type } = calcEntryXP(
-      { exerciseName: name, minutes: min },
-      { skill, challenge: ch, streak }
-    );
-
-    const rec = ex?.rec ? `${ex.rec.sets} Sets • ${ex.rec.reps} Reps` : "—";
-    let detail = `Empf: ${rec}`;
-    if (type === "NEAT") detail = `Min: ${Math.round(min)} • ` + detail;
-    if (type !== "NEAT" && type !== "Rest") detail = `Sets: ${Math.round(sets)} • Reps: ${Math.round(reps)} • ` + detail;
-    if (note) detail += ` • Note: ${note}`;
-    detail += ` • Skill x${skill.toFixed(2)} • Challenge x${ch.toFixed(2)} • Streak x${streak.toFixed(2)}`;
-
-    if (editId) {
-      await entriesPut({ id: editId, date, week, exercise: name, type, detail, xp });
-    } else {
-      await entriesAdd({ date, week, exercise: name, type, detail, xp });
-    }
-
-    window.dispatchEvent(new Event("iq:refresh"));
-    alert(editId ? "Updated ✅" : "Saved ✅");
-  };
-
-  document.getElementById("lClear").onclick = async ()=>{
-    alert("Diese Funktion ist in v4 PRO absichtlich nicht als One-Click drin.\nWenn du sie willst, sag Bescheid.");
-  };
 }
 
-/* ---------- SKILLTREE ---------- */
-function renderSkillPanel(container, entries) {
-  const st = loadSkill();
-  const sp = computeSkillPoints(entries);
-  const trees = skillTrees();
+async function boot(){
+  const player = getPlayerState(await entriesGetAll());
+  const start = ensureStartDate();
+  const today = isoDate(new Date());
+  const curWeek = computeWeekFromStart(start, today);
 
-  container.innerHTML = `
-    <div class="card">
-      <h2>🌳 Skilltree</h2>
-      <p class="hint">Skillpunkte: pro Tag 0–3 (nach Sternen). Nodes geben +2% XP pro Unlock + Capstone Bonus.</p>
+  const entries = await entriesGetAll();
 
-      <div class="row2">
-        <div class="pill"><b>Earned:</b> ${fmt(sp.earned)}</div>
-        <div class="pill"><b>Available:</b> ${fmt(sp.available)} (Spent ${fmt(sp.spent)})</div>
-      </div>
+  // Header info
+  $("playerInfo").textContent = `W${curWeek} • Total XP: ${player.totalXp} • Level: ${player.level}`;
 
-      <div class="divider"></div>
-
-      <div class="grid2" id="treeGrid"></div>
-
-      <div class="divider"></div>
-      <button id="skillReset" class="danger">Skilltree reset</button>
-    </div>
-  `;
-
-  const grid = document.getElementById("treeGrid");
-  grid.innerHTML = "";
-
-  trees.forEach(t=>{
-    const nodes = st.nodes[t.key] || [];
-    const box = document.createElement("div");
-    box.className = "card";
-
-    box.innerHTML = `
-      <h3>${safeText(t.name)}</h3>
-      <p class="hint">Typ: ${safeText(t.type)} • Multiplikator wirkt automatisch</p>
-      <ul class="list">
-        ${nodes.map(n=>`
-          <li>
-            <div class="entryRow">
-              <div>
-                <div class="entryTitle">${safeText(n.name)}</div>
-                <div class="small">Cost ${n.cost} • ${n.unlocked ? "✅ unlocked" : "🔒 locked"}</div>
-              </div>
-              <button class="secondary" data-node="${n.id}" ${n.unlocked ? "disabled":""}>Unlock</button>
-            </div>
-          </li>
-        `).join("")}
-      </ul>
-    `;
-    grid.appendChild(box);
-  });
-
-  grid.querySelectorAll("button[data-node]").forEach(btn=>{
-    btn.addEventListener("click", ()=>{
-      const id = btn.getAttribute("data-node");
-      const res = unlockNode(id, entries);
-      alert(res.msg);
-      if (res.ok) window.dispatchEvent(new Event("iq:refresh"));
-    });
-  });
-
-  document.getElementById("skillReset").onclick = ()=>{
-    if (!confirm("Skilltree wirklich resetten?")) return;
-    resetSkill();
-    window.dispatchEvent(new Event("iq:refresh"));
-  };
+  // Panels
+  renderDashboard($("dashboard"), entries, curWeek, player);
+  renderLog($("log"), entries, curWeek);
+  renderSkilltreePanel($("skills"), entries, curWeek);
+  renderAnalyticsPanel($("analytics"), entries, curWeek);
+  renderHealthPanel($("health"));
+  renderBossPanel($("boss"), entries, curWeek);
+  renderChallengePanel($("challenge"), entries, curWeek);
+  renderBackupPanel($("backup"));
 }
 
-/* ---------- SERVICE WORKER / UPDATE ---------- */
-async function setupSW() {
-  if (!("serviceWorker" in navigator)) return;
+// Service Worker update trigger (iOS Homescreen braucht oft “manual” kick)
+function setupSWUpdateButton(){
+  const btn = $("btnUpdate");
+  if (!btn) return;
 
-  const reg = await navigator.serviceWorker.register("sw.js");
+  btn.onclick = async () => {
+    if (!("serviceWorker" in navigator)) return alert("Kein Service Worker verfügbar.");
+    const reg = await navigator.serviceWorker.getRegistration();
+    if (!reg) return alert("SW nicht registriert.");
 
-  // Button: force update
-  document.getElementById("forceUpdateBtn").onclick = async ()=>{
-    if (reg.waiting) {
-      reg.waiting.postMessage({ type:"SKIP_WAITING" });
-      return;
-    }
     await reg.update();
-    alert("Update geprüft. Wenn verfügbar, App neu öffnen.");
+    if (reg.waiting) {
+      reg.waiting.postMessage({ type: "SKIP_WAITING" });
+      alert("Update angewendet ✅ App neu öffnen (komplett schließen).");
+    } else {
+      alert("Kein Update gefunden. (Oder schon aktuell)");
+    }
   };
-
-  // When new SW takes control -> reload (iOS: manchmal nötig)
-  navigator.serviceWorker.addEventListener("controllerchange", () => {
-    location.reload();
-  });
 }
 
-/* ---------- MAIN RENDER ---------- */
-async function render() {
-  const status = $("appStatus");
-  try {
-    const raw = await entriesGetAll();
-    const entries = sortEntriesDesc(raw);
-
-    // compute week from today
-    ensureStartDate();
-    const currentWeek = clampWeek(getWeekNumber(isoDate()));
-
-    // Panels
-    renderDashboard(document.getElementById("dashboard"), entries, currentWeek);
-    renderLog(document.getElementById("log"), entries, currentWeek);
-    renderSkillPanel(document.getElementById("skills"), entries);
-    renderAnalyticsPanel(document.getElementById("analytics"), entries, currentWeek);
-    await renderHealthPanel(document.getElementById("health"));
-    renderBossPanel(document.getElementById("boss"), currentWeek);
-    renderChallengePanel(document.getElementById("challenge"), entries, currentWeek);
-    await renderBackupPanel(document.getElementById("backup"));
-
-    if (status) status.textContent = `OK • W${currentWeek} • Entries: ${fmt(entries.length)}`;
-  } catch (e) {
-    console.error(e);
-    if (status) status.textContent = "ERROR (siehe Konsole)";
-    alert("Fehler in JS. Bitte Safari-Konsole Screenshot schicken.");
-  }
-}
-
-function boot() {
+async function init(){
   bindTabs();
-  setupSW();
-  render();
-  window.addEventListener("iq:refresh", render);
+  setupSWUpdateButton();
+
+  // SW register
+  if ("serviceWorker" in navigator) {
+    try {
+      const reg = await navigator.serviceWorker.register("./sw.js");
+      reg.addEventListener("updatefound", () => {
+        // optional: could show badge
+      });
+    } catch (e) {
+      console.warn("SW register failed", e);
+    }
+  }
+
+  await boot();
 }
 
-boot();
+init();
