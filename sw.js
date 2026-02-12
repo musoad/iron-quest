@@ -1,11 +1,11 @@
-/* IRON QUEST – sw.js (FULL, iOS-safe)
+/* =========================
+   IRON QUEST – sw.js (FULL, iOS-safe)
    ✅ Offline Cache
    ✅ Auto-Update (skipWaiting + clients.claim)
    ✅ Cache bust via SW_VERSION
-   ✅ Caches JS folder too
-*/
+========================= */
 
-const SW_VERSION = "v4.0.18";
+const SW_VERSION = "v4.0.19";
 const CACHE_NAME = `ironquest-${SW_VERSION}`;
 
 const ASSETS = [
@@ -16,11 +16,9 @@ const ASSETS = [
   "./sw.js",
 
   "./js/utils.js",
+  "./js/urls.js",
   "./js/db.js",
   "./js/exercises.js",
-  "./js/mutations.js",
-  "./js/streak.js",
-  "./js/prSystem.js",
   "./js/xpSystem.js",
   "./js/progression.js",
   "./js/attributes.js",
@@ -30,7 +28,7 @@ const ASSETS = [
   "./js/boss.js",
   "./js/challenges.js",
   "./js/backup.js",
-  "./js/app.js",
+  "./js/app.js"
 ];
 
 self.addEventListener("install", (event) => {
@@ -43,16 +41,14 @@ self.addEventListener("install", (event) => {
 self.addEventListener("activate", (event) => {
   event.waitUntil((async () => {
     const keys = await caches.keys();
-    await Promise.all(keys.map((k) => (k !== CACHE_NAME ? caches.delete(k) : Promise.resolve())));
+    await Promise.all(keys.map((k) => (k !== CACHE_NAME ? caches.delete(k) : null)));
     await self.clients.claim();
+    const clients = await self.clients.matchAll({ type: "window" });
+    clients.forEach(c => c.postMessage({ type: "SW_UPDATED", version: SW_VERSION }));
   })());
 });
 
-self.addEventListener("message", (event) => {
-  if (event.data && event.data.type === "SKIP_WAITING") self.skipWaiting();
-});
-
-// HTML: network-first (updates), others: cache-first
+// Network-first for HTML, cache-first for others
 self.addEventListener("fetch", (event) => {
   const req = event.request;
   const url = new URL(req.url);
@@ -65,7 +61,7 @@ self.addEventListener("fetch", (event) => {
   if (isHTML) {
     event.respondWith((async () => {
       try {
-        const fresh = await fetch(req, { cache: "no-store" });
+        const fresh = await fetch(req);
         const cache = await caches.open(CACHE_NAME);
         cache.put("./index.html", fresh.clone());
         return fresh;
@@ -80,7 +76,6 @@ self.addEventListener("fetch", (event) => {
   event.respondWith((async () => {
     const cached = await caches.match(req);
     if (cached) return cached;
-
     const fresh = await fetch(req);
     const cache = await caches.open(CACHE_NAME);
     cache.put(req, fresh.clone());
