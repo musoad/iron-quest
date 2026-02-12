@@ -6,7 +6,7 @@
    ✅ GitHub Pages / iOS friendly
 ========================= */
 
-const SW_VERSION = "v4.0.13"; // <-- bei JEDEM Update hochzählen
+const SW_VERSION = "v4.0.14"; // <-- bei JEDEM Update hochzählen
 const CACHE_NAME = `ironquest-${SW_VERSION}`;
 
 const ASSETS = [
