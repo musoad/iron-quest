@@ -1,122 +1,100 @@
-// js/health.js (ES Module)
-import { isoDate } from "./utils.js";
+/* health.js – Health tracking (Weight, BP, Pulse) ES Module */
 
-const KEY = "iq_health_v1";
+import { isoDate, loadJSON, saveJSON } from "./utils.js";
 
-function load() {
-  try { return JSON.parse(localStorage.getItem(KEY)) || []; }
-  catch { return []; }
+const KEY_HEALTH = "iq_health_v4";
+
+function getHealth() {
+  return loadJSON(KEY_HEALTH, { logs: [] });
 }
-function save(rows) {
-  localStorage.setItem(KEY, JSON.stringify(rows));
-}
-
-function recompositionIndex(weightKg, bodyfatPct) {
-  const w = Number(weightKg || 0);
-  const bf = Number(bodyfatPct || 0);
-  if (w <= 0 || bf <= 0 || bf >= 80) return null;
-  const lean = w * (1 - bf/100);
-  return Math.round(lean * 10) / 10; // Lean Mass (kg) als einfacher Recomp-Index
+function saveHealth(h) {
+  saveJSON(KEY_HEALTH, h);
 }
 
 export function renderHealthPanel(container) {
   if (!container) return;
 
-  const rows = load().sort((a,b)=> (a.date < b.date ? 1 : -1));
-  const today = isoDate(new Date());
+  const h = getHealth();
+  const logs = (h.logs || []).slice().sort((a, b) => (a.date < b.date ? 1 : -1));
 
   container.innerHTML = `
     <div class="card">
       <h2>Health</h2>
-      <p class="hint">Gewicht, KFA, Blutdruck & Puls – plus Recomp Index (Lean Mass)</p>
+      <p class="hint">Gewicht, Blutdruck & Puls. (Alles lokal gespeichert)</p>
+
+      <label>Datum
+        <input id="hDate" type="date" value="${isoDate(new Date())}">
+      </label>
 
       <div class="row2">
-        <label>Datum
-          <input id="hDate" type="date" value="${today}">
-        </label>
         <label>Gewicht (kg)
-          <input id="hW" type="number" step="0.1" inputmode="decimal" placeholder="z.B. 85.2">
-        </label>
-      </div>
-
-      <div class="row2">
-        <label>KFA (%)
-          <input id="hBF" type="number" step="0.1" inputmode="decimal" placeholder="z.B. 18.5">
+          <input id="hWeight" type="number" step="0.1" inputmode="decimal" placeholder="z.B. 82.4">
         </label>
         <label>Puls (bpm)
-          <input id="hPulse" type="number" step="1" inputmode="numeric" placeholder="z.B. 58">
+          <input id="hPulse" type="number" step="1" inputmode="numeric" placeholder="z.B. 62">
         </label>
       </div>
 
       <div class="row2">
         <label>Blutdruck SYS
-          <input id="hSys" type="number" step="1" inputmode="numeric" placeholder="z.B. 125">
+          <input id="hSys" type="number" step="1" inputmode="numeric" placeholder="z.B. 120">
         </label>
         <label>Blutdruck DIA
           <input id="hDia" type="number" step="1" inputmode="numeric" placeholder="z.B. 80">
         </label>
       </div>
 
-      <div class="row2">
-        <button id="hSave">Speichern</button>
-        <button id="hClear" class="secondary">Alle Health-Daten löschen</button>
-      </div>
+      <button id="hSave">Speichern</button>
+    </div>
 
-      <div class="divider"></div>
-
-      <div class="pill"><b>Letzter Recomp Index (Lean Mass):</b> <span id="hRecomp">—</span></div>
-
-      <div class="divider"></div>
-      <h3>Historie</h3>
+    <div class="card">
+      <h2>Verlauf</h2>
       <ul id="hList"></ul>
+      <button class="danger" id="hClear">Alle Health-Einträge löschen</button>
     </div>
   `;
 
-  const list = container.querySelector("#hList");
-  list.innerHTML = rows.length ? "" : "<li>—</li>";
+  const ul = container.querySelector("#hList");
+  ul.innerHTML = logs.length ? "" : "<li>—</li>";
 
-  let lastRecomp = null;
-
-  rows.forEach(r => {
-    const rec = recompositionIndex(r.weight, r.bodyfat);
-    if (lastRecomp == null && rec != null) lastRecomp = rec;
-
+  logs.forEach((x) => {
     const li = document.createElement("li");
     li.innerHTML = `
       <div class="entryRow">
         <div style="min-width:0;">
-          <div><b>${r.date}</b> • ${r.weight ?? "—"} kg • ${r.bodyfat ?? "—"}% KFA</div>
-          <div class="hint">Recomp(Lean): <b>${rec ?? "—"}</b> kg • BP: ${r.sys ?? "—"}/${r.dia ?? "—"} • Puls: ${r.pulse ?? "—"}</div>
+          <div class="entryTitle"><b>${x.date}</b></div>
+          <div class="hint">Gewicht: ${x.weight ?? "—"} kg • Puls: ${x.pulse ?? "—"} bpm • BP: ${x.sys ?? "—"}/${x.dia ?? "—"}</div>
         </div>
       </div>
     `;
-    list.appendChild(li);
+    ul.appendChild(li);
   });
 
-  container.querySelector("#hRecomp").textContent = lastRecomp == null ? "—" : `${lastRecomp} kg`;
+  container.querySelector("#hSave")?.addEventListener("click", () => {
+    const date = container.querySelector("#hDate").value || isoDate(new Date());
+    const weight = parseFloat(container.querySelector("#hWeight").value);
+    const pulse = parseInt(container.querySelector("#hPulse").value, 10);
+    const sys = parseInt(container.querySelector("#hSys").value, 10);
+    const dia = parseInt(container.querySelector("#hDia").value, 10);
 
-  container.querySelector("#hSave").onclick = () => {
-    const date = container.querySelector("#hDate").value || today;
-    const weight = Number(container.querySelector("#hW").value || 0) || null;
-    const bodyfat = Number(container.querySelector("#hBF").value || 0) || null;
-    const pulse = Number(container.querySelector("#hPulse").value || 0) || null;
-    const sys = Number(container.querySelector("#hSys").value || 0) || null;
-    const dia = Number(container.querySelector("#hDia").value || 0) || null;
+    const entry = {
+      date,
+      weight: Number.isFinite(weight) ? weight : null,
+      pulse: Number.isFinite(pulse) ? pulse : null,
+      sys: Number.isFinite(sys) ? sys : null,
+      dia: Number.isFinite(dia) ? dia : null
+    };
 
-    const all = load();
-    const idx = all.findIndex(x => x.date === date);
-    const row = { date, weight, bodyfat, sys, dia, pulse };
-
-    if (idx >= 0) all[idx] = row;
-    else all.push(row);
-
-    save(all);
+    const h2 = getHealth();
+    h2.logs ??= [];
+    h2.logs.push(entry);
+    saveHealth(h2);
     renderHealthPanel(container);
-  };
+  });
 
-  container.querySelector("#hClear").onclick = () => {
-    if (!confirm("Health-Daten wirklich löschen?")) return;
-    localStorage.removeItem(KEY);
+  container.querySelector("#hClear")?.addEventListener("click", () => {
+    if (!confirm("Wirklich alle Health-Einträge löschen?")) return;
+    saveHealth({ logs: [] });
     renderHealthPanel(container);
-  };
+  });
 }
