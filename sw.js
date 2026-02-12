@@ -1,12 +1,11 @@
 /* =========================
-   IRON QUEST – sw.js (iOS SAFE)
+   IRON QUEST – sw.js (FULL)
    ✅ Offline Cache
-   ✅ Auto-Update (skipWaiting + clients.claim)
-   ✅ Network-first für HTML/JS/CSS (damit Home-Screen Updates wirklich kommen)
-   ✅ Cache bust via SW_VERSION
+   ✅ Update stabil (skipWaiting + clients.claim)
+   ✅ iOS-friendly: Network-first for HTML + JS + CSS
 ========================= */
 
-const SW_VERSION = "v4.0.14";               // <-- bei JEDEM Update hochzählen
+const SW_VERSION = "v4.0.14"; // <-- bei jedem Update hochzählen
 const CACHE_NAME = `ironquest-${SW_VERSION}`;
 
 const ASSETS = [
@@ -16,7 +15,7 @@ const ASSETS = [
   "./manifest.json",
   "./sw.js",
 
-  // JS Modules
+  // JS Modules (wenn vorhanden, sonst ignoriert fetch fallback)
   "./js/app.js",
   "./js/utils.js",
   "./js/db.js",
@@ -29,7 +28,7 @@ const ASSETS = [
   "./js/health.js",
   "./js/boss.js",
   "./js/challenges.js",
-  "./js/backup.js",
+  "./js/backup.js"
 ];
 
 self.addEventListener("install", (event) => {
@@ -39,8 +38,11 @@ self.addEventListener("install", (event) => {
     try {
       await cache.addAll(ASSETS);
     } catch (e) {
-      // iOS/Safari kann bei addAll zicken → trotzdem installieren
-      // (die wichtigsten Dateien kommen später über network-first)
+      // Falls einzelne Dateien fehlen -> trotzdem installieren
+      // (GitHub Pages/Paths können manchmal abweichen)
+      for (const a of ASSETS) {
+        try { await cache.add(a); } catch (_) {}
+      }
     }
   })());
 });
@@ -48,32 +50,35 @@ self.addEventListener("install", (event) => {
 self.addEventListener("activate", (event) => {
   event.waitUntil((async () => {
     const keys = await caches.keys();
-    await Promise.all(keys.map((k) => (k !== CACHE_NAME ? caches.delete(k) : Promise.resolve())));
+    await Promise.all(keys.map((k) => (k !== CACHE_NAME ? caches.delete(k) : null)));
     await self.clients.claim();
   })());
 });
 
 self.addEventListener("message", (event) => {
-  if (event.data && event.data.type === "SKIP_WAITING") {
-    self.skipWaiting();
-  }
+  if (event.data && event.data.type === "SKIP_WAITING") self.skipWaiting();
 });
 
 function isHTML(req) {
   return req.mode === "navigate" || (req.headers.get("accept") || "").includes("text/html");
 }
-function isAsset(url) {
-  return url.pathname.endsWith(".js") || url.pathname.endsWith(".css") || url.pathname.endsWith(".json");
+function isJS(req) {
+  const url = new URL(req.url);
+  return url.pathname.endsWith(".js");
+}
+function isCSS(req) {
+  const url = new URL(req.url);
+  return url.pathname.endsWith(".css");
 }
 
+// Network-first for HTML + JS + CSS (updates!), cache-first fallback for others
 self.addEventListener("fetch", (event) => {
   const req = event.request;
   const url = new URL(req.url);
 
   if (url.origin !== self.location.origin) return;
 
-  // ✅ Network-first für HTML + JS/CSS/JSON (Updates sollen IMMER durchkommen)
-  if (isHTML(req) || isAsset(url)) {
+  if (isHTML(req) || isJS(req) || isCSS(req)) {
     event.respondWith((async () => {
       try {
         const fresh = await fetch(req, { cache: "no-store" });
@@ -84,10 +89,10 @@ self.addEventListener("fetch", (event) => {
         const cached = await caches.match(req);
         if (cached) return cached;
 
-        // Fallback: index.html offline
+        // Fallback auf index.html (für Navigation offline)
         if (isHTML(req)) {
-          const cachedIndex = await caches.match("./index.html");
-          return cachedIndex || new Response("Offline", { status: 503, headers: { "Content-Type": "text/plain" } });
+          const idx = await caches.match("./index.html");
+          return idx || new Response("Offline", { status: 503, headers: { "Content-Type": "text/plain" } });
         }
         return new Response("Offline", { status: 503, headers: { "Content-Type": "text/plain" } });
       }
@@ -95,7 +100,7 @@ self.addEventListener("fetch", (event) => {
     return;
   }
 
-  // Andere Requests: cache-first
+  // Other assets: cache-first
   event.respondWith((async () => {
     const cached = await caches.match(req);
     if (cached) return cached;
