@@ -1,152 +1,175 @@
-/* backup.js – Local Backup + optional WebDAV sync (ES Module) */
+/* IRON QUEST – backup.js (classic)
+   ✅ Offline-safe Export/Import JSON
+   ✅ Optional: Cloud Push/Pull (simple endpoint, wenn vorhanden)
+*/
+(function () {
+  const KEY_CLOUD = "ironquest_cloud_v4";
 
-import { downloadText, pickFileText, loadJSON, saveJSON } from "./utils.js";
-import { entriesGetAll, entriesAdd, entriesClear } from "./db.js";
+  function loadCfg(){ return window.IQ.loadJSON(KEY_CLOUD, { url:"", token:"" }); }
+  function saveCfg(v){ window.IQ.saveJSON(KEY_CLOUD, v); }
 
-const KEY_WEBDAV = "iq_webdav_v4";
+  async function exportAll(){
+    const entries = await window.IronQuestDB.getAll();
+    const payload = {
+      version: "v4",
+      exportedAt: new Date().toISOString(),
+      localStorage: { ...localStorage },
+      entries
+    };
+    const blob = new Blob([JSON.stringify(payload, null, 2)], { type:"application/json" });
+    const url = URL.createObjectURL(blob);
+    const a = document.createElement("a");
+    a.href = url;
+    a.download = `ironquest_backup_${Date.now()}.json`;
+    document.body.appendChild(a);
+    a.click();
+    a.remove();
+    setTimeout(()=>URL.revokeObjectURL(url), 1500);
+  }
 
-function getWebDAV() {
-  return loadJSON(KEY_WEBDAV, { url: "", user: "", pass: "", filename: "ironquest-backup.json" });
-}
-function saveWebDAV(cfg) {
-  saveJSON(KEY_WEBDAV, cfg);
-}
+  async function importAll(file){
+    const text = await file.text();
+    const data = JSON.parse(text);
 
-export function renderBackupPanel(container) {
-  if (!container) return;
+    if (!data || !Array.isArray(data.entries)) throw new Error("Ungültiges Backup.");
 
-  const cfg = getWebDAV();
+    // restore localStorage (safe-ish)
+    if (data.localStorage && typeof data.localStorage === "object") {
+      for (const [k,v] of Object.entries(data.localStorage)) {
+        try { localStorage.setItem(k, String(v)); } catch {}
+      }
+    }
 
-  container.innerHTML = `
-    <div class="card">
-      <h2>Backup</h2>
-      <p class="hint">Lokales Export/Import (JSON) + optional WebDAV Cloud Sync (Nextcloud/Synology).</p>
+    // restore entries (overwrite)
+    await window.IronQuestDB.clear();
+    await window.IronQuestDB.addMany(data.entries);
 
-      <div class="row2">
-        <button id="bkExport">Export JSON</button>
-        <button class="secondary" id="bkImport">Import JSON</button>
-      </div>
-    </div>
+    alert("Backup importiert ✅");
+    document.dispatchEvent(new CustomEvent("iq:refresh"));
+  }
 
-    <div class="card">
-      <h2>WebDAV Cloud Sync (optional)</h2>
-      <p class="hint">URL Beispiel: https://dein-server/remote.php/dav/files/USER/IRONQUEST/ironquest.json</p>
+  async function cloudPush(){
+    const cfg = loadCfg();
+    if (!cfg.url) return alert("Cloud URL fehlt.");
+    const payload = {
+      version: "v4",
+      exportedAt: new Date().toISOString(),
+      localStorage: { ...localStorage },
+      entries: await window.IronQuestDB.getAll(),
+    };
 
-      <label>WebDAV URL
-        <input id="wdUrl" placeholder="https://..." value="${cfg.url || ""}">
-      </label>
-      <div class="row2">
-        <label>User
-          <input id="wdUser" value="${cfg.user || ""}">
+    const res = await fetch(cfg.url, {
+      method: "PUT",
+      headers: {
+        "Content-Type": "application/json",
+        ...(cfg.token ? { "Authorization": `Bearer ${cfg.token}` } : {})
+      },
+      body: JSON.stringify(payload)
+    });
+
+    if (!res.ok) throw new Error("Cloud Push fehlgeschlagen.");
+    alert("Cloud Push ✅");
+  }
+
+  async function cloudPull(){
+    const cfg = loadCfg();
+    if (!cfg.url) return alert("Cloud URL fehlt.");
+
+    const res = await fetch(cfg.url, {
+      method: "GET",
+      headers: { ...(cfg.token ? { "Authorization": `Bearer ${cfg.token}` } : {}) }
+    });
+
+    if (!res.ok) throw new Error("Cloud Pull fehlgeschlagen.");
+    const data = await res.json();
+    if (!data || !Array.isArray(data.entries)) throw new Error("Ungültige Cloud Daten.");
+
+    await window.IronQuestDB.clear();
+    await window.IronQuestDB.addMany(data.entries);
+
+    // optional localStorage restore (nur wenn du willst)
+    if (data.localStorage && typeof data.localStorage === "object") {
+      for (const [k,v] of Object.entries(data.localStorage)) {
+        try { localStorage.setItem(k, String(v)); } catch {}
+      }
+    }
+
+    alert("Cloud Pull ✅");
+    document.dispatchEvent(new CustomEvent("iq:refresh"));
+  }
+
+  async function render(state){
+    const host = document.getElementById("backup");
+    if (!host) return;
+
+    const cfg = loadCfg();
+
+    host.innerHTML = `
+      <div class="card">
+        <h2>Backup</h2>
+        <p class="hint">Export/Import läuft offline. Cloud optional (PUT/GET JSON Endpoint).</p>
+
+        <div class="row2">
+          <button id="bkExport" type="button">Export JSON</button>
+          <label class="secondary" style="display:flex; align-items:center; justify-content:center; gap:10px;">
+            Import JSON
+            <input id="bkImport" type="file" accept="application/json" style="display:none;">
+          </label>
+        </div>
+
+        <div class="divider"></div>
+
+        <h3>Cloud Sync (optional)</h3>
+        <label>Cloud URL (PUT/GET)
+          <input id="cloudUrl" type="url" placeholder="https://example.com/ironquest.json" value="${cfg.url || ""}">
         </label>
-        <label>Password / App-Passwort
-          <input id="wdPass" type="password" value="${cfg.pass || ""}">
+        <label>Token (optional)
+          <input id="cloudToken" type="password" placeholder="Bearer Token (optional)" value="${cfg.token || ""}">
         </label>
+
+        <div class="row2">
+          <button id="cloudSave" class="secondary" type="button">Speichern</button>
+          <button id="cloudPush" type="button">Cloud Push</button>
+        </div>
+        <div class="row2">
+          <button id="cloudPull" class="secondary" type="button">Cloud Pull</button>
+          <button id="bkDangerClear" class="danger" type="button">Alle Daten löschen</button>
+        </div>
+
+        <p class="hint">Einträge: <b>${state.entries.length}</b></p>
       </div>
-      <label>Dateiname (nur Info)
-        <input id="wdFile" value="${cfg.filename || "ironquest-backup.json"}">
-      </label>
+    `;
 
-      <div class="row2">
-        <button class="secondary" id="wdSave">Config speichern</button>
-        <button id="wdUpload">⬆ Upload</button>
-        <button id="wdDownload">⬇ Download & Import</button>
-      </div>
+    host.querySelector("#bkExport")?.addEventListener("click", exportAll);
+    host.querySelector("#bkImport")?.addEventListener("change", async (e) => {
+      const f = e.target.files?.[0];
+      if (!f) return;
+      try { await importAll(f); }
+      catch (err) { alert(String(err?.message || err)); }
+      e.target.value = "";
+    });
 
-      <div class="pill" id="wdStatus">—</div>
-    </div>
-  `;
+    host.querySelector("#cloudSave")?.addEventListener("click", () => {
+      const url = host.querySelector("#cloudUrl")?.value || "";
+      const token = host.querySelector("#cloudToken")?.value || "";
+      saveCfg({ url:url.trim(), token:token.trim() });
+      alert("Cloud Settings gespeichert ✅");
+    });
 
-  async function exportJson() {
-    const entries = await entriesGetAll();
-    const payload = { version: 1, exportedAt: new Date().toISOString(), entries };
-    downloadText("ironquest-backup.json", JSON.stringify(payload, null, 2));
+    host.querySelector("#cloudPush")?.addEventListener("click", async () => {
+      try { await cloudPush(); } catch (e) { alert(String(e?.message || e)); }
+    });
+    host.querySelector("#cloudPull")?.addEventListener("click", async () => {
+      try { await cloudPull(); } catch (e) { alert(String(e?.message || e)); }
+    });
+
+    host.querySelector("#bkDangerClear")?.addEventListener("click", async () => {
+      if (!confirm("Wirklich alles löschen?")) return;
+      await window.IronQuestDB.clear();
+      alert("Gelöscht.");
+      document.dispatchEvent(new CustomEvent("iq:refresh"));
+    });
   }
 
-  async function importJsonText(text) {
-    const parsed = JSON.parse(text);
-    const entries = parsed?.entries;
-    if (!Array.isArray(entries)) throw new Error("Ungültige Datei (entries fehlt).");
-
-    const ok = confirm(`Importiert ${entries.length} Einträge.\n\n⚠️ Aktuelle DB vorher löschen?`);
-    if (ok) await entriesClear();
-
-    for (const e of entries) {
-      const copy = { ...e };
-      delete copy.id; // new ids
-      await entriesAdd(copy);
-    }
-  }
-
-  container.querySelector("#bkExport")?.addEventListener("click", exportJson);
-
-  container.querySelector("#bkImport")?.addEventListener("click", async () => {
-    try {
-      const text = await pickFileText(".json");
-      await importJsonText(text);
-      alert("Import fertig ✅");
-      location.reload();
-    } catch (e) {
-      alert("Import Fehler: " + (e?.message || e));
-    }
-  });
-
-  function setStatus(msg) {
-    const el = container.querySelector("#wdStatus");
-    if (el) el.textContent = msg;
-  }
-
-  container.querySelector("#wdSave")?.addEventListener("click", () => {
-    const url = container.querySelector("#wdUrl").value.trim();
-    const user = container.querySelector("#wdUser").value.trim();
-    const pass = container.querySelector("#wdPass").value;
-    const filename = container.querySelector("#wdFile").value.trim() || "ironquest-backup.json";
-    saveWebDAV({ url, user, pass, filename });
-    setStatus("Config gespeichert ✅");
-  });
-
-  container.querySelector("#wdUpload")?.addEventListener("click", async () => {
-    try {
-      const c = getWebDAV();
-      if (!c.url || !c.user || !c.pass) return setStatus("Bitte URL/User/Pass setzen.");
-      setStatus("Upload…");
-      const entries = await entriesGetAll();
-      const payload = { version: 1, exportedAt: new Date().toISOString(), entries };
-
-      const res = await fetch(c.url, {
-        method: "PUT",
-        headers: {
-          "Content-Type": "application/json",
-          "Authorization": "Basic " + btoa(`${c.user}:${c.pass}`)
-        },
-        body: JSON.stringify(payload)
-      });
-      if (!res.ok) throw new Error(`HTTP ${res.status}`);
-      setStatus("Upload OK ✅");
-    } catch (e) {
-      setStatus("Upload Fehler: " + (e?.message || e));
-    }
-  });
-
-  container.querySelector("#wdDownload")?.addEventListener("click", async () => {
-    try {
-      const c = getWebDAV();
-      if (!c.url || !c.user || !c.pass) return setStatus("Bitte URL/User/Pass setzen.");
-      setStatus("Download…");
-
-      const res = await fetch(c.url, {
-        method: "GET",
-        headers: { "Authorization": "Basic " + btoa(`${c.user}:${c.pass}`) }
-      });
-      if (!res.ok) throw new Error(`HTTP ${res.status}`);
-      const text = await res.text();
-
-      await importJsonText(text);
-      setStatus("Download + Import OK ✅");
-      alert("Cloud Import fertig ✅");
-      location.reload();
-    } catch (e) {
-      setStatus("Download Fehler: " + (e?.message || e));
-    }
-  });
-}
+  window.IronQuestBackup = { render };
+})();
