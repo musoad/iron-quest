@@ -1,9 +1,12 @@
-// js/app.js (ES Module)
-import { isoDate } from "./utils.js";
-import { entriesGetAll, entriesAdd } from "./db.js";
+/* app.js – Main ES Module boot (iOS/Safari stable) */
+
+import { $, $$, isoDate, htmlEscape } from "./utils.js";
+import { entriesGetAll, entriesAdd, entriesDelete } from "./db.js";
+
 import { EXERCISES, getExercise } from "./exercises.js";
 import { calcEntryXP } from "./xpSystem.js";
-import { getPlayerState, computeWeekFromStart, ensureStartDate } from "./progression.js";
+
+import { ensureStartDate, setStartDate, computeWeekFromStart, clampWeek, getPlayerState } from "./progression.js";
 import { renderSkilltreePanel, skillMultiplierForType } from "./skilltree.js";
 import { renderAnalyticsPanel } from "./analytics.js";
 import { renderHealthPanel } from "./health.js";
@@ -11,247 +14,257 @@ import { renderBossPanel } from "./boss.js";
 import { renderChallengePanel, challengeMultiplier } from "./challenges.js";
 import { renderBackupPanel } from "./backup.js";
 
-function $(id){ return document.getElementById(id); }
+function sortEntriesDesc(arr) {
+  return (arr || []).slice().sort((a, b) => {
+    if (a.date !== b.date) return a.date < b.date ? 1 : -1;
+    return (b.id || 0) - (a.id || 0);
+  });
+}
 
 function setActiveTab(tabId) {
-  document.querySelectorAll("nav button[data-tab]").forEach(b => {
-    b.classList.toggle("active", b.getAttribute("data-tab") === tabId);
-  });
-  document.querySelectorAll("main section.tab").forEach(s => {
-    s.classList.toggle("active", s.id === tabId);
-  });
-  location.hash = tabId;
+  $$("nav button").forEach(b => b.classList.toggle("active", b.dataset.tab === tabId));
+  $$(".tab").forEach(s => s.classList.toggle("active", s.id === tabId));
 }
 
-function bindTabs() {
-  document.addEventListener("click", (e) => {
-    const btn = e.target.closest("nav button[data-tab]");
-    if (!btn) return;
-    e.preventDefault();
-    setActiveTab(btn.getAttribute("data-tab"));
-  });
-
-  const initial = (location.hash || "#dashboard").replace("#","");
-  setActiveTab(initial);
-}
-
-function sortEntriesDesc(entries){
-  return [...entries].sort((a,b)=>{
-    if (a.date !== b.date) return a.date < b.date ? 1 : -1;
-    return (b.id||0)-(a.id||0);
+function wireTabs() {
+  $$("nav button").forEach(btn => {
+    btn.addEventListener("click", () => {
+      setActiveTab(btn.dataset.tab);
+    });
   });
 }
 
-function renderDashboard(container, entries, curWeek, player) {
-  if (!container) return;
-
-  const today = isoDate(new Date());
-  const todayXp = entries.filter(e=>e.date===today).reduce((s,e)=>s+(e.xp||0),0);
-  const weekXp  = entries.filter(e=>Number(e.week)===Number(curWeek)).reduce((s,e)=>s+(e.xp||0),0);
-
-  container.innerHTML = `
-    <div class="card">
-      <h2>Dashboard</h2>
-      <div class="row2">
-        <div class="pill"><b>Woche:</b> W${curWeek}</div>
-        <div class="pill"><b>Heute XP:</b> ${todayXp}</div>
-      </div>
-      <div class="row2">
-        <div class="pill"><b>Woche XP:</b> ${weekXp}</div>
-        <div class="pill"><b>Einträge:</b> ${entries.length}</div>
-      </div>
-      <div class="divider"></div>
-      <div class="hint">Nutze Log → Eintrag speichern. Analytics zeigt Trends.</div>
-    </div>
+function renderPlayerInfo(player) {
+  const el = $("#playerInfo");
+  if (!el) return;
+  el.innerHTML = `
+    <div class="pill"><b>Level:</b> ${player.level} (${player.title})</div>
+    <div class="pill"><b>Streak:</b> ${player.streak} 🔥</div>
+    <div class="pill"><b>Woche:</b> W${player.week}</div>
+    <div class="pill"><b>Heute:</b> ${player.todayXp} XP</div>
+    <div class="pill"><b>Woche:</b> ${player.weekXp} XP</div>
+    <div class="pill"><b>Gesamt:</b> ${player.totalXp} XP</div>
   `;
 }
 
-function renderLog(container, entries, curWeek) {
-  if (!container) return;
+function renderDashboard(container, player) {
+  const start = ensureStartDate();
+  container.innerHTML = `
+    <div class="card">
+      <h2>Dashboard</h2>
+      <p class="hint">Startdatum steuert die Wochenlogik.</p>
 
-  const exOptions = EXERCISES.map(ex => `<option value="${ex.name}">${ex.name}</option>`).join("");
+      <label>Startdatum
+        <input id="startDate" type="date" value="${start}">
+      </label>
+      <button id="saveStart" class="secondary">Startdatum speichern</button>
+
+      <div class="row2" style="margin-top:10px;">
+        <div class="pill"><b>Heute XP:</b> ${player.todayXp}</div>
+        <div class="pill"><b>Streak:</b> ${player.streak} 🔥</div>
+      </div>
+    </div>
+  `;
+
+  container.querySelector("#saveStart")?.addEventListener("click", async () => {
+    const v = container.querySelector("#startDate").value;
+    if (!v) return alert("Bitte Datum wählen.");
+    setStartDate(v);
+    await boot(); // re-render
+  });
+}
+
+function renderLog(container, player, entries) {
+  const today = isoDate(new Date());
+  const start = ensureStartDate();
+
+  const exOptions = EXERCISES.map(e => `<option value="${htmlEscape(e.name)}">${htmlEscape(e.name)}</option>`).join("");
 
   container.innerHTML = `
     <div class="card">
       <h2>Log</h2>
 
-      <div class="row2">
-        <label>Datum
-          <input id="logDate" type="date" value="${isoDate(new Date())}">
-        </label>
+      <label>Datum
+        <input id="logDate" type="date" value="${today}">
+      </label>
 
-        <label>Übung
-          <select id="logExercise">${exOptions}</select>
-        </label>
-      </div>
+      <label>Übung
+        <select id="logExercise">${exOptions}</select>
+      </label>
 
       <div class="row2">
-        <label>Sätze
-          <input id="logSets" type="number" min="0" step="1" inputmode="numeric" placeholder="z.B. 4">
+        <label>Gewicht (kg) – optional
+          <input id="logWeight" type="number" step="0.5" inputmode="decimal" placeholder="z.B. 24">
         </label>
         <label>Reps pro Satz
-          <input id="logReps" type="number" min="0" step="1" inputmode="numeric" placeholder="z.B. 10">
+          <input id="logReps" type="number" step="1" inputmode="numeric" placeholder="z.B. 10">
         </label>
       </div>
 
-      <div class="row2">
-        <label>Walking Minuten (NEAT)
-          <input id="logMin" type="number" min="0" step="1" inputmode="numeric" placeholder="z.B. 60">
-        </label>
-        <div class="pill"><b>Preview XP:</b> <span id="logXP">—</span></div>
-      </div>
+      <label>Sätze
+        <input id="logSets" type="number" step="1" inputmode="numeric" placeholder="z.B. 4">
+      </label>
 
       <div class="row2">
-        <button id="logSave">Eintrag speichern</button>
-        <button id="logClearPreview" class="secondary">Reset</button>
+        <div class="pill"><b>Week:</b> <span id="logWeek">—</span></div>
+        <div class="pill"><b>XP Preview:</b> <span id="logXp">—</span></div>
       </div>
 
-      <div class="divider"></div>
+      <button id="logSave">Speichern</button>
+    </div>
 
-      <h3>Letzte 15 Einträge</h3>
+    <div class="card">
+      <h2>Einträge</h2>
       <ul id="logList"></ul>
     </div>
   `;
 
-  const exSel = container.querySelector("#logExercise");
   const dateEl = container.querySelector("#logDate");
+  const exEl = container.querySelector("#logExercise");
   const setsEl = container.querySelector("#logSets");
   const repsEl = container.querySelector("#logReps");
-  const minEl  = container.querySelector("#logMin");
-  const xpEl   = container.querySelector("#logXP");
+  const wEl = container.querySelector("#logWeek");
+  const xpEl = container.querySelector("#logXp");
 
-  function computePreview(){
-    const dateISO = dateEl.value || isoDate(new Date());
-    const w = computeWeekFromStart(ensureStartDate(), dateISO);
-    const exName = exSel.value;
+  function updatePreview() {
+    const date = dateEl.value || today;
+    const week = clampWeek(computeWeekFromStart(start, date));
+    wEl.textContent = `W${week}`;
 
-    const ex = getExercise(exName);
-    const type = ex?.type || "Other";
+    const ex = getExercise(exEl.value);
+    const sets = parseInt(setsEl.value || "0", 10) || 0;
+    const reps = parseInt(repsEl.value || "0", 10) || 0;
 
-    const mult = {
-      skill: skillMultiplierForType(type),
-      challenge: challengeMultiplier(dateISO),
-    };
+    const baseXP = calcEntryXP({ exercise: ex, sets, reps });
+    const skillMult = skillMultiplierForType(ex.type);
+    const challMult = challengeMultiplier();
 
-    const minutes = Number(minEl.value || 0) || 0;
-
-    const xp = calcEntryXP({ exerciseName: exName, minutes }, mult);
-    xpEl.textContent = `${xp} XP (W${w})`;
-    return { xp, w, dateISO, exName, type };
+    const xp = Math.round(baseXP * skillMult * challMult);
+    xpEl.textContent = `${xp} XP (base ${baseXP} • skill x${skillMult.toFixed(2)} • ch x${challMult.toFixed(2)})`;
   }
 
-  ["change","input"].forEach(ev=>{
-    [exSel, dateEl, setsEl, repsEl, minEl].forEach(el=> el.addEventListener(ev, computePreview));
+  [dateEl, exEl, setsEl, repsEl].forEach(el => {
+    el?.addEventListener("input", updatePreview);
+    el?.addEventListener("change", updatePreview);
   });
+  updatePreview();
 
-  computePreview();
+  container.querySelector("#logSave")?.addEventListener("click", async () => {
+    const date = dateEl.value || today;
+    const week = clampWeek(computeWeekFromStart(ensureStartDate(), date));
+    const ex = getExercise(exEl.value);
 
-  container.querySelector("#logSave").onclick = async () => {
-    const { xp, w, dateISO, exName, type } = computePreview();
-    const sets = Number(setsEl.value || 0) || null;
-    const reps = Number(repsEl.value || 0) || null;
-    const minutes = Number(minEl.value || 0) || null;
+    const sets = parseInt(setsEl.value || "0", 10) || 0;
+    const reps = parseInt(repsEl.value || "0", 10) || 0;
+    const weight = parseFloat(container.querySelector("#logWeight").value);
 
-    const ex = getExercise(exName);
-    const rec = ex?.recommended || null;
+    const baseXP = calcEntryXP({ exercise: ex, sets, reps });
+    const skillMult = skillMultiplierForType(ex.type);
+    const challMult = challengeMultiplier();
 
-    const detailParts = [];
-    if (rec?.sets) detailParts.push(`Empf Sets: ${rec.sets}`);
-    if (rec?.reps) detailParts.push(`Empf Reps: ${rec.reps}`);
-    if (sets != null) detailParts.push(`Ist Sets: ${sets}`);
-    if (reps != null) detailParts.push(`Ist Reps: ${reps}`);
-    if (minutes != null && minutes > 0) detailParts.push(`Min: ${minutes}`);
-    if (ex?.desc) detailParts.push(ex.desc);
+    const xp = Math.round(baseXP * skillMult * challMult);
+
+    const detail = [
+      `Type: ${ex.type}`,
+      `Empf: ${ex.recommended?.sets ?? "—"} Sätze • ${ex.recommended?.reps ?? "—"} Reps`,
+      `Ist: ${sets}×${reps}${Number.isFinite(weight) ? ` @ ${weight}kg` : ""}`,
+      `Skill x${skillMult.toFixed(2)}`,
+      `Challenge x${challMult.toFixed(2)}`
+    ].join(" • ");
 
     await entriesAdd({
-      date: dateISO,
-      week: w,
-      exercise: exName,
-      type,
-      detail: detailParts.join(" • "),
-      xp
+      date,
+      week,
+      exercise: ex.name,
+      type: ex.type,
+      sets,
+      reps,
+      weight: Number.isFinite(weight) ? weight : null,
+      xp,
+      detail
     });
 
-    await boot(); // rerender alles
+    await boot();
     alert(`Gespeichert: +${xp} XP ✅`);
-  };
+  });
 
-  container.querySelector("#logClearPreview").onclick = () => {
-    setsEl.value = "";
-    repsEl.value = "";
-    minEl.value = "";
-    computePreview();
-  };
-
+  // render list
   const ul = container.querySelector("#logList");
-  const recent = sortEntriesDesc(entries).slice(0,15);
-  ul.innerHTML = recent.length ? "" : "<li>—</li>";
-  recent.forEach(e=>{
+  const sorted = sortEntriesDesc(entries);
+  ul.innerHTML = sorted.length ? "" : "<li>—</li>";
+
+  sorted.slice(0, 60).forEach(e => {
     const li = document.createElement("li");
-    li.innerHTML = `<div class="entryRow"><div style="min-width:0;"><b>${e.date}</b> • ${e.exercise}<div class="hint">${e.type} • ${e.detail||""}</div></div><span class="badge">${e.xp} XP</span></div>`;
+    li.innerHTML = `
+      <div class="entryRow">
+        <div style="min-width:0;">
+          <div class="entryTitle"><b>${e.date}</b> • W${e.week} • ${htmlEscape(e.exercise)}</div>
+          <div class="hint">${htmlEscape(e.detail || "")}</div>
+        </div>
+        <div class="row" style="margin:0;">
+          <span class="badge">${e.xp} XP</span>
+          <button class="danger" data-del="${e.id}">Del</button>
+        </div>
+      </div>
+    `;
     ul.appendChild(li);
+  });
+
+  ul.querySelectorAll("[data-del]").forEach(btn => {
+    btn.addEventListener("click", async () => {
+      const id = parseInt(btn.getAttribute("data-del"), 10);
+      if (!confirm("Eintrag löschen?")) return;
+      await entriesDelete(id);
+      await boot();
+    });
   });
 }
 
-async function boot(){
-  const player = getPlayerState(await entriesGetAll());
-  const start = ensureStartDate();
-  const today = isoDate(new Date());
-  const curWeek = computeWeekFromStart(start, today);
-
+async function boot() {
   const entries = await entriesGetAll();
+  const player = getPlayerState(entries);
 
-  // Header info
-  $("playerInfo").textContent = `W${curWeek} • Total XP: ${player.totalXp} • Level: ${player.level}`;
+  renderPlayerInfo(player);
 
   // Panels
-  renderDashboard($("dashboard"), entries, curWeek, player);
-  renderLog($("log"), entries, curWeek);
-  renderSkilltreePanel($("skills"), entries, curWeek);
-  renderAnalyticsPanel($("analytics"), entries, curWeek);
-  renderHealthPanel($("health"));
-  renderBossPanel($("boss"), entries, curWeek);
-  renderChallengePanel($("challenge"), entries, curWeek);
-  renderBackupPanel($("backup"));
+  renderDashboard($("#dashboard"), player);
+  renderLog($("#log"), player, entries);
+
+  renderSkilltreePanel($("#skills"), player, entries);
+  renderAnalyticsPanel($("#analytics"), player, entries);
+  renderHealthPanel($("#health"));
+
+  // Boss clears add XP entry
+  renderBossPanel($("#boss"), player, entries, async (boss) => {
+    await entriesAdd({
+      date: isoDate(new Date()),
+      week: player.week,
+      exercise: `Boss Cleared: ${boss.name}`,
+      type: "Boss",
+      xp: boss.xp,
+      detail: `Boss Week ${boss.week}`
+    });
+  });
+
+  renderChallengePanel($("#challenge"), player);
+  renderBackupPanel($("#backup"));
+
+  // Ensure first tab is active
+  setActiveTab("dashboard");
 }
 
-// Service Worker update trigger (iOS Homescreen braucht oft “manual” kick)
-function setupSWUpdateButton(){
-  const btn = $("btnUpdate");
-  if (!btn) return;
+function init() {
+  wireTabs();
+  boot().catch((e) => {
+    console.error(e);
+    const el = $("#playerInfo");
+    if (el) el.textContent = "JS Fehler (Details in Konsole).";
+  });
 
-  btn.onclick = async () => {
-    if (!("serviceWorker" in navigator)) return alert("Kein Service Worker verfügbar.");
-    const reg = await navigator.serviceWorker.getRegistration();
-    if (!reg) return alert("SW nicht registriert.");
-
-    await reg.update();
-    if (reg.waiting) {
-      reg.waiting.postMessage({ type: "SKIP_WAITING" });
-      alert("Update angewendet ✅ App neu öffnen (komplett schließen).");
-    } else {
-      alert("Kein Update gefunden. (Oder schon aktuell)");
-    }
-  };
-}
-
-async function init(){
-  bindTabs();
-  setupSWUpdateButton();
-
-  // SW register
+  // SW (optional)
   if ("serviceWorker" in navigator) {
-    try {
-      const reg = await navigator.serviceWorker.register("./sw.js");
-      reg.addEventListener("updatefound", () => {
-        // optional: could show badge
-      });
-    } catch (e) {
-      console.warn("SW register failed", e);
-    }
+    navigator.serviceWorker.register("./sw.js").catch(console.warn);
   }
-
-  await boot();
 }
 
 init();
