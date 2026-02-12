@@ -1,82 +1,18 @@
-// analyticsPro.js
-import { $, isoDate, addDays, startOfWeekMonday } from "./utils.js";
+import { $, fmt } from "./utils.js";
 
-export function ensureAnalyticsTab(){
-  const nav = document.querySelector("nav.tabs");
-  const main = document.querySelector("main");
-  if (!nav || !main) return;
-
-  if (!document.querySelector('.tab[data-tab="analytics"]')) {
-    const btn = document.createElement("button");
-    btn.type="button";
-    btn.className="tab";
-    btn.dataset.tab="analytics";
-    btn.textContent="Analytics";
-    const exportBtn = nav.querySelector('.tab[data-tab="export"]');
-    if (exportBtn) nav.insertBefore(btn, exportBtn);
-    else nav.appendChild(btn);
-  }
-
-  if (!document.getElementById("tab-analytics")) {
-    const sec = document.createElement("section");
-    sec.id="tab-analytics";
-    sec.className="panel";
-    sec.innerHTML = `
-      <div class="card">
-        <h2>Advanced Analytics</h2>
-        <p class="hint">Echte Canvas Graphen (offline).</p>
-
-        <div class="row2">
-          <div class="pill"><b>Woche:</b> <span id="anWeek">—</span></div>
-          <div class="pill"><b>Trend:</b> <span id="anTrend">—</span></div>
-        </div>
-
-        <div class="divider"></div>
-
-        <h2>Wochen-XP (letzte 10 Wochen)</h2>
-        <canvas id="chartWeeks" width="900" height="240" style="width:100%; height:auto; border-radius:12px;"></canvas>
-
-        <div class="divider"></div>
-
-        <h2>XP nach Typ (aktuelle Woche)</h2>
-        <canvas id="chartTypes" width="900" height="240" style="width:100%; height:auto; border-radius:12px;"></canvas>
-
-        <div class="divider"></div>
-
-        <h2>⭐ Heatmap (aktuelle Woche)</h2>
-        <div id="starHeat" class="calGrid"></div>
-
-        <div class="divider"></div>
-
-        <h2>Top 10 Übungen (Woche)</h2>
-        <ul id="anTop" class="skilllist"></ul>
-      </div>
-    `;
-    main.appendChild(sec);
-  }
-}
-
-function pctChange(cur, prev){
-  if (prev <= 0 && cur > 0) return "↑ neu";
-  if (prev <= 0 && cur <= 0) return "—";
-  const p = ((cur - prev) / prev) * 100;
-  const sign = p >= 0 ? "+" : "";
-  return `${sign}${Math.round(p)}%`;
-}
-
-function drawBars(canvas, labels, values){
+function drawBarChart(canvas, labels, values) {
   if (!canvas) return;
   const ctx = canvas.getContext("2d");
   const W = canvas.width, H = canvas.height;
   ctx.clearRect(0,0,W,H);
 
-  const pad = 24;
+  const pad = 28;
   const innerW = W - pad*2;
   const innerH = H - pad*2;
 
   const maxV = Math.max(1, ...values);
   const n = values.length;
-  const gap = Math.max(6, Math.floor(innerW / (n*12)));
+  const gap = Math.max(8, Math.floor(innerW / (n*10)));
   const barW = Math.floor((innerW - gap*(n-1)) / n);
 
   ctx.globalAlpha = 0.25;
@@ -84,8 +20,8 @@ function drawBars(canvas, labels, values){
   ctx.globalAlpha = 1;
 
   for (let i=0;i<n;i++){
-    const v = values[i] || 0;
-    const h = Math.round((v/maxV) * (innerH-30));
+    const v = values[i];
+    const h = Math.round((v/maxV) * (innerH-22));
     const x = pad + i*(barW+gap);
     const y = pad + (innerH - h);
 
@@ -98,90 +34,169 @@ function drawBars(canvas, labels, values){
   }
 }
 
-export function renderAnalyticsPro(entries, curWeek, thr, starsForDayFn, getWeekFromDateFn, startDateISO){
-  ensureAnalyticsTab();
+function drawLine(canvas, labels, values) {
+  if (!canvas) return;
+  const ctx = canvas.getContext("2d");
+  const W = canvas.width, H = canvas.height;
+  ctx.clearRect(0,0,W,H);
 
-  // Weeks map
+  const pad = 28;
+  const innerW = W - pad*2;
+  const innerH = H - pad*2;
+
+  const maxV = Math.max(1, ...values);
+  const minV = Math.min(...values, 0);
+  const range = Math.max(1, maxV - minV);
+
+  const pts = values.map((v, i) => {
+    const x = pad + (i / Math.max(1, values.length - 1)) * innerW;
+    const y = pad + innerH - ((v - minV) / range) * innerH;
+    return {x,y};
+  });
+
+  ctx.beginPath();
+  pts.forEach((p,i)=> i===0 ? ctx.moveTo(p.x,p.y) : ctx.lineTo(p.x,p.y));
+  ctx.strokeStyle = "#ffffff";
+  ctx.lineWidth = 3;
+  ctx.globalAlpha = 0.9;
+  ctx.stroke();
+  ctx.globalAlpha = 1;
+
+  pts.forEach(p=>{
+    ctx.beginPath();
+    ctx.arc(p.x,p.y,4,0,Math.PI*2);
+    ctx.fill();
+  });
+
+  ctx.globalAlpha = 0.85;
+  ctx.font = "18px system-ui";
+  ctx.fillText(labels[0] || "", pad, 20);
+  ctx.globalAlpha = 1;
+}
+
+export function renderAnalyticsPanel(container, entries, currentWeek) {
+  container.innerHTML = `
+    <div class="card">
+      <h2>📊 Advanced Analytics</h2>
+      <p class="hint">Echte Canvas-Charts (Offline). Fokus: Trend, Top-Übungen, Typ-Verteilung.</p>
+
+      <div class="row2">
+        <div class="pill"><b>Aktuelle Woche:</b> W${currentWeek}</div>
+        <div class="pill"><b>Einträge:</b> ${fmt(entries.length)}</div>
+      </div>
+
+      <div class="divider"></div>
+
+      <h3>Wochen-XP (letzte 12 Wochen)</h3>
+      <div class="canvasBox"><canvas id="anWeekBar" width="900" height="260"></canvas></div>
+      <p class="hint" id="anWeekHint">—</p>
+
+      <div class="divider"></div>
+
+      <div class="grid2">
+        <div class="card">
+          <h3>Top 10 Übungen (nach XP)</h3>
+          <ul id="anTopEx" class="list"></ul>
+        </div>
+        <div class="card">
+          <h3>XP nach Typ</h3>
+          <ul id="anType" class="list"></ul>
+        </div>
+      </div>
+    </div>
+  `;
+
   const weekMap = {};
-  for (const e of entries){
-    const w = e.week || getWeekFromDateFn(e.date);
+  for (const e of entries) {
+    const w = Number(e.week || 1);
     weekMap[w] = (weekMap[w] || 0) + (e.xp || 0);
   }
 
+  const startW = Math.max(1, currentWeek - 11);
   const weeks = [];
-  for (let w = Math.max(1, curWeek-9); w <= curWeek; w++) weeks.push(w);
+  for (let w = startW; w <= currentWeek; w++) weeks.push(w);
 
-  const vals = weeks.map(w=>weekMap[w]||0);
-  const labels = weeks.map(w=>`W${w}`);
+  const labels = weeks.map(w => `W${w}`);
+  const vals = weeks.map(w => weekMap[w] || 0);
 
-  const cur = weekMap[curWeek] || 0;
-  const prev = weekMap[curWeek-1] || 0;
+  drawBarChart($("#anWeekBar"), labels, vals);
 
-  if ($("#anWeek")) $("#anWeek").textContent = `W${curWeek}`;
-  if ($("#anTrend")) $("#anTrend").textContent = `${pctChange(cur, prev)} (${cur} XP)`;
+  const cur = weekMap[currentWeek] || 0;
+  const prev = weekMap[currentWeek-1] || 0;
+  const trend =
+    prev <= 0 && cur > 0 ? "↑ neu" :
+    prev <= 0 ? "—" :
+    `${Math.round(((cur-prev)/prev)*100)}%`;
 
-  drawBars($("#chartWeeks"), labels, vals);
+  $("#anWeekHint").textContent = `Trend vs. letzte Woche: ${trend} (W${currentWeek}: ${fmt(cur)} XP, W${currentWeek-1}: ${fmt(prev)} XP)`;
 
-  // Type distribution current week
-  const typeMap = {};
-  for (const e of entries){
-    if ((e.week || getWeekFromDateFn(e.date)) !== curWeek) continue;
-    const t = e.type || "Other";
-    typeMap[t] = (typeMap[t] || 0) + (e.xp || 0);
-  }
-  const dist = Object.entries(typeMap).sort((a,b)=>b[1]-a[1]).slice(0,8);
-  drawBars($("#chartTypes"), dist.map(x=>x[0].slice(0,6)), dist.map(x=>Math.round(x[1])));
-
-  // Top 10 exercises
+  // Top Exercises
   const exMap = {};
-  for (const e of entries){
-    if ((e.week || getWeekFromDateFn(e.date)) !== curWeek) continue;
-    const name = String(e.exercise||"");
+  for (const e of entries) {
+    if (e.week !== currentWeek) continue;
+    const name = String(e.exercise || "—");
     if (name.startsWith("Bossfight CLEARED")) continue;
     exMap[name] = (exMap[name] || 0) + (e.xp || 0);
   }
   const top10 = Object.entries(exMap).sort((a,b)=>b[1]-a[1]).slice(0,10);
-  const ul = $("#anTop");
-  if (ul){
-    ul.innerHTML = top10.length ? "" : "<li>—</li>";
-    top10.forEach(([name,xp],i)=>{
-      const li=document.createElement("li");
-      li.innerHTML = `<div class="entryRow"><div style="min-width:0;"><b>${i+1}.</b> ${name}</div><span class="badge">${Math.round(xp)} XP</span></div>`;
-      ul.appendChild(li);
-    });
-  }
 
-  // Star heat (7 days of current week)
-  const start = startDateISO;
-  const weekStart = addDays(start, (curWeek-1)*7);
-  const monday = startOfWeekMonday(weekStart);
-  const days = Array.from({length:7}, (_,i)=>addDays(monday,i));
+  const ulTop = $("#anTopEx");
+  ulTop.innerHTML = top10.length ? "" : `<li>—</li>`;
+  top10.forEach(([name, xp], i) => {
+    const li = document.createElement("li");
+    li.innerHTML = `<div class="entryRow"><div><b>${i+1}.</b> ${name}</div><span class="badge">${fmt(Math.round(xp))} XP</span></div>`;
+    ulTop.appendChild(li);
+  });
 
-  const dayXP = Object.fromEntries(days.map(d=>[d,0]));
-  for (const e of entries){
-    if ((e.week || getWeekFromDateFn(e.date)) !== curWeek) continue;
-    if (dayXP[e.date] != null) dayXP[e.date] += (e.xp||0);
+  // Type Dist
+  const typeMap = {};
+  for (const e of entries) {
+    if (e.week !== currentWeek) continue;
+    const t = e.type || "Other";
+    typeMap[t] = (typeMap[t] || 0) + (e.xp || 0);
   }
+  const dist = Object.entries(typeMap).sort((a,b)=>b[1]-a[1]);
+  const total = dist.reduce((s,[_t,x])=>s+x,0) || 1;
 
-  const grid = $("#starHeat");
-  if (grid){
-    const DOW = ["Mo","Di","Mi","Do","Fr","Sa","So"];
-    grid.innerHTML = "";
-    for (let i=0;i<7;i++){
-      const d = days[i];
-      const xp = dayXP[d]||0;
-      const s = starsForDayFn(xp, thr);
-      const cell=document.createElement("div");
-      cell.className="calCell";
-      cell.innerHTML = `
-        <div class="calTop">
-          <div class="calDow">${DOW[i]}</div>
-          <div class="calDate">${d.slice(5)}</div>
-        </div>
-        <div class="calXP"><b>${xp}</b> XP</div>
-        <div class="calStars">${s}</div>
-      `;
-      grid.appendChild(cell);
-    }
-  }
+  const ulType = $("#anType");
+  ulType.innerHTML = dist.length ? "" : `<li>—</li>`;
+  dist.forEach(([t,x]) => {
+    const pct = Math.round((x/total)*100);
+    const li = document.createElement("li");
+    li.innerHTML = `<div class="entryRow"><div><b>${t}</b> <span class="small">(${pct}%)</span></div><span class="badge">${fmt(Math.round(x))} XP</span></div>`;
+    ulType.appendChild(li);
+  });
+}
+
+export function renderDashboardMiniAnalytics(container, entries, currentWeek) {
+  const weekMap = {};
+  for (const e of entries) weekMap[e.week] = (weekMap[e.week] || 0) + (e.xp || 0);
+
+  const cur = weekMap[currentWeek] || 0;
+  const prev = weekMap[currentWeek-1] || 0;
+  const trend =
+    prev <= 0 && cur > 0 ? "↑ neu" :
+    prev <= 0 ? "—" :
+    `${Math.round(((cur-prev)/prev)*100)}%`;
+
+  // Spark line: simple line chart
+  const weeks = [];
+  for (let w = Math.max(1, currentWeek-7); w <= currentWeek; w++) weeks.push(w);
+  const labels = weeks.map(w=>`W${w}`);
+  const vals = weeks.map(w=>weekMap[w]||0);
+
+  container.innerHTML = `
+    <div class="card">
+      <h2>Mini-Analytics</h2>
+      <div class="row2">
+        <div class="pill"><b>Trend:</b> ${trend} (${fmt(cur)} XP)</div>
+        <div class="pill"><b>Letzte Woche:</b> ${fmt(prev)} XP</div>
+      </div>
+      <div class="divider"></div>
+      <div class="canvasBox"><canvas id="dashLine" width="900" height="180"></canvas></div>
+      <p class="hint">Letzte 8 Wochen</p>
+    </div>
+  `;
+
+  drawLine($("#dashLine"), labels, vals);
 }
