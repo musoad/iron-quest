@@ -5,7 +5,7 @@
    ✅ Caches JS folder too
 */
 
-const SW_VERSION = "v4.0.15";
+const SW_VERSION = "v4.0.16";
 const CACHE_NAME = `ironquest-${SW_VERSION}`;
 
 const ASSETS = [
