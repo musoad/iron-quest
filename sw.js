@@ -5,7 +5,7 @@
    ✅ Cache bust via SW_VERSION
 ========================= */
 
-const SW_VERSION = "v4.0.4"; // <- bei jedem Release erhöhen
+const SW_VERSION = "v4.0.9"; // <- bei JEDEM Release hochzählen
 const CACHE_NAME = `ironquest-${SW_VERSION}`;
 
 const ASSETS = [
@@ -15,27 +15,27 @@ const ASSETS = [
   "./manifest.json",
   "./sw.js",
 
+  // JS entry + modules (nur die, die wirklich existieren)
   "./js/app.js",
   "./js/utils.js",
-  "./js/urls.js",
   "./js/db.js",
   "./js/exercises.js",
   "./js/xpSystem.js",
   "./js/progression.js",
-  "./js/attributes.js",
   "./js/skilltree.js",
   "./js/analytics.js",
   "./js/health.js",
   "./js/boss.js",
   "./js/challenges.js",
-  "./js/backup.js",
+  "./js/backup.js"
 ];
 
 self.addEventListener("install", (event) => {
   self.skipWaiting();
-  event.waitUntil(
-    caches.open(CACHE_NAME).then((cache) => cache.addAll(ASSETS))
-  );
+  event.waitUntil((async () => {
+    const cache = await caches.open(CACHE_NAME);
+    await cache.addAll(ASSETS);
+  })());
 });
 
 self.addEventListener("activate", (event) => {
@@ -46,21 +46,14 @@ self.addEventListener("activate", (event) => {
   })());
 });
 
-self.addEventListener("message", (event) => {
-  if (event.data && event.data.type === "SKIP_WAITING") self.skipWaiting();
-});
-
-// HTML: network-first; assets: cache-first
 self.addEventListener("fetch", (event) => {
   const req = event.request;
   const url = new URL(req.url);
 
   if (url.origin !== self.location.origin) return;
 
-  const accept = req.headers.get("accept") || "";
-  const isHTML = req.mode === "navigate" || accept.includes("text/html");
-
-  if (isHTML) {
+  // HTML: network-first (damit Updates durchkommen)
+  if (req.mode === "navigate" || (req.headers.get("accept") || "").includes("text/html")) {
     event.respondWith((async () => {
       try {
         const fresh = await fetch(req);
@@ -69,12 +62,13 @@ self.addEventListener("fetch", (event) => {
         return fresh;
       } catch {
         const cached = await caches.match("./index.html");
-        return cached || new Response("Offline", { status: 503, headers: { "Content-Type": "text/plain" } });
+        return cached || new Response("Offline", { status: 503 });
       }
     })());
     return;
   }
 
+  // Assets: cache-first
   event.respondWith((async () => {
     const cached = await caches.match(req);
     if (cached) return cached;
