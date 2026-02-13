@@ -1,49 +1,128 @@
-(function(){
-  const EX = [
-    { name:"DB Floor Press (neutral)", type:"Mehrgelenkig", desc:"Brust/Trizeps, stabil & schulterfreundlich.", recSets:"4", recReps:"8-12" },
-    { name:"DB Bench Press", type:"Mehrgelenkig", desc:"Brust/Trizeps, klassisch.", recSets:"4", recReps:"8-12" },
-    { name:"Arnold Press", type:"Mehrgelenkig", desc:"Schulter rundum, Kontrolle.", recSets:"3-4", recReps:"8-12" },
-    { name:"DB Overhead Press", type:"Mehrgelenkig", desc:"Schulter/Trizeps, streng.", recSets:"3-4", recReps:"6-10" },
-    { name:"Deficit Push-Ups", type:"Mehrgelenkig", desc:"Push-up mit mehr ROM, Brust/Trizeps.", recSets:"3-4", recReps:"10-20" },
-    { name:"Close-Grip Push-Ups", type:"Mehrgelenkig", desc:"Trizeps-Fokus.", recSets:"3-4", recReps:"10-20" },
-    { name:"Overhead Trizeps Extension", type:"Mehrgelenkig", desc:"Trizeps langer Kopf.", recSets:"3", recReps:"10-15" },
-    { name:"DB Skull Crushers (Floor)", type:"Mehrgelenkig", desc:"Trizeps, sauber.", recSets:"3", recReps:"10-15" },
-    { name:"DB Lateral Raises", type:"Mehrgelenkig", desc:"Seitliche Schulter, langsam.", recSets:"3", recReps:"12-20" },
+// js/exercises.js
+window.Exercises = (function(){
+  // helper: kurzer how-to text
+  function how(text){ return text; }
 
-    { name:"1-Arm DB Row (Pause oben)", type:"Unilateral", desc:"Rücken/Lat, Pause oben.", recSets:"4", recReps:"8-12" },
-    { name:"Renegade Rows", type:"Unilateral", desc:"Rücken + Core Anti-Rotation.", recSets:"3-4", recReps:"6-10/Seite" },
-    { name:"Reverse Flys (langsam)", type:"Mehrgelenkig", desc:"Rear Delt/Upper Back.", recSets:"3", recReps:"12-20" },
-    { name:"DB Pullover", type:"Mehrgelenkig", desc:"Lat/Brustkorb, Dehnung.", recSets:"3", recReps:"10-15" },
-    { name:"DB Supinated Curl", type:"Mehrgelenkig", desc:"Bizeps, Supination.", recSets:"3", recReps:"8-12" },
-    { name:"Cross-Body Hammer Curl", type:"Mehrgelenkig", desc:"Brachialis/Unterarm.", recSets:"3", recReps:"10-15" },
-    { name:"Farmer’s Carry (DB)", type:"Unilateral", desc:"Grip/Traps/Core – Carry.", recSets:"3", recReps:"30-60s" },
+  const list = [
+    // PUSH
+    { name:"DB Floor Press", type:"Mehrgelenkig", group:"Push", muscle:"Brust/Trizeps", desc:"Drücken am Boden – stabil, schulterfreundlich.",
+      how: how("Rücken flach, Ellbogen ca. 45°. Hanteln kontrolliert runter bis Trizeps Boden berührt. Explosiv hoch, oben nicht überstrecken.") },
 
-    { name:"Bulgarian Split Squats", type:"Unilateral", desc:"Quads/Glute, brutal effektiv.", recSets:"4", recReps:"8-12/Seite" },
-    { name:"DB Romanian Deadlift", type:"Mehrgelenkig", desc:"Hamstrings/Glute, Hip hinge.", recSets:"4", recReps:"6-10" },
-    { name:"Goblet Squat", type:"Mehrgelenkig", desc:"Quads/Glute, aufrecht.", recSets:"4", recReps:"8-12" },
-    { name:"Hip Thrust (Floor)", type:"Mehrgelenkig", desc:"Glute, Peak contraction.", recSets:"3-4", recReps:"10-15" },
-    { name:"Side Plank + Leg Raise", type:"Core", desc:"Core + Glute med.", recSets:"3", recReps:"30-45s/Seite" },
-    { name:"Dead Bug", type:"Core", desc:"Core Kontrolle, Rücken neutral.", recSets:"3", recReps:"8-12/Seite" },
-    { name:"Standing DB Calf Raises", type:"Core", desc:"Waden, oben halten.", recSets:"3-4", recReps:"15-25" },
+    { name:"DB Bench Press", type:"Mehrgelenkig", group:"Push", muscle:"Brust/Trizeps", desc:"Klassisches Drücken – mehr ROM als Floor Press.",
+      how: how("Schulterblätter hinten/unten, leichte Brücke. Hanteln zur Brustlinie, dann hoch. Keine Schulter nach vorn rollen lassen.") },
 
-    { name:"Komplex: Deadlift", type:"Komplexe", desc:"Komplex-Teil – Technik vor Tempo.", recSets:"5-6 Runden", recReps:"6" },
-    { name:"Komplex: Clean", type:"Komplexe", desc:"Explosiv, sauber.", recSets:"5-6 Runden", recReps:"6" },
-    { name:"Komplex: Front Squat", type:"Komplexe", desc:"Core/Quads, aufrecht.", recSets:"5-6 Runden", recReps:"6" },
-    { name:"Komplex: Push Press", type:"Komplexe", desc:"Power + Schulter.", recSets:"5-6 Runden", recReps:"6" },
-    { name:"DB Thrusters", type:"Komplexe", desc:"Fullbody + Conditioning.", recSets:"4-6", recReps:"8-12" },
-    { name:"Plank Shoulder Taps", type:"Core", desc:"Core Anti-Rotation.", recSets:"3-4", recReps:"20-40" },
+    { name:"DB Overhead Press", type:"Mehrgelenkig", group:"Push", muscle:"Schulter/Trizeps", desc:"Überkopfdrücken – Core & Schulterkraft.",
+      how: how("Rippen runter, Po anspannen. Hanteln über Kopf in Linie Ohr. Kein Hohlkreuz, Kopf leicht nach hinten/unter die Hantel.") },
 
-    { name:"Burpees", type:"Conditioning", desc:"Ganzkörper, Puls hoch.", recSets:"5", recReps:"30-40s" },
-    { name:"Mountain Climbers", type:"Conditioning", desc:"Core + Conditioning.", recSets:"5", recReps:"30-40s" },
-    { name:"High Knees", type:"Conditioning", desc:"Cardio, Knie hoch.", recSets:"5", recReps:"30-40s" },
-    { name:"Jumping Jacks", type:"Conditioning", desc:"Einsteiger Cardio.", recSets:"5", recReps:"40-60s" },
+    { name:"Arnold Press", type:"Mehrgelenkig", group:"Push", muscle:"Schulter", desc:"Rotation beim Drücken – vordere/seitliche Schulter.",
+      how: how("Start Handflächen zu dir, beim Hochdrücken rotieren. Langsam ablassen, Schulter unten halten.") },
 
-    { name:"Walking Desk (Laufband 3 km/h)", type:"NEAT", desc:"Alltagsschritte/Zone2.", recSets:"—", recReps:"Minuten" },
-    { name:"Ruhetag (Recovery + Mobility)", type:"Rest", desc:"Mobility + Spaziergang.", recSets:"—", recReps:"10-20 Min" },
+    { name:"Deficit Push-Ups", type:"Mehrgelenkig", group:"Push", muscle:"Brust/Trizeps", desc:"Liegestütz mit größerer Tiefe (Defizit).",
+      how: how("Hände auf Erhöhung, Brust tiefer als Hände. Körper bleibt Brett, Ellbogen 30–45°. Sauberer Druck hoch.") },
+
+    { name:"Close-Grip Push-Ups", type:"Mehrgelenkig", group:"Push", muscle:"Trizeps", desc:"Enger Liegestütz – mehr Trizeps.",
+      how: how("Hände enger als Schulterbreit. Ellbogen nah am Körper. Kein Hüfte-Hängen, kontrolliert runter/hoch.") },
+
+    { name:"Overhead Trizeps Extension", type:"Mehrgelenkig", group:"Push", muscle:"Trizeps", desc:"Trizeps über Kopf – langer Kopf Fokus.",
+      how: how("Ellbogen eng, Oberarme fix. Hantel hinter Kopf ablassen, dann strecken. Core fest, kein Ausweichen.") },
+
+    { name:"DB Skull Crushers", type:"Mehrgelenkig", group:"Push", muscle:"Trizeps", desc:"Trizepsstrecken – auf Boden/Bank.",
+      how: how("Ellbogen zeigen nach oben. Unterarme bewegen, Oberarme bleiben. Langsam runter, explosiv hoch.") },
+
+    { name:"DB Lateral Raises", type:"Mehrgelenkig", group:"Push", muscle:"Seitliche Schulter", desc:"Seitheben für Schulterbreite.",
+      how: how("Leicht nach vorn lehnen, Ellbogen soft. Hoch bis Schulterhöhe, oben kurz halten, langsam ab.") },
+
+    // PULL
+    { name:"1-Arm DB Row", type:"Unilateral", group:"Pull", muscle:"Rücken/Lat", desc:"Einarmiges Rudern – Lat & Stabilität.",
+      how: how("Rücken neutral, Hüfte fix. Zieh Ellbogen zur Hüfte. Oben 1s Pause, Schulter nicht hochziehen.") },
+
+    { name:"Renegade Rows", type:"Unilateral", group:"Pull", muscle:"Rücken/Core", desc:"Rudern in Plank – Core + Rücken.",
+      how: how("Füße breit, Becken stabil. Zieh Hantel ohne Rotation. Langsam absetzen, Brett bleibt stabil.") },
+
+    { name:"Reverse Flys", type:"Mehrgelenkig", group:"Pull", muscle:"Rear Delt", desc:"Reverse Fly – hintere Schulter.",
+      how: how("Hüfte beugen, Rücken neutral. Arme leicht gebeugt, nach außen ziehen. Oben kurz halten, langsam ab.") },
+
+    { name:"DB Pullover", type:"Mehrgelenkig", group:"Pull", muscle:"Lat/Brustkorb", desc:"Pullover – Lat & Brustkorb.",
+      how: how("Becken stabil, Hantel über Brust. Langsam hinter Kopf bis Dehnung, dann zurück. Kein Hohlkreuz.") },
+
+    { name:"DB Curl (supinated)", type:"Mehrgelenkig", group:"Pull", muscle:"Bizeps", desc:"Bizepscurls – klassisch.",
+      how: how("Ellbogen am Körper, keine Hüftschwünge. Hoch bis Spannung, langsam ablassen.") },
+
+    { name:"Hammer Curl", type:"Mehrgelenkig", group:"Pull", muscle:"Bizeps/Brachialis", desc:"Hammer Curls – Griffkraft & Arm.",
+      how: how("Neutraler Griff, Ellbogen fix. Kontrollierte Wiederholungen, kein Schwung.") },
+
+    { name:"Farmer’s Carry", type:"Unilateral", group:"Pull", muscle:"Grip/Traps/Core", desc:"Tragen – Grip, Core, Haltung.",
+      how: how("Aufrecht, Schulterblätter runter, Core fest. Kurze Schritte, nicht seitlich kippen.") },
+
+    // LEGS + CORE
+    { name:"Goblet Squat", type:"Mehrgelenkig", group:"Legs", muscle:"Quads/Glute", desc:"Goblet Squat – sauberer Squat Pattern.",
+      how: how("Hantel vor Brust, Ellbogen runter. Knie folgen Zehen, tief in ROM, Brust stolz. Hoch über ganze Fußsohle.") },
+
+    { name:"DB Romanian Deadlift", type:"Mehrgelenkig", group:"Legs", muscle:"Hamstrings/Glute", desc:"RDL – hintere Kette.",
+      how: how("Hüfte nach hinten schieben, Rücken neutral. Hanteln nah am Körper, bis Hamstring-Dehnung, dann hoch.") },
+
+    { name:"Bulgarian Split Squats", type:"Unilateral", group:"Legs", muscle:"Quads/Glute", desc:"Split Squat – brutal effektiv, unilateral.",
+      how: how("Hinterfuß erhöht. Senkrecht runter, vorderes Knie folgt Zehen. Oberkörper leicht nach vorn, Druck über Mittelfuß.") },
+
+    { name:"Side Plank", type:"Core", group:"Legs", muscle:"Core", desc:"Seitstütz – Anti-Rotation, Core.",
+      how: how("Ellenbogen unter Schulter. Hüfte hoch, Körper Linie. Nicht nach vorn kippen, ruhig atmen.") },
+
+    { name:"Dead Bug", type:"Core", group:"Legs", muscle:"Core", desc:"Dead Bug – Core Kontrolle.",
+      how: how("LWS am Boden, Rippen runter. Arm/Bein langsam strecken ohne Hohlkreuz. Kontrolle > Tempo.") },
+
+    // FULL BODY / COMPLEX
+    { name:"DB Thrusters", type:"Komplexe", group:"Fullbody", muscle:"Fullbody", desc:"Squat + Press – metabolisch.",
+      how: how("Tiefer Squat, explosiv hoch und direkt über Kopf drücken. Core fest, saubere Linie.") },
+
+    { name:"Complex: DL→Clean→FS→PP", type:"Komplexe", group:"Fullbody", muscle:"Fullbody", desc:"Komplex – Kraft + Conditioning.",
+      how: how("Gewicht moderat. Jede Rep sauber. Keine Hektik: Technik vor Tempo. Ruhige Übergänge.") },
+
+    // CONDITIONING
+    { name:"Burpees", type:"Conditioning", group:"Conditioning", muscle:"Metcon", desc:"Ganzkörper – Herz/Kreislauf.",
+      how: how("Brust runter, Füße vor, sauberer Sprung/Stand. Rhythmus finden, nicht ausfransen.") },
+
+    { name:"Mountain Climbers", type:"Conditioning", group:"Conditioning", muscle:"Metcon", desc:"Core + Puls.",
+      how: how("Plank stabil, Knie zügig nach vorn. Hüfte tief, Schultern stabil.") },
+
+    { name:"High Knees", type:"Conditioning", group:"Conditioning", muscle:"Metcon", desc:"Schnelle Kniehebeläufe – Puls hoch.",
+      how: how("Aufrecht, Knie bis Hüfte, Arme aktiv. Kurze Bodenkontaktzeit.") },
+
+    { name:"Jumping Jacks", type:"Conditioning", group:"Conditioning", muscle:"Metcon", desc:"Einfacher Cardio-Finisher.",
+      how: how("Weich landen, Rhythmus halten, Schultern entspannt.") },
+
+    // NEAT
+    { name:"Walking Desk", type:"NEAT", group:"NEAT", muscle:"NEAT", desc:"Laufen am Band 3 km/h – Alltag XP.",
+      how: how("Aufrecht gehen, lockere Arme. Ziel: konstante Minuten sammeln.") },
+
+    // REST
+    { name:"Recovery + Mobility", type:"Rest", group:"Rest", muscle:"Recovery", desc:"Ruhetag mit Mobility.",
+      how: how("10–20 Min Mobility (Hüfte/Schulter/WS) + optional Spaziergang.") }
   ];
 
-  function all(){ return EX.slice(); }
-  function byName(name){ return EX.find(e => e.name === name) || null; }
+  function getAll(){ return list.slice(); }
+  function getByName(name){ return list.find(x=>x.name===name) || null; }
 
-  window.IronQuestExercises = { all, byName };
+  // Simple recommender (week + adaptive)
+  function recommend(ex, week, adaptive){
+    const type = ex?.type || "Mehrgelenkig";
+    const w = Math.max(1, Number(week||1));
+    const block = (w<=4)?1:(w<=8?2:3);
+
+    let sets = 3, reps = "8–12";
+    if(type==="Mehrgelenkig"){ sets = (block===1?3:(block===2?4:4)); reps = (block===1?"8–12":(block===2?"6–10":"5–8")); }
+    if(type==="Unilateral"){ sets = (block===1?3:(block===2?4:4)); reps = (block===1?"8–12 je Seite":(block===2?"6–10 je Seite":"5–8 je Seite")); }
+    if(type==="Core"){ sets = (block===1?3:4); reps = (block===1?"30–45s":"40–60s"); }
+    if(type==="Conditioning"){ sets = (block===1?4:(block===2?5:5)); reps = (block===1?"30–40s / 60s Pause":(block===2?"35–45s / 45–60s":"40–45s / 30–45s")); }
+    if(type==="Komplexe"){ sets = (block===1?4:(block===2?5:6)); reps = (block===1?"6–8 je Movement":(block===2?"6 je Movement":"5–6 je Movement")); }
+    if(type==="NEAT"){ sets = null; reps = "30–60 Min"; }
+    if(type==="Rest"){ sets = null; reps = "10–20 Min Mobility"; }
+
+    // adaptive tweak
+    const sd = adaptive?.setDelta || 0;
+    if(sets!=null) sets = Math.max(1, sets + sd);
+
+    return { sets, reps };
+  }
+
+  return { getAll, getByName, recommend };
 })();
