@@ -1,64 +1,81 @@
-// js/app.js ✅ FULL WORKING ORCHESTRATOR (NO MODULES)
+(function(){
+  const $ = window.IQ.$;
+  const iso = window.IQ.isoDate;
 
-(function () {
-  const $ = (id) => document.getElementById(id);
-
-  function setActiveTab(tabId) {
-    document.querySelectorAll("nav button").forEach(b => b.classList.toggle("active", b.dataset.tab === tabId));
-    document.querySelectorAll("main section.tab").forEach(s => s.classList.toggle("active", s.id === tabId));
+  function setStatus(text){
+    const el = $("playerInfo");
+    if (el) el.textContent = text;
   }
 
-  function levelFromTotalXP(total) {
-    let lvl = 1;
-    let xp = Math.max(0, Math.round(total || 0));
-    const needFor = (l) => Math.round(350 + 120 * l + 32 * Math.pow(l, 1.75));
-    while (xp >= needFor(lvl) && lvl < 999) {
-      xp -= needFor(lvl);
-      lvl++;
+  function sortEntriesDesc(arr){
+    return arr.slice().sort((a,b)=>{
+      if (a.date !== b.date) return a.date < b.date ? 1 : -1;
+      return (b.id||0) - (a.id||0);
+    });
+  }
+
+  async function getEntries(){
+    const rows = await window.IronQuestDB.getAll(window.IronQuestDB.STORES.entries);
+    return sortEntriesDesc(rows);
+  }
+
+  function bindTabs(){
+    document.querySelectorAll(".tabBtn").forEach(btn=>{
+      btn.addEventListener("click", ()=>{
+        const tab = btn.getAttribute("data-tab");
+        document.querySelectorAll(".tabBtn").forEach(b=>b.classList.remove("active"));
+        btn.classList.add("active");
+
+        document.querySelectorAll("main .tab").forEach(sec=>sec.classList.remove("active"));
+        const target = document.getElementById(tab);
+        if (target) target.classList.add("active");
+      });
+    });
+  }
+
+  async function renderDashboard(container, entries){
+    const today = iso(new Date());
+    const start = window.IronQuestProgression.ensureStartDate();
+    const curWeek = window.IronQuestProgression.weekForDate(today);
+
+    let totalXP=0, todayXP=0, weekXP=0;
+    const attr = { STR:0, STA:0, END:0, MOB:0 };
+
+    for (const e of entries){
+      totalXP += (e.xp||0);
+      if (e.date === today) todayXP += (e.xp||0);
+      if (e.week === curWeek) weekXP += (e.xp||0);
+      window.IronQuestAttributes.addAttrTotalsFromEntry(attr, e);
     }
-    return { lvl };
-  }
 
-  async function getEntries() {
-    const all = await window.IronQuestDB.getAllEntries();
-    // sort newest first
-    return all.sort((a, b) => (a.date < b.date ? 1 : -1) || ((b.id || 0) - (a.id || 0)));
-  }
+    const lv = window.IronQuestProgression.levelFromXP(totalXP);
+    const title = window.IronQuestProgression.titleForLevel(lv.lvl);
 
-  async function addEntry(entry) {
-    await window.IronQuestDB.addEntry(entry);
-  }
+    const streak = window.IronQuestProgression.updateStreakFromEntries(entries);
+    const sm = window.IronQuestProgression.streakMultiplier(streak.count);
+    const ad = window.IronQuestProgression.adaptiveHint(entries, curWeek);
 
-  async function deleteEntry(id) {
-    await window.IronQuestDB.deleteEntry(id);
-  }
+    const prTop = window.IronQuestXP.getTopPRs(10);
 
-  function renderDashboard(container, entries, week) {
-    const today = window.IronQuestProgression.isoDate(new Date());
-    const todayXP = entries.filter(e => e.date === today).reduce((s, e) => s + Number(e.xp || 0), 0);
-    const weekXP = entries.filter(e => Number(e.week) === Number(week)).reduce((s, e) => s + Number(e.xp || 0), 0);
-    const totalXP = entries.reduce((s, e) => s + Number(e.xp || 0), 0);
-
-    const streak = window.IronQuestProgression.computeStreak(entries);
-    const mut = window.IronQuestProgression.mutationForWeek(week);
-    const reward = window.IronQuestProgression.rewardActive(week) ? "✅ +5% aktiv" : "—";
-
-    const lv = levelFromTotalXP(totalXP);
+    // attributes levels
+    function attrBox(key){
+      const xp = Math.round(attr[key]||0);
+      const a = window.IronQuestAttributes.attrLevelFromXP(xp);
+      return `<div class="pill"><b>${key}</b> Lv ${a.lvl}<div class="small">${xp} XP • ${Math.max(0, a.need-a.into)} bis next</div></div>`;
+    }
 
     container.innerHTML = `
       <div class="card">
-        <h2>⚔ Dashboard</h2>
+        <h2>Status</h2>
         <div class="row2">
-          <div class="pill"><b>Startdatum:</b> <span id="startShow">${window.IronQuestProgression.getStartDate()}</span></div>
-          <div class="pill"><b>Woche:</b> W${week}</div>
+          <div class="pill"><b>Startdatum:</b> <span id="startShow">${start}</span></div>
+          <div class="pill"><b>Woche:</b> W${curWeek}</div>
         </div>
 
-        <div class="row2">
-          <label>Startdatum ändern
-            <input id="startInput" type="date" value="${window.IronQuestProgression.getStartDate()}">
-          </label>
-          <button id="startSave" type="button" class="secondary">Speichern</button>
-        </div>
+        <label>Startdatum ändern (wirkt auf Wochen)
+          <input id="startInput" type="date" value="${start}">
+        </label>
+        <button id="saveStart" class="btn" type="button">Startdatum speichern</button>
 
         <div class="divider"></div>
 
@@ -66,321 +83,368 @@
           <div class="pill"><b>Heute XP:</b> ${todayXP}</div>
           <div class="pill"><b>Woche XP:</b> ${weekXP}</div>
         </div>
-
         <div class="row2">
-          <div class="pill"><b>Gesamt XP:</b> ${totalXP}</div>
-          <div class="pill"><b>Level:</b> ${lv.lvl}</div>
+          <div class="pill"><b>Total XP:</b> ${totalXP}</div>
+          <div class="pill"><b>Level:</b> ${lv.lvl} – ${title}</div>
         </div>
 
         <div class="row2">
-          <div class="pill"><b>Streak:</b> ${streak} Tage</div>
-          <div class="pill"><b>Reward:</b> ${reward}</div>
+          <div class="pill"><b>Streak:</b> ${streak.count} Tage <div class="small">Bonus: x${sm.toFixed(2)}</div></div>
+          <div class="pill"><b>Adaptive:</b><div class="small">${ad.note}</div></div>
         </div>
+      </div>
 
-        <div class="pill"><b>Mutation W${week}:</b> ${mut.name}</div>
+      <div class="card">
+        <h2>Attribute</h2>
+        <div class="row2">
+          ${attrBox("STR")}
+          ${attrBox("STA")}
+          ${attrBox("END")}
+          ${attrBox("MOB")}
+        </div>
+      </div>
 
-        <div class="divider"></div>
-
-        <h3>Letzte Einträge</h3>
-        <ul class="list" id="recent"></ul>
+      <div class="card">
+        <h2>Top 10 PRs</h2>
+        <ul class="list" id="prList"></ul>
       </div>
     `;
 
-    // start save
-    container.querySelector("#startSave").addEventListener("click", async () => {
-      const v = container.querySelector("#startInput").value;
-      if (!v) return alert("Bitte Datum wählen.");
-      window.IronQuestProgression.setStartDate(v);
-      alert("Startdatum gespeichert ✅");
-      await renderAll();
+    const prList = document.getElementById("prList");
+    prList.innerHTML = prTop.length ? "" : "<li>Keine PRs.</li>";
+    prTop.forEach(([ex,val], i)=>{
+      const li = document.createElement("li");
+      li.innerHTML = `<div class="row" style="justify-content:space-between;align-items:center;">
+        <div><b>${i+1}.</b> ${ex}<div class="small">PR Metric: ${val}</div></div>
+        <span class="badge ok">PR</span>
+      </div>`;
+      prList.appendChild(li);
     });
 
-    const recent = container.querySelector("#recent");
-    const last = entries.slice(0, 8);
-    recent.innerHTML = last.length ? "" : "<li>—</li>";
-    last.forEach(e => {
-      const li = document.createElement("li");
-      li.innerHTML = `<div class="entryRow"><div style="min-width:0;">
-        <b>${e.date}</b> • ${e.exercise}<div class="hint">${e.type} • ${e.xp} XP</div>
-      </div></div>`;
-      recent.appendChild(li);
+    document.getElementById("saveStart").addEventListener("click", async ()=>{
+      const newStart = document.getElementById("startInput").value;
+      if (!newStart) return alert("Bitte Datum wählen.");
+      if (!confirm("Startdatum ändern? Wochen werden neu berechnet (Einträge bleiben).")) return;
+
+      window.IronQuestProgression.setStartDate(newStart);
+
+      // recalc weeks
+      const all = await getEntries();
+      for (const e of all){
+        const w = window.IronQuestProgression.weekForDate(e.date);
+        if (e.week !== w){
+          e.week = w;
+          await window.IronQuestDB.put(window.IronQuestDB.STORES.entries, e);
+        }
+      }
+      alert("Startdatum gespeichert & Wochen neu berechnet ✅");
+      location.reload();
     });
   }
 
-  function renderLog(container, entries, week) {
-    const exList = window.IronQuestExercises.list;
+  function renderLog(container, entries){
+    const today = iso(new Date());
+    const start = window.IronQuestProgression.ensureStartDate();
+    const curWeek = window.IronQuestProgression.weekForDate(today);
 
-    const today = window.IronQuestProgression.isoDate(new Date());
-    const options = exList.map(e => `<option value="${e.name}">${e.name}</option>`).join("");
+    const exAll = window.IronQuestExercises.all();
 
     container.innerHTML = `
       <div class="card">
-        <h2>📝 Log</h2>
+        <h2>Neuer Eintrag</h2>
 
         <div class="row2">
-          <label>Datum
+          <div>
+            <label>Datum</label>
             <input id="lDate" type="date" value="${today}">
-          </label>
-          <div class="pill"><b>Woche:</b> <span id="lWeek">W${week}</span></div>
+          </div>
+          <div class="pill"><b>Woche:</b> <span id="lWeek">W${curWeek}</span></div>
         </div>
 
-        <label>Übung
-          <select id="lEx">${options}</select>
-        </label>
+        <label>Übung</label>
+        <select id="lExercise"></select>
         <div class="hint" id="lDesc">—</div>
 
         <div class="row2">
-          <label>Tatsächliche Sets
-            <input id="lSets" inputmode="numeric" value="4">
-          </label>
-          <label>Tatsächliche Reps
-            <input id="lReps" inputmode="numeric" value="10">
-          </label>
+          <div>
+            <label>Tatsächliche Sets</label>
+            <input id="lSets" inputmode="numeric" placeholder="z.B. 4">
+          </div>
+          <div>
+            <label>Tatsächliche Reps</label>
+            <input id="lReps" inputmode="text" placeholder="z.B. 10 (oder 8-10)">
+          </div>
         </div>
 
         <div class="row2">
-          <label>Minuten (nur NEAT)
-            <input id="lMin" inputmode="numeric" value="60">
-          </label>
-          <div class="pill"><b>XP:</b> <span id="lXP">0</span></div>
+          <div>
+            <label>Walking Minuten (nur NEAT)</label>
+            <input id="lMin" inputmode="numeric" placeholder="z.B. 60">
+          </div>
+          <div class="pill">
+            <b>Preview XP:</b> <span id="lXP">0</span>
+            <div class="small" id="lInfo">—</div>
+          </div>
         </div>
 
-        <label>Notizen
-          <input id="lNote" placeholder="optional">
-        </label>
+        <div class="row">
+          <button class="btn primary" id="lSave" type="button">Speichern</button>
+          <button class="btn danger" id="lClear" type="button">Alle Einträge löschen</button>
+        </div>
+      </div>
 
-        <button id="lSave" type="button">Speichern</button>
-
-        <div class="divider"></div>
-
-        <h3>Alle Einträge</h3>
+      <div class="card">
+        <h2>Einträge</h2>
         <ul class="list" id="lList"></ul>
       </div>
     `;
 
-    const elDate = container.querySelector("#lDate");
-    const elWeek = container.querySelector("#lWeek");
-    const elEx = container.querySelector("#lEx");
-    const elDesc = container.querySelector("#lDesc");
-    const elSets = container.querySelector("#lSets");
-    const elReps = container.querySelector("#lReps");
-    const elMin = container.querySelector("#lMin");
-    const elXP = container.querySelector("#lXP");
+    const sel = document.getElementById("lExercise");
+    exAll.forEach(e=>{
+      const opt = document.createElement("option");
+      opt.value = e.name;
+      opt.textContent = `${e.name} (${e.type})`;
+      sel.appendChild(opt);
+    });
 
-    function updateUI() {
-      const dateISO = elDate.value || today;
-      const w = window.IronQuestProgression.currentWeek(dateISO);
-      elWeek.textContent = "W" + w;
+    function parseSetsReps(){
+      const sets = Number(document.getElementById("lSets").value || 0) || 0;
+      // reps may be "8-10" -> use first number for metric
+      const repsStr = String(document.getElementById("lReps").value || "").trim();
+      const m = repsStr.match(/\d+/);
+      const reps = m ? Number(m[0]) : 0;
+      const minutes = Number(document.getElementById("lMin").value || 0) || 0;
+      return { sets, reps, minutes, repsStr };
+    }
 
-      const ex = window.IronQuestExercises.getByName(elEx.value);
+    function refreshMeta(){
+      const ex = window.IronQuestExercises.byName(sel.value);
+      if (!ex) return;
+      document.getElementById("lDesc").textContent =
+        `${ex.desc} • Empfohlen: Sets ${ex.recSets}, Reps ${ex.recReps}`;
+
+      const date = document.getElementById("lDate").value || today;
+      const week = window.IronQuestProgression.weekForDate(date);
+      document.getElementById("lWeek").textContent = "W"+week;
+
+      const st = window.IronQuestProgression.updateStreakFromEntries(entries);
+      const streakMult = window.IronQuestProgression.streakMultiplier(st.count);
+
+      const skillMult = window.IronQuestSkilltree.multiplierForType(ex.type);
+
+      const { sets, reps, minutes } = parseSetsReps();
+
+      const res = window.IronQuestXP.computeXP({
+        type: ex.type,
+        exercise: ex.name,
+        sets, reps, minutes,
+        streakMult,
+        skillMult
+      });
+
+      document.getElementById("lXP").textContent = String(res.xp);
+      document.getElementById("lInfo").textContent =
+        `Base ${res.base} • Vol x${res.volMult.toFixed(2)} • Streak x${res.streakMult.toFixed(2)} • Skill x${res.skillMult.toFixed(2)}`;
+    }
+
+    ["lDate","lSets","lReps","lMin"].forEach(id=>{
+      document.getElementById(id).addEventListener("input", refreshMeta);
+      document.getElementById(id).addEventListener("change", refreshMeta);
+    });
+    sel.addEventListener("change", refreshMeta);
+
+    async function fillList(){
+      const ul = document.getElementById("lList");
+      const rows = await getEntries();
+      ul.innerHTML = rows.length ? "" : "<li>Noch keine Einträge.</li>";
+
+      rows.slice(0, 80).forEach(e=>{
+        const li = document.createElement("li");
+        li.innerHTML = `
+          <div class="row" style="justify-content:space-between;align-items:flex-start;">
+            <div>
+              <b>${e.date}</b> • W${e.week} • <b>${e.exercise}</b>
+              <div class="small">${e.type} ${e.detail ? "• "+e.detail : ""}</div>
+            </div>
+            <div class="row" style="margin:0;">
+              <span class="badge">${e.xp} XP</span>
+              <button class="btn danger" data-del="${e.id}" type="button">Del</button>
+            </div>
+          </div>
+        `;
+        ul.appendChild(li);
+      });
+
+      ul.querySelectorAll("[data-del]").forEach(btn=>{
+        btn.addEventListener("click", async ()=>{
+          const id = Number(btn.getAttribute("data-del"));
+          if (!confirm("Eintrag löschen?")) return;
+          await window.IronQuestDB.del(window.IronQuestDB.STORES.entries, id);
+          await fillList();
+        });
+      });
+    }
+
+    document.getElementById("lSave").addEventListener("click", async ()=>{
+      const ex = window.IronQuestExercises.byName(sel.value);
       if (!ex) return;
 
-      elDesc.textContent = `${ex.type} • ${ex.desc} • Empf: ${ex.rec.sets}×${ex.rec.reps}`;
+      const date = document.getElementById("lDate").value || today;
+      const week = window.IronQuestProgression.weekForDate(date);
 
-      // adaptive recommendation (soft)
-      const adj = window.IronQuestProgression.adaptiveAdjust(entries, w);
-      const recSets = Math.max(1, (Number(ex.rec.sets || 0) + adj.setDelta));
-      const recReps = Math.max(1, (Number(ex.rec.reps || 0) + adj.repDelta));
+      const st = window.IronQuestProgression.updateStreakFromEntries(entries);
+      const streakMult = window.IronQuestProgression.streakMultiplier(st.count);
+      const skillMult = window.IronQuestSkilltree.multiplierForType(ex.type);
 
-      // set defaults if empty
-      if (!elSets.value) elSets.value = String(recSets);
-      if (!elReps.value) elReps.value = String(recReps);
+      const { sets, reps, minutes, repsStr } = parseSetsReps();
 
-      // multipliers
-      const streak = window.IronQuestProgression.computeStreak(entries);
-      const streakMult = window.IronQuestProgression.streakMultiplier(streak);
-      const mutationMult = window.IronQuestProgression.mutationMultiplier(ex.type, w);
-      const rewardMult = window.IronQuestProgression.rewardActive(w) ? 1.05 : 1.0;
-      const skillMult = 1.0; // Skilltree-Multiplikator kann später hier rein
-
-      const sets = Number(elSets.value || 0);
-      const reps = Number(elReps.value || 0);
-      const minutes = Number(elMin.value || 0);
-
-      const calc = window.IronQuestXP.computeXP({
-        exercise: ex.name,
+      const res = window.IronQuestXP.computeXP({
         type: ex.type,
+        exercise: ex.name,
         sets, reps, minutes,
-        streakMult, skillMult, mutationMult, rewardMult
+        streakMult,
+        skillMult
       });
 
-      elXP.textContent = String(calc.xp);
+      const detailParts = [];
+      detailParts.push(`Empf Sets ${ex.recSets}, Reps ${ex.recReps}`);
+      if (ex.type === "NEAT") detailParts.push(`Min ${minutes}`);
+      else if (ex.type !== "Rest") detailParts.push(`Sets ${sets} • Reps ${repsStr || reps}`);
+      if (res.pr.isPR) detailParts.push(`NEW PR ${res.pr.old} → ${res.pr.now}`);
 
-      // NEAT/Rest UI
-      elMin.closest("label").style.display = (ex.type === "NEAT") ? "block" : "none";
-      elSets.closest("label").style.display = (ex.type === "Rest" || ex.type === "NEAT") ? "none" : "block";
-      elReps.closest("label").style.display = (ex.type === "Rest" || ex.type === "NEAT") ? "none" : "block";
-    }
-
-    elDate.addEventListener("change", updateUI);
-    elEx.addEventListener("change", () => {
-      const ex = window.IronQuestExercises.getByName(elEx.value);
-      if (ex) {
-        elSets.value = String(ex.rec.sets || "");
-        elReps.value = String(ex.rec.reps || "");
-      }
-      updateUI();
-    });
-    [elSets, elReps, elMin].forEach(x => x.addEventListener("input", updateUI));
-
-    updateUI();
-
-    container.querySelector("#lSave").addEventListener("click", async () => {
-      const dateISO = elDate.value || today;
-      const w = window.IronQuestProgression.currentWeek(dateISO);
-      const ex = window.IronQuestExercises.getByName(elEx.value);
-      if (!ex) return alert("Übung fehlt.");
-
-      const sets = Number(elSets.value || 0);
-      const reps = Number(elReps.value || 0);
-      const minutes = Number(elMin.value || 0);
-
-      // multipliers
-      const streak = window.IronQuestProgression.computeStreak(entries);
-      const streakMult = window.IronQuestProgression.streakMultiplier(streak);
-      const mutationMult = window.IronQuestProgression.mutationMultiplier(ex.type, w);
-      const rewardMult = window.IronQuestProgression.rewardActive(w) ? 1.05 : 1.0;
-      const skillMult = 1.0;
-
-      const calc = window.IronQuestXP.computeXP({
+      await window.IronQuestDB.add(window.IronQuestDB.STORES.entries, {
+        date,
+        week,
         exercise: ex.name,
         type: ex.type,
-        sets, reps, minutes,
-        streakMult, skillMult, mutationMult, rewardMult
+        sets: ex.type==="NEAT" ? null : sets,
+        reps: ex.type==="NEAT" ? null : repsStr || reps,
+        minutes: ex.type==="NEAT" ? minutes : null,
+        xp: res.xp,
+        detail: detailParts.join(" • ")
       });
 
-      const pr = window.IronQuestXP.checkAndSetPR({ exercise: ex.name, sets, reps });
-
-      await addEntry({
-        date: dateISO,
-        week: w,
-        exercise: ex.name,
-        type: ex.type,
-        sets,
-        reps,
-        minutes,
-        notes: container.querySelector("#lNote").value || "",
-        xp: calc.xp
-      });
-
-      if (pr.isPR) alert(`NEW PR! 🔥 Volume ${pr.now} (vorher ${pr.best})`);
-      else alert("Gespeichert ✅");
-
-      await renderAll();
+      alert(res.pr.isPR ? `Gespeichert ✅ NEW PR! (+${res.xp} XP)` : `Gespeichert ✅ (+${res.xp} XP)`);
+      location.reload();
     });
 
-    // List entries
-    const ul = container.querySelector("#lList");
-    ul.innerHTML = entries.length ? "" : "<li>—</li>";
-    entries.forEach(e => {
-      const li = document.createElement("li");
-      li.innerHTML = `
-        <div class="entryRow">
-          <div style="min-width:0;">
-            <b>${e.date}</b> (W${e.week}) • ${e.exercise}
-            <div class="hint">${e.type} • ${e.xp} XP • Sets ${e.sets || 0} • Reps ${e.reps || 0}</div>
-          </div>
-          <button class="danger" data-del="${e.id}" type="button" style="width:auto;">Delete</button>
+    document.getElementById("lClear").addEventListener("click", async ()=>{
+      if (!confirm("Wirklich ALLE Einträge löschen?")) return;
+      await window.IronQuestDB.clear(window.IronQuestDB.STORES.entries);
+      alert("Gelöscht ✅");
+      location.reload();
+    });
+
+    refreshMeta();
+    fillList();
+  }
+
+  function renderSkills(container, entries){
+    const sp = window.IronQuestSkilltree.availableSkillPoints(entries);
+    const st = window.IronQuestSkilltree.load();
+    const trees = window.IronQuestSkilltree.TREES;
+
+    container.innerHTML = `
+      <div class="card">
+        <h2>Skilltree</h2>
+        <div class="row2">
+          <div class="pill"><b>Skillpunkte:</b> ${sp.available} <div class="small">Earned ${sp.earned} • Spent ${sp.spent}</div></div>
+          <div class="pill"><b>Bonus:</b> Unlocks geben XP-Multiplikator pro Typ.</div>
         </div>
+      </div>
+      <div class="card">
+        <h2>Trees</h2>
+        <div class="grid2" id="skGrid"></div>
+      </div>
+    `;
+
+    const grid = document.getElementById("skGrid");
+
+    trees.forEach(t=>{
+      const nodes = st.nodes[t.key] || [];
+      const box = document.createElement("div");
+      box.className = "card";
+      box.innerHTML = `
+        <h2>${t.label}</h2>
+        <p class="hint">Typ: ${t.type} • Aktueller Mult: x${window.IronQuestSkilltree.multiplierForType(t.type).toFixed(2)}</p>
+        <ul class="list" id="tree_${t.key}"></ul>
       `;
-      ul.appendChild(li);
+      grid.appendChild(box);
+
+      const ul = box.querySelector(`#tree_${t.key}`);
+      nodes.forEach(n=>{
+        const li = document.createElement("li");
+        li.innerHTML = `
+          <div class="row" style="justify-content:space-between;align-items:center;">
+            <div><b>${n.name}</b><div class="small">Cost: ${n.cost} • ${n.unlocked?"✅ unlocked":"🔒 locked"}</div></div>
+            <button class="btn primary" data-node="${n.id}" ${n.unlocked?"disabled":""} type="button">Unlock</button>
+          </div>
+        `;
+        ul.appendChild(li);
+      });
     });
 
-    ul.querySelectorAll("[data-del]").forEach(btn => {
-      btn.addEventListener("click", async () => {
-        const id = Number(btn.getAttribute("data-del"));
-        const ok = confirm("Eintrag löschen?");
-        if (!ok) return;
-        await deleteEntry(id);
-        await renderAll();
+    container.querySelectorAll("[data-node]").forEach(btn=>{
+      btn.addEventListener("click", ()=>{
+        const id = btn.getAttribute("data-node");
+        const res = window.IronQuestSkilltree.unlockNode(id, entries);
+        if (!res.ok) return alert(res.msg || "Nicht möglich.");
+        alert("Unlocked ✅ (Reload)");
+        location.reload();
       });
     });
   }
 
-  async function getAllData() {
-    const entries = await window.IronQuestDB.getAllEntries();
-    const health = (function () { try { return JSON.parse(localStorage.getItem("ironquest_health_v1") || "{}"); } catch { return {}; } })();
-    const misc = {
-      startDate: window.IronQuestProgression.getStartDate()
-    };
-    return { entries, health, misc };
-  }
-
-  async function importAllData(data) {
-    if (!data || !Array.isArray(data.entries)) throw new Error("Ungültige Backup-Struktur");
-    await window.IronQuestDB.clearAllEntries();
-    for (const e of data.entries) {
-      const copy = { ...e };
-      delete copy.id; // id autoIncrement
-      await window.IronQuestDB.addEntry(copy);
-    }
-    if (data.health) localStorage.setItem("ironquest_health_v1", JSON.stringify(data.health));
-    if (data.misc?.startDate) window.IronQuestProgression.setStartDate(data.misc.startDate);
-  }
-
-  async function renderAll() {
+  async function renderAll(){
     const entries = await getEntries();
-    const today = window.IronQuestProgression.isoDate(new Date());
-    const week = window.IronQuestProgression.currentWeek(today);
 
-    // reward update based on entries
-    window.IronQuestProgression.updateRewardFromEntries(entries, week);
-
-    // Player info
-    const totalXP = entries.reduce((s, e) => s + Number(e.xp || 0), 0);
-    const lv = levelFromTotalXP(totalXP);
-    const streak = window.IronQuestProgression.computeStreak(entries);
-
-    $("playerInfo").innerHTML = `<div class="pill"><b>Level:</b> ${lv.lvl}</div>
-      <div class="pill"><b>Streak:</b> ${streak}</div>
-      <div class="pill"><b>Total XP:</b> ${totalXP}</div>`;
+    // Update header status
+    const today = iso(new Date());
+    const curWeek = window.IronQuestProgression.weekForDate(today);
+    const streak = window.IronQuestProgression.updateStreakFromEntries(entries);
+    setStatus(`OK • W${curWeek} • Streak ${streak.count}`);
 
     // Render each tab content
-    renderDashboard($("dashboard"), entries, week);
-    renderLog($("log"), entries, week);
-    window.IronQuestAnalytics.render($("analytics"), entries, week);
-    window.IronQuestHealth.render($("health"));
-    window.IronQuestBoss.render($("boss"), entries, week, addEntry);
-    window.IronQuestChallenges.render($("challenge"));
-    await window.IronQuestBackup.render($("backup"), getAllData, importAllData);
+    await renderDashboard(document.getElementById("dashboard"), entries);
+    renderLog(document.getElementById("log"), entries);
+    renderSkills(document.getElementById("skills"), entries);
+
+    window.IronQuestAnalytics.renderAnalytics(document.getElementById("analytics"), entries, curWeek);
+    window.IronQuestHealth.renderHealth(document.getElementById("health"), entries);
+    window.IronQuestBoss.renderBoss(document.getElementById("boss"), entries, curWeek);
+    window.IronQuestChallenges.renderChallenge(document.getElementById("challenge"), entries, curWeek, streak.count);
+    window.IronQuestBackup.renderBackup(document.getElementById("backup"));
   }
 
-  function wireTabs() {
-    document.querySelectorAll("nav button").forEach(btn => {
-      btn.addEventListener("click", () => {
-        const id = btn.dataset.tab;
-        setActiveTab(id);
-      });
-    });
-    setActiveTab("dashboard");
-  }
-
-  async function init() {
-    try {
-      wireTabs();
-      await window.IronQuestDB.init();
-
-      // SW update button
-      const upBtn = $("updateBtn");
-      if (upBtn && "serviceWorker" in navigator) {
-        navigator.serviceWorker.register("sw.js");
-        upBtn.addEventListener("click", async () => {
-          try {
-            const reg = await navigator.serviceWorker.getRegistration();
-            if (reg) await reg.update();
-            alert("Update geprüft ✅ (ggf. App schließen/neu öffnen)");
-          } catch {
-            alert("Update fehlgeschlagen.");
-          }
-        });
+  async function forceUpdate(){
+    try{
+      if (navigator.serviceWorker && navigator.serviceWorker.controller){
+        navigator.serviceWorker.controller.postMessage({ type:"SKIP_WAITING" });
       }
-
-      await renderAll();
-    } catch (e) {
-      console.error(e);
-      alert("Anzeige Fehler in JS.");
+      // Hard reload
+      location.reload(true);
+    }catch{
+      location.reload();
     }
   }
 
-  document.addEventListener("DOMContentLoaded", init);
+  window.addEventListener("DOMContentLoaded", async ()=>{
+    try{
+      bindTabs();
+
+      // SW register
+      if ("serviceWorker" in navigator){
+        navigator.serviceWorker.register("./sw.js");
+      }
+
+      const btn = document.getElementById("btnUpdate");
+      if (btn) btn.addEventListener("click", forceUpdate);
+
+      await renderAll();
+    }catch(e){
+      console.error(e);
+      setStatus("JS Error: " + (e && e.message ? e.message : String(e)));
+      alert("Anzeige Fehler in JS. " + (e && e.message ? e.message : String(e)));
+    }
+  });
 })();
