@@ -1,36 +1,39 @@
-<!DOCTYPE html>
+<!doctype html>
 <html lang="de">
 <head>
-  <meta charset="UTF-8" />
-  <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+  <meta charset="utf-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover" />
   <title>IRON QUEST v4 PRO</title>
 
   <link rel="manifest" href="manifest.json">
   <link rel="stylesheet" href="style.css">
 
-  <meta name="theme-color" content="#0f0f0f">
+  <meta name="theme-color" content="#0f0f0f" />
   <meta name="apple-mobile-web-app-capable" content="yes">
   <meta name="apple-mobile-web-app-status-bar-style" content="black-translucent">
 </head>
 
 <body>
-  <header>
-    <h1>⚔ IRON QUEST v4 PRO</h1>
-    <div id="playerInfo"></div>
+  <header class="top">
+    <div class="brand">
+      <h1>⚔ IRON QUEST v4 PRO</h1>
+      <div id="playerInfo" class="sub">—</div>
+    </div>
+    <button id="btnUpdate" class="btn ghost" type="button">Update</button>
   </header>
 
-  <nav>
-    <button data-tab="dashboard">Dashboard</button>
-    <button data-tab="log">Log</button>
-    <button data-tab="skills">Skilltree</button>
-    <button data-tab="analytics">Analytics</button>
-    <button data-tab="health">Health</button>
-    <button data-tab="boss">Boss</button>
-    <button data-tab="challenge">Challenge</button>
-    <button data-tab="backup">Backup</button>
+  <nav class="tabs" aria-label="Navigation">
+    <button class="tabBtn active" data-tab="dashboard" type="button">Dashboard</button>
+    <button class="tabBtn" data-tab="log" type="button">Log</button>
+    <button class="tabBtn" data-tab="skills" type="button">Skilltree</button>
+    <button class="tabBtn" data-tab="analytics" type="button">Analytics</button>
+    <button class="tabBtn" data-tab="health" type="button">Health</button>
+    <button class="tabBtn" data-tab="boss" type="button">Boss</button>
+    <button class="tabBtn" data-tab="challenge" type="button">Challenge</button>
+    <button class="tabBtn" data-tab="backup" type="button">Backup</button>
   </nav>
 
-  <main>
+  <main class="main">
     <section id="dashboard" class="tab active"></section>
     <section id="log" class="tab"></section>
     <section id="skills" class="tab"></section>
@@ -41,10 +44,8 @@
     <section id="backup" class="tab"></section>
   </main>
 
-  <!-- Reihenfolge: utils -> db -> feature modules -> app -->
+  <!-- IMPORTANT: kein type="module" (iOS/GitHub Pages stabil) -->
   <script src="js/utils.js"></script>
-  <script src="js/urls.js"></script>
-
   <script src="js/db.js"></script>
   <script src="js/exercises.js"></script>
   <script src="js/xpSystem.js"></script>
@@ -56,7 +57,6 @@
   <script src="js/boss.js"></script>
   <script src="js/challenges.js"></script>
   <script src="js/backup.js"></script>
-
   <script src="js/app.js"></script>
 </body>
 </html>
