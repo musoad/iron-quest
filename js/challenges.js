@@ -1,64 +1,70 @@
-// js/challenges.js ✅
-
-(function () {
-  const KEY = "ironquest_challenges_v1";
+(function(){
+  const KEY = "iq_challenges_v4";
 
   const DEFAULT = [
-    { id: "c1", name: "5 Trainingstage", desc: "Trainiere an 5 Tagen in einer Woche.", reward: "+5% Reward nächste Woche (auto)" },
-    { id: "c2", name: "2x 1600+ XP Tage", desc: "Schaffe 2 starke Tage in einer Woche.", reward: "Motivation Badge" },
-    { id: "c3", name: "NEAT 3x", desc: "3x Walking Desk in einer Woche.", reward: "END-Boost (gefühlter Vorteil)" }
+    { id:"c1", name:"7-Day Streak", desc:"7 Tage in Folge trainieren.", goal:7, type:"streak" },
+    { id:"c2", name:"10k XP Week", desc:"In einer Woche 10.000 XP erreichen.", goal:10000, type:"weekxp" },
+    { id:"c3", name:"NEAT King", desc:"300 Minuten Walking Desk sammeln.", goal:300, type:"neatmin" }
   ];
 
-  function load() {
-    try { return JSON.parse(localStorage.getItem(KEY) || "null") || { active: null }; } catch { return { active: null }; }
+  function load(){
+    try{ return JSON.parse(localStorage.getItem(KEY)) || DEFAULT; }catch{ return DEFAULT; }
   }
-  function save(m) { localStorage.setItem(KEY, JSON.stringify(m)); }
+  function save(v){ localStorage.setItem(KEY, JSON.stringify(v)); }
 
-  function render(container) {
-    const st = load();
+  function renderChallenge(container, entries, curWeek, streakCount){
+    const ch = load();
+    // compute week xp and neat minutes
+    let weekXP = 0;
+    let neatMin = 0;
+    for (const e of entries){
+      if (e.week === curWeek) weekXP += (e.xp||0);
+      if (e.type === "NEAT") neatMin += Number(e.minutes||0);
+    }
+
     container.innerHTML = `
       <div class="card">
-        <h2>🏆 Challenge Mode</h2>
-        <p class="hint">Wähle eine Challenge – rein motivational. Rewards sind „soft“.</p>
-
-        <div class="pill"><b>Aktiv:</b> <span id="cActive">${st.active || "—"}</span></div>
-        <div class="divider"></div>
-
-        <ul class="list" id="cList"></ul>
-        <button id="cClear" type="button" class="secondary">Challenge deaktivieren</button>
+        <h2>Challenge Mode</h2>
+        <p class="hint">Mini-Challenges für Motivation. (Alles offline)</p>
+        <ul class="list" id="chList"></ul>
       </div>
     `;
 
-    const ul = container.querySelector("#cList");
-    DEFAULT.forEach(c => {
+    const ul = document.getElementById("chList");
+    ch.forEach(c=>{
+      let prog = 0;
+      if (c.type === "streak") prog = streakCount;
+      if (c.type === "weekxp") prog = weekXP;
+      if (c.type === "neatmin") prog = neatMin;
+
+      const done = prog >= c.goal;
+      const pct = Math.max(0, Math.min(100, Math.round((prog/c.goal)*100)));
+
       const li = document.createElement("li");
       li.innerHTML = `
-        <div class="entryRow">
-          <div style="min-width:0;">
-            <b>${c.name}</b>
-            <div class="hint">${c.desc}</div>
-            <div class="hint">Reward: ${c.reward}</div>
+        <div class="row" style="justify-content:space-between;align-items:center;">
+          <div>
+            <b>${c.name}</b> ${done?`<span class="badge ok">DONE</span>`:""}
+            <div class="small">${c.desc}</div>
+            <div class="small">Progress: ${prog} / ${c.goal} (${pct}%)</div>
           </div>
-          <button class="secondary" type="button" data-c="${c.id}" style="width:auto;">Aktivieren</button>
+          <button class="btn danger" data-reset="${c.id}" type="button">Reset</button>
         </div>
       `;
       ul.appendChild(li);
     });
 
-    ul.querySelectorAll("[data-c]").forEach(btn => {
-      btn.addEventListener("click", () => {
-        const id = btn.getAttribute("data-c");
-        save({ active: id });
-        alert("Challenge aktiviert ✅");
-        render(container);
+    ul.querySelectorAll("[data-reset]").forEach(btn=>{
+      btn.addEventListener("click", ()=>{
+        if (!confirm("Challenge reset?")) return;
+        const id = btn.getAttribute("data-reset");
+        const fresh = DEFAULT.map(x=>({ ...x }));
+        save(fresh);
+        alert("Challenges zurückgesetzt ✅");
+        location.reload();
       });
-    });
-
-    container.querySelector("#cClear").addEventListener("click", () => {
-      save({ active: null });
-      render(container);
     });
   }
 
-  window.IronQuestChallenges = { render };
+  window.IronQuestChallenges = { renderChallenge };
 })();
