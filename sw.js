@@ -4,7 +4,7 @@
    - network-first for HTML
 */
 
-const SW_VERSION = "v4.0.24";
+const SW_VERSION = "v4.0.25";
 const CACHE_NAME = `ironquest-${SW_VERSION}`;
 
 const ASSETS = [
