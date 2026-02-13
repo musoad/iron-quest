@@ -1,53 +1,77 @@
-/* IRON QUEST – xpSystem.js (classic)
-   ✅ XP Berechnung (Basis + NEAT Minuten)
-   ✅ Multiplikatoren: Mutation, Skilltree, Weekly Reward (optional)
-   ✅ PR-System Hook (wenn prSystem.js vorhanden)
-*/
+// js/xpSystem.js ✅
+// XP Engine + einfacher PR (Best Volume = sets*reps) pro Übung
+
 (function () {
-  const { loadJSON } = window.IQ;
+  const XP_BASE = {
+    "Mehrgelenkig": 180,
+    "Unilateral": 200,
+    "Core": 140,
+    "Conditioning": 240,
+    "Komplexe": 260,
+    "NEAT": 0,
+    "Rest": 0
+  };
 
-  const KEY_START = "ironquest_startdate_v20";
-  const KEY_WEEK_REWARD = "ironquest_week_rewards_v20"; // optional (true/false per week)
+  const PR_KEY = "ironquest_pr_volume_v1";
 
-  function getStartDate() {
-    return localStorage.getItem(KEY_START) || window.IQ.isoDate(new Date());
+  function loadPR() {
+    try { return JSON.parse(localStorage.getItem(PR_KEY) || "{}"); } catch { return {}; }
   }
-
-  function daysBetween(aISO, bISO) {
-    return Math.floor((new Date(bISO) - new Date(aISO)) / 86400000);
-  }
-  function weekFor(dateISO) {
-    const start = getStartDate();
-    const diff = daysBetween(start, dateISO);
-    return diff < 0 ? 1 : (Math.floor(diff / 7) + 1);
-  }
-
-  function rewardActiveForWeek(week) {
-    const map = loadJSON(KEY_WEEK_REWARD, {});
-    return map?.[String(week)] === true;
-  }
+  function savePR(m) { localStorage.setItem(PR_KEY, JSON.stringify(m)); }
 
   function neatXP(minutes) {
-    // iOS-safe integers
     const m = Math.max(0, Number(minutes || 0));
-    return Math.round(m * 2.5); // 60min = 150
+    return Math.round(m * 2.5); // 60min -> 150 XP
   }
 
-  function calcXP(input, ctx) {
-    const exName = input.exercise;
-    const type = window.IronQuestExercises.typeFor(exName);
-    const base = (type === "NEAT")
-      ? neatXP(input.minutes || 0)
-      : window.IronQuestExercises.baseXPForType(type);
+  function computeXP({ exercise, type, sets, reps, minutes, streakMult, skillMult, mutationMult, rewardMult }) {
+    let base = XP_BASE[type] ?? 0;
 
-    const mutMult = (ctx?.mutationMultByType?.[type] ?? 1);
-    const skillMult = (ctx?.skillMultByType?.[type] ?? 1);
-    const rewardMult = rewardActiveForWeek(input.week) ? 1.05 : 1.0;
+    if (type === "NEAT") base = neatXP(minutes);
+    if (type === "Rest") base = 0;
 
-    const xp = Math.round(base * mutMult * skillMult * rewardMult);
+    // Optional: kleiner Trainings-Boost wenn echte Sets/Reps vorhanden
+    let volumeBoost = 1;
+    const s = Number(sets || 0);
+    const r = Number(reps || 0);
 
-    return { xp, base, type, mutMult, skillMult, rewardMult };
+    if (type !== "NEAT" && type !== "Rest" && s > 0 && r > 0) {
+      const vol = s * r;
+      // sanfter Boost
+      volumeBoost = 1 + Math.min(0.25, vol / 400);
+    }
+
+    const mult =
+      (Number(streakMult) || 1) *
+      (Number(skillMult) || 1) *
+      (Number(mutationMult) || 1) *
+      (Number(rewardMult) || 1) *
+      volumeBoost;
+
+    const xp = Math.round(base * mult);
+    return { xp, base, mult, volumeBoost };
   }
 
-  window.IronQuestXP = { weekFor, neatXP, calcXP, rewardActiveForWeek };
+  function checkAndSetPR({ exercise, sets, reps }) {
+    const s = Number(sets || 0);
+    const r = Number(reps || 0);
+    if (!exercise || s <= 0 || r <= 0) return { isPR: false, best: 0, now: 0 };
+
+    const now = s * r;
+    const map = loadPR();
+    const best = Number(map[exercise] || 0);
+
+    if (now > best) {
+      map[exercise] = now;
+      savePR(map);
+      return { isPR: true, best, now };
+    }
+    return { isPR: false, best, now };
+  }
+
+  window.IronQuestXP = {
+    computeXP,
+    checkAndSetPR,
+    neatXP
+  };
 })();
