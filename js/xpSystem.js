@@ -1,77 +1,99 @@
-// js/xpSystem.js ✅
-// XP Engine + einfacher PR (Best Volume = sets*reps) pro Übung
+(function(){
+  const KEY_PR = "iq_pr_v4";
 
-(function () {
-  const XP_BASE = {
-    "Mehrgelenkig": 180,
-    "Unilateral": 200,
-    "Core": 140,
-    "Conditioning": 240,
-    "Komplexe": 260,
-    "NEAT": 0,
-    "Rest": 0
-  };
-
-  const PR_KEY = "ironquest_pr_volume_v1";
-
-  function loadPR() {
-    try { return JSON.parse(localStorage.getItem(PR_KEY) || "{}"); } catch { return {}; }
+  function loadPR(){
+    try{ return JSON.parse(localStorage.getItem(KEY_PR)) || {}; }catch{ return {}; }
   }
-  function savePR(m) { localStorage.setItem(PR_KEY, JSON.stringify(m)); }
-
-  function neatXP(minutes) {
-    const m = Math.max(0, Number(minutes || 0));
-    return Math.round(m * 2.5); // 60min -> 150 XP
+  function savePR(map){
+    localStorage.setItem(KEY_PR, JSON.stringify(map));
   }
 
-  function computeXP({ exercise, type, sets, reps, minutes, streakMult, skillMult, mutationMult, rewardMult }) {
-    let base = XP_BASE[type] ?? 0;
+  function baseXPByType(type){
+    if (type === "Mehrgelenkig") return 180;
+    if (type === "Unilateral") return 200;
+    if (type === "Core") return 140;
+    if (type === "Conditioning") return 240;
+    if (type === "Komplexe") return 260;
+    if (type === "NEAT") return 0;
+    if (type === "Rest") return 0;
+    return 120;
+  }
 
+  function neatXP(minutes){
+    const m = Math.max(0, Number(minutes||0));
+    return Math.round(m * 2.5); // 60 -> 150
+  }
+
+  // PR Logic:
+  // - For strength types: PR = max(sets*reps) OR reps if sets missing
+  // - For NEAT: PR = minutes
+  function computePRMetric(type, sets, reps, minutes){
+    if (type === "NEAT") return Math.max(0, Number(minutes||0));
+    const s = Number(sets||0), r = Number(reps||0);
+    if (s > 0 && r > 0) return Math.round(s*r);
+    if (r > 0) return Math.round(r);
+    return 0;
+  }
+
+  function checkAndUpdatePR(exerciseName, metric){
+    if (!exerciseName || metric <= 0) return { isPR:false, old:0, now:metric };
+    const pr = loadPR();
+    const old = Number(pr[exerciseName] || 0);
+    if (metric > old){
+      pr[exerciseName] = metric;
+      savePR(pr);
+      return { isPR:true, old, now:metric };
+    }
+    return { isPR:false, old, now:metric };
+  }
+
+  function getTopPRs(limit){
+    const pr = loadPR();
+    return Object.entries(pr)
+      .sort((a,b)=>Number(b[1])-Number(a[1]))
+      .slice(0, limit || 10);
+  }
+
+  // XP calc combines:
+  // base(type) + volume factor (sets/reps) + streak bonus + skill multiplier + mutation/reward placeholders
+  function computeXP(payload){
+    const type = payload.type;
+    const sets = Number(payload.sets||0);
+    const reps = Number(payload.reps||0);
+    const minutes = Number(payload.minutes||0);
+
+    let base = 0;
     if (type === "NEAT") base = neatXP(minutes);
-    if (type === "Rest") base = 0;
+    else base = baseXPByType(type);
 
-    // Optional: kleiner Trainings-Boost wenn echte Sets/Reps vorhanden
-    let volumeBoost = 1;
-    const s = Number(sets || 0);
-    const r = Number(reps || 0);
-
-    if (type !== "NEAT" && type !== "Rest" && s > 0 && r > 0) {
-      const vol = s * r;
-      // sanfter Boost
-      volumeBoost = 1 + Math.min(0.25, vol / 400);
+    // volume factor (small)
+    let vol = 1.0;
+    if (type !== "NEAT" && type !== "Rest"){
+      const v = (sets>0 && reps>0) ? (sets*reps) : (reps>0?reps:0);
+      vol = 1.0 + Math.min(0.35, v / 200); // capped
     }
 
-    const mult =
-      (Number(streakMult) || 1) *
-      (Number(skillMult) || 1) *
-      (Number(mutationMult) || 1) *
-      (Number(rewardMult) || 1) *
-      volumeBoost;
+    const streakMult = Number(payload.streakMult || 1.0);
+    const skillMult = Number(payload.skillMult || 1.0);
 
-    const xp = Math.round(base * mult);
-    return { xp, base, mult, volumeBoost };
-  }
+    const xp = Math.max(0, Math.round(base * vol * streakMult * skillMult));
 
-  function checkAndSetPR({ exercise, sets, reps }) {
-    const s = Number(sets || 0);
-    const r = Number(reps || 0);
-    if (!exercise || s <= 0 || r <= 0) return { isPR: false, best: 0, now: 0 };
+    const metric = computePRMetric(type, sets, reps, minutes);
+    const prRes = checkAndUpdatePR(payload.exercise, metric);
 
-    const now = s * r;
-    const map = loadPR();
-    const best = Number(map[exercise] || 0);
-
-    if (now > best) {
-      map[exercise] = now;
-      savePR(map);
-      return { isPR: true, best, now };
-    }
-    return { isPR: false, best, now };
+    return {
+      xp,
+      base,
+      volMult: vol,
+      streakMult,
+      skillMult,
+      pr: prRes
+    };
   }
 
   window.IronQuestXP = {
     computeXP,
-    checkAndSetPR,
-    neatXP
+    getTopPRs,
+    loadPR
   };
 })();
