@@ -1,651 +1,613 @@
 /* =========================
-   IRON QUEST – app.js (FULL)
-   ✅ Tabs (stabil, iOS): Event Delegation
-   ✅ Dashboard + Log + Jogging + Skills + Analytics + Health + Boss + Challenge + Backup
-   ✅ Jogging generiert XP + speichert Run-Objekt in runs-store
-   ========================= */
+   IRON QUEST v4 PRO – js/app.js (FULL)
+   ✅ Tabs funktionieren stabil (iOS/Safari)
+   ✅ Log: Übungen + Beschreibung + tatsächliche Sets/Reps
+   ✅ Sterne pro Trainingstag (⭐/⭐⭐/⭐⭐⭐) + Anzeige
+   ✅ Weekly Plan (einfach) im Dashboard
+   ✅ Jogging Tab: Distanz + Zeit + XP + Pace-Chart
+   ✅ Skilltree/Analytics/Health/Boss/Challenge/Backup: echte Module (kompatible Global-Namen)
+========================= */
 
-const $ = (sel) => document.querySelector(sel);
+(function () {
+  "use strict";
 
-function showTab(id) {
-  const tabs = document.querySelectorAll("main .tab");
-  const buttons = document.querySelectorAll("nav button[data-tab]");
+  /* -------------------------
+     Helpers
+  ------------------------- */
+  const $ = (sel, root = document) => root.querySelector(sel);
+  const $$ = (sel, root = document) => Array.from(root.querySelectorAll(sel));
+  const isoDate = (d) => new Date(d).toISOString().slice(0, 10);
 
-  tabs.forEach((t) => t.classList.remove("active"));
-  buttons.forEach((b) => b.classList.remove("active"));
+  const KEY_START = "ironquest_startdate_v4";
+  const STAR_THR = { one: 1200, two: 1600, three: 2000 };
 
-  const el = document.getElementById(id);
-  const btn = document.querySelector(`nav button[data-tab="${id}"]`);
-
-  if (el) el.classList.add("active");
-  if (btn) btn.classList.add("active");
-
-  // optional hash
-  try { location.hash = id; } catch {}
-}
-
-/** ✅ FIX: Delegation statt einzelne Listener (damit Tabs immer klickbar bleiben) */
-function setupNav() {
-  const nav = document.querySelector("nav");
-  if (!nav) return;
-
-  // Joggen direkt nach Log positionieren
-  const logBtn = nav.querySelector('button[data-tab="log"]');
-  const jogBtn = nav.querySelector('button[data-tab="jogging"]');
-  if (logBtn && jogBtn && logBtn.nextElementSibling !== jogBtn) {
-    logBtn.insertAdjacentElement("afterend", jogBtn);
+  function starsForXp(xp) {
+    if (xp >= STAR_THR.three) return "⭐⭐⭐";
+    if (xp >= STAR_THR.two) return "⭐⭐";
+    if (xp >= STAR_THR.one) return "⭐";
+    return "—";
   }
 
-  nav.addEventListener("click", (e) => {
-    const btn = e.target.closest("button");
-    if (!btn) return;
+  function computeTrainingStreak(entries) {
+    const totals = new Map();
+    for (const e of entries || []) {
+      const d = e?.date;
+      if (!d) continue;
+      totals.set(d, (totals.get(d) || 0) + (e.xp || 0));
+    }
 
-    // Update Button
-    if (btn.id === "btnUpdate") {
+    let streak = 0;
+    let cursor = new Date();
+    while (true) {
+      const d = isoDate(cursor);
+      const xp = totals.get(d) || 0;
+      if (xp > 0) {
+        streak += 1;
+        cursor.setDate(cursor.getDate() - 1);
+      } else {
+        break;
+      }
+    }
+    return streak;
+  }
+
+  function ensureStartDate() {
+    let start = localStorage.getItem(KEY_START);
+    if (!start) {
+      start = isoDate(new Date());
+      localStorage.setItem(KEY_START, start);
+    }
+    return start;
+  }
+
+  function getWeekNumber(startISO, dateISO) {
+    const a = new Date(startISO);
+    const b = new Date(dateISO);
+    const diff = Math.floor((b - a) / 86400000);
+    if (diff < 0) return 0;
+    return Math.floor(diff / 7) + 1;
+  }
+
+  function weekBlock(week) {
+    if (week <= 4) return 1;
+    if (week <= 8) return 2;
+    return 3;
+  }
+
+  function blockLabel(block) {
+    if (block === 1) return "Block 1 (Technik/ROM)";
+    if (block === 2) return "Block 2 (Volumen/Progress)";
+    return "Block 3 (Dichte/Intensität)";
+  }
+
+  // Compatibility: different files may expose different global names.
+  function pickGlobal(...names) {
+    for (const n of names) {
+      if (n && typeof window[n] !== "undefined") return window[n];
+    }
+    return null;
+  }
+
+  /* -------------------------
+     DB Adapter
+  ------------------------- */
+  function db() {
+    const d = window.IronQuestDB || window.DB || null;
+    if (!d) throw new Error("DB Modul fehlt (db.js).");
+    return d;
+  }
+
+  /* -------------------------
+     Tabs
+  ------------------------- */
+  const TAB_IDS = ["dashboard", "log", "jogging", "skills", "analytics", "health", "boss", "challenge", "backup"];
+
+  function setActiveTab(id) {
+    if (!TAB_IDS.includes(id)) id = "dashboard";
+    $$("nav button").forEach((b) => b.classList.toggle("active", b.dataset.tab === id));
+    TAB_IDS.forEach((tid) => {
+      const sec = document.getElementById(tid);
+      if (sec) sec.classList.toggle("active", tid === id);
+    });
+    location.hash = id;
+  }
+
+  function wireTabs() {
+    const nav = $("nav");
+    if (!nav) return;
+
+    nav.addEventListener("click", (e) => {
+      const btn = e.target.closest("button[data-tab]");
+      if (!btn) return;
       e.preventDefault();
-      tryUpdate();
-      return;
-    }
-
-    // Tabs
-    const tab = btn.getAttribute("data-tab");
-    if (!tab) return;
-    e.preventDefault();
-    showTab(tab);
-  });
-
-  const initial = (location.hash || "#dashboard").replace("#", "") || "dashboard";
-  showTab(initial);
-}
-
-/* =========================
-   Helpers
-========================= */
-function isoDate(d = new Date()) {
-  return new Date(d).toISOString().slice(0, 10);
-}
-
-function groupBy(arr, keyFn) {
-  const m = new Map();
-  for (const x of arr) {
-    const k = keyFn(x);
-    if (!m.has(k)) m.set(k, []);
-    m.get(k).push(x);
-  }
-  return m;
-}
-
-/* =========================
-   Stars (Tagesbewertung)
-   1200–1599 ⭐ • 1600–1999 ⭐⭐ • 2000+ ⭐⭐⭐
-========================= */
-const STAR_THR = { one: 1200, two: 1600, three: 2000 };
-function starsForXp(xp) {
-  if (xp >= STAR_THR.three) return "⭐⭐⭐";
-  if (xp >= STAR_THR.two) return "⭐⭐";
-  if (xp >= STAR_THR.one) return "⭐";
-  return "—";
-}
-
-/* =========================
-   Update (SW)
-========================= */
-async function tryUpdate() {
-  if (!("serviceWorker" in navigator)) return alert("Service Worker nicht verfügbar.");
-  try {
-    const reg = await navigator.serviceWorker.getRegistration();
-    if (reg?.waiting) {
-      reg.waiting.postMessage({ type: "SKIP_WAITING" });
-      alert("Update wird angewendet… App neu öffnen.");
-      return;
-    }
-    await reg?.update();
-    alert("Update geprüft. Falls verfügbar: App neu öffnen.");
-  } catch (e) {
-    alert("Update fehlgeschlagen.");
-    console.warn(e);
-  }
-}
-
-/* =========================
-   Data loading
-========================= */
-async function getEntries() {
-  const all = await window.IronQuestDB.getAll(window.IronQuestDB.STORES.entries);
-  return (all || []).sort((a, b) => (b.id || 0) - (a.id || 0));
-}
-
-function computeDayXp(entries) {
-  const map = {};
-  for (const e of entries) {
-    const d = e.date || "";
-    map[d] = (map[d] || 0) + (e.xp || 0);
-  }
-  return map;
-}
-
-/* =========================
-   Dashboard
-========================= */
-async function renderDashboard() {
-  const root = document.getElementById("dashboard");
-  if (!root) return;
-
-  const entries = await getEntries();
-  const today = isoDate();
-  const dayXp = computeDayXp(entries);
-  const todayXp = dayXp[today] || 0;
-
-  const totalXp = entries.reduce((s, e) => s + (e.xp || 0), 0);
-  const lvl = window.Progression?.levelFromXp ? window.Progression.levelFromXp(totalXp) : { level: 1, next: 0 };
-
-  // Weekly plan (simple, based on exercises tags)
-  const planHTML = buildWeeklyPlanHTML(entries);
-
-  root.innerHTML = `
-    <div class="card">
-      <h2>Dashboard</h2>
-      <div class="row2">
-        <div class="pill"><b>Heute:</b> ${today}</div>
-        <div class="pill"><b>Heute XP:</b> ${todayXp} (${starsForXp(todayXp)})</div>
-      </div>
-      <div class="row2">
-        <div class="pill"><b>Gesamt XP:</b> ${totalXp}</div>
-        <div class="pill"><b>Level:</b> ${lvl.level || 1}</div>
-      </div>
-      <p class="hint">Sterne: ⭐ ab ${STAR_THR.one} • ⭐⭐ ab ${STAR_THR.two} • ⭐⭐⭐ ab ${STAR_THR.three}</p>
-    </div>
-
-    <div class="card">
-      <h2>Wochenplan</h2>
-      <p class="hint">Einfacher Plan + Status anhand deiner geloggten Einträge dieser Woche.</p>
-      ${planHTML}
-    </div>
-
-    <div class="card">
-      <h2>Letzte Einträge</h2>
-      ${renderRecentEntriesHTML(entries)}
-    </div>
-  `;
-}
-
-function renderRecentEntriesHTML(entries) {
-  const last = entries.slice(0, 8);
-  if (!last.length) return `<div class="hint">Noch keine Einträge.</div>`;
-  return `
-    <ul class="list">
-      ${last.map(e => `
-        <li class="listRow">
-          <div>
-            <div><b>${e.exercise || e.type || "Eintrag"}</b></div>
-            <div class="hint">${e.date || ""} • ${e.type || ""} • ${e.detail || ""}</div>
-          </div>
-          <div class="badge">${e.xp || 0} XP</div>
-        </li>
-      `).join("")}
-    </ul>
-  `;
-}
-
-/* =========================
-   Weekly Plan (minimal / robust)
-   - verwendet EXERCISES aus exercises.js
-   - enthält Joggen optional
-========================= */
-function buildWeeklyPlanHTML(entries) {
-  const today = new Date();
-  const monday = new Date(today);
-  const day = monday.getDay(); // 0 So, 1 Mo
-  const diff = (day === 0 ? -6 : 1 - day);
-  monday.setDate(monday.getDate() + diff);
-
-  const days = Array.from({ length: 7 }, (_, i) => {
-    const d = new Date(monday);
-    d.setDate(d.getDate() + i);
-    return isoDate(d);
-  });
-
-  const byDate = groupBy(entries, e => e.date || "");
-  const statusIcon = (dateISO) => {
-    const list = byDate.get(dateISO) || [];
-    const xp = list.reduce((s, e) => s + (e.xp || 0), 0);
-    if (xp >= STAR_THR.one) return "🟢";
-    if (xp > 0) return "⚪";
-    return "🔴";
-  };
-
-  const labels = ["Mo", "Di", "Mi", "Do", "Fr", "Sa", "So"];
-
-  const planned = {
-    0: ["Push (Oberkörper)", "DB Floor Press / DB Press", "Arnold Press", "Push-Ups", "Trizeps"],
-    1: ["Pull (Rücken)", "1-Arm DB Row", "Reverse Flys", "Curls", "Farmer Carry"],
-    2: ["Joggen (optional)", "20–40 Min easy", "oder Intervalle 8×1min", "XP über Joggen-Tab"],
-    3: ["Beine & Core", "Bulgarian Split Squats", "RDL", "Core Hold", "Calves"],
-    4: ["Ganzkörper", "Komplex / Thrusters", "Core", "Finisher"],
-    5: ["Conditioning", "Burpees / Climbers", "Core"],
-    6: ["Recovery", "Mobility + Spaziergang"],
-  };
-
-  return `
-    <div class="planGrid">
-      ${days.map((d, i) => `
-        <div class="planDay">
-          <div class="planHead">${labels[i]} • ${d.slice(5)} <span class="planStatus">${statusIcon(d)}</span></div>
-          <ul class="planList">
-            ${(planned[i] || []).map(x => `<li>${x}</li>`).join("")}
-          </ul>
-          <div class="hint">Tag: ${starsForXp((byDate.get(d) || []).reduce((s,e)=>s+(e.xp||0),0))}</div>
-        </div>
-      `).join("")}
-    </div>
-  `;
-}
-
-/* =========================
-   Log (Training Entry)
-========================= */
-async function renderLog() {
-  const root = document.getElementById("log");
-  if (!root) return;
-
-  const ex = window.EXERCISES || [];
-  const entries = await getEntries();
-  const today = isoDate();
-
-  root.innerHTML = `
-    <div class="card">
-      <h2>Log</h2>
-
-      <label>Datum</label>
-      <input id="logDate" type="date" value="${today}" />
-
-      <label>Übung</label>
-      <select id="logExercise">
-        ${ex.map(e => `<option value="${e.name}">${e.name} (${e.type})</option>`).join("")}
-      </select>
-
-      <div id="logMeta" class="hint"></div>
-
-      <label>Tatsächliche Sets</label>
-      <input id="logSets" inputmode="numeric" placeholder="z.B. 4" />
-
-      <label>Tatsächliche Reps</label>
-      <input id="logReps" inputmode="numeric" placeholder="z.B. 10 (oder 8-10)" />
-
-      <label>Walking Minuten (nur NEAT)</label>
-      <input id="logWalk" inputmode="numeric" placeholder="z.B. 60" />
-
-      <div class="card soft" style="margin-top:12px;">
-        <div><b>Preview XP:</b> <span id="logXpPrev">0</span></div>
-        <div class="hint" id="logXpInfo">—</div>
-      </div>
-
-      <div class="row2" style="margin-top:12px;">
-        <button id="btnSave" type="button">Speichern</button>
-        <button id="btnClearAll" type="button" class="danger">Alle Einträge löschen</button>
-      </div>
-    </div>
-
-    <div class="card">
-      <h2>Einträge</h2>
-      ${renderEntriesList(entries)}
-    </div>
-  `;
-
-  const dateEl = $("#logDate");
-  const exEl = $("#logExercise");
-  const setsEl = $("#logSets");
-  const repsEl = $("#logReps");
-  const walkEl = $("#logWalk");
-  const metaEl = $("#logMeta");
-
-  function refreshPreview() {
-    const exName = exEl.value;
-    const m = ex.find(x => x.name === exName);
-    const type = m?.type || "Mehrgelenkig";
-
-    const sets = parseInt(setsEl.value || "0", 10) || 0;
-    const reps = parseInt(repsEl.value || "0", 10) || 0;
-    const walkMin = parseInt(walkEl.value || "0", 10) || 0;
-
-    if (metaEl) {
-      metaEl.textContent = `${m?.desc || ""} • Empfohlen: Sets ${m?.recSets || "-"}, Reps ${m?.recReps || "-"}`;
-    }
-
-    const xpRes = window.XPSystem?.calcXP
-      ? window.XPSystem.calcXP({ type, sets, reps, walkMin })
-      : { xp: 0, info: "XPSystem fehlt" };
-
-    $("#logXpPrev").textContent = xpRes.xp || 0;
-    $("#logXpInfo").textContent = xpRes.info || "—";
-  }
-
-  refreshPreview();
-  [dateEl, exEl, setsEl, repsEl, walkEl].forEach(el => el?.addEventListener("input", refreshPreview));
-
-  $("#btnSave")?.addEventListener("click", async () => {
-    const date = dateEl.value || today;
-    const exName = exEl.value;
-    const m = ex.find(x => x.name === exName);
-    const type = m?.type || "Mehrgelenkig";
-
-    const sets = parseInt(setsEl.value || "0", 10) || 0;
-    const reps = parseInt(repsEl.value || "0", 10) || 0;
-    const walkMin = parseInt(walkEl.value || "0", 10) || 0;
-
-    const xpRes = window.XPSystem?.calcXP
-      ? window.XPSystem.calcXP({ type, sets, reps, walkMin })
-      : { xp: 0, info: "XPSystem fehlt" };
-
-    const detailParts = [];
-    if (m?.how) detailParts.push(m.how);
-    if (sets) detailParts.push(`Sets: ${sets}`);
-    if (reps) detailParts.push(`Reps: ${reps}`);
-    if (walkMin) detailParts.push(`Min: ${walkMin}`);
-    detailParts.push(xpRes.info || "");
-
-    await window.IronQuestDB.add({
-      date,
-      exercise: exName,
-      type,
-      xp: xpRes.xp || 0,
-      detail: detailParts.filter(Boolean).join(" • "),
+      setActiveTab(btn.dataset.tab);
+      renderActive();
     });
 
-    await renderAll();
-    showTab("log");
-  });
-
-  $("#btnClearAll")?.addEventListener("click", async () => {
-    if (!confirm("Wirklich ALLE Einträge löschen?")) return;
-    await window.IronQuestDB.clearEntries();
-    await renderAll();
-    showTab("log");
-  });
-}
-
-function renderEntriesList(entries) {
-  if (!entries.length) return `<div class="hint">Noch keine Einträge.</div>`;
-
-  // Star badge per day (simple)
-  const dayXp = computeDayXp(entries);
-
-  return `
-    <ul class="list">
-      ${entries.slice(0, 40).map(e => {
-        const dxp = dayXp[e.date] || 0;
-        return `
-          <li class="listRow">
-            <div>
-              <div><b>${e.exercise || e.type || "Eintrag"}</b></div>
-              <div class="hint">${e.date || ""} • ${e.type || ""} • ${e.detail || ""}</div>
-              <div class="hint">Tageswertung: ${starsForXp(dxp)} (${dxp} XP)</div>
-            </div>
-            <div class="badge">${e.xp || 0} XP</div>
-          </li>
-        `;
-      }).join("")}
-    </ul>
-  `;
-}
-
-/* =========================
-   Jogging (XP + Chart)
-========================= */
-async function renderJogging() {
-  const root = document.getElementById("jogging");
-  if (!root) return;
-
-  const entries = await getEntries();
-  const runs = entries.filter(e => e.type === "Jogging").slice(0, 60);
-
-  root.innerHTML = `
-    <div class="card">
-      <h2>Joggen</h2>
-      <p class="hint">Distance + Zeit → XP wird automatisch erzeugt und als Eintrag gespeichert.</p>
-
-      <label>Datum</label>
-      <input id="runDate" type="date" value="${isoDate()}" />
-
-      <label>Distanz (km)</label>
-      <input id="runDist" inputmode="decimal" placeholder="z.B. 5.0" />
-
-      <label>Zeit (Minuten)</label>
-      <input id="runTime" inputmode="numeric" placeholder="z.B. 30" />
-
-      <div class="card soft" style="margin-top:12px;">
-        <div><b>Preview XP:</b> <span id="runXpPrev">0</span></div>
-        <div class="hint" id="runXpInfo">—</div>
-      </div>
-
-      <div class="row2" style="margin-top:12px;">
-        <button id="btnRunSave" type="button">Speichern</button>
-        <button id="btnRunClear" type="button" class="danger">Runs löschen</button>
-      </div>
-    </div>
-
-    <div class="card">
-      <h2>Entwicklung</h2>
-      <canvas id="runChart" width="900" height="260" style="width:100%; height:auto; border-radius:14px;"></canvas>
-      <p class="hint">Chart = Pace (min/km). Weniger ist besser.</p>
-    </div>
-
-    <div class="card">
-      <h2>Letzte Runs</h2>
-      ${runs.length ? `
-        <ul class="list">
-          ${runs.map(r => `<li class="listRow"><div>
-            <div><b>${r.date}</b> • ${r.exercise}</div>
-            <div class="hint">${r.detail || ""}</div>
-          </div><div class="badge">${r.xp || 0} XP</div></li>`).join("")}
-        </ul>
-      ` : `<div class="hint">Noch keine Jogging-Einträge.</div>`}
-    </div>
-  `;
-
-  const dEl = $("#runDate");
-  const distEl = $("#runDist");
-  const timeEl = $("#runTime");
-
-  function preview() {
-    const distKm = parseFloat((distEl.value || "").replace(",", ".")) || 0;
-    const timeMin = parseFloat((timeEl.value || "").replace(",", ".")) || 0;
-
-    const xpRes = window.XPSystem?.calcJogXP
-      ? window.XPSystem.calcJogXP({ distKm, timeMin })
-      : { xp: 0, info: "XPSystem.calcJogXP fehlt" };
-
-    $("#runXpPrev").textContent = xpRes.xp || 0;
-    $("#runXpInfo").textContent = xpRes.info || "—";
+    const initial = (location.hash || "#dashboard").replace("#", "");
+    setActiveTab(initial);
   }
 
-  [distEl, timeEl].forEach(el => el?.addEventListener("input", preview));
-  preview();
+  /* -------------------------
+     Dashboard (includes Weekly Plan + Stars summary)
+  ------------------------- */
+  async function renderDashboard() {
+    const root = document.getElementById("dashboard");
+    if (!root) return;
 
-  $("#btnRunSave")?.addEventListener("click", async () => {
-    const date = dEl.value || isoDate();
-    const distKm = parseFloat((distEl.value || "").replace(",", ".")) || 0;
-    const timeMin = parseFloat((timeEl.value || "").replace(",", ".")) || 0;
-    if (distKm <= 0 || timeMin <= 0) return alert("Bitte Distanz und Zeit eingeben.");
+    const start = ensureStartDate();
+    const today = isoDate(new Date());
+    const week = getWeekNumber(start, today);
+    const block = weekBlock(week);
 
-    const xpRes = window.XPSystem?.calcJogXP
-      ? window.XPSystem.calcJogXP({ distKm, timeMin })
-      : { xp: 0, info: "XPSystem.calcJogXP fehlt" };
-
-    const pace = distKm > 0 ? (timeMin / distKm) : 0;
-    const entry = {
-      date,
-      exercise: `Joggen ${distKm.toFixed(2)} km`,
-      type: "Jogging",
-      xp: xpRes.xp || 0,
-      detail: `Zeit: ${timeMin.toFixed(0)} min • Pace: ${pace.toFixed(2)} min/km • ${xpRes.info || ""}`
-    };
-
-    await window.IronQuestDB.add(entry);
-
-    // zusätzlich runs-store (für spätere Charts/Export)
-    try { await window.IronQuestDB.addRun({ date, distKm, timeMin, pace, xp: entry.xp }); } catch(e) {}
-
-    await renderAll();
-    showTab("jogging");
-  });
-
-  $("#btnRunClear")?.addEventListener("click", async () => {
-    if (!confirm("Alle Run-Daten löschen? (Entries bleiben, wenn du sie im Log nicht löscht)")) return;
-    try { await window.IronQuestDB.clearRuns(); } catch(e) {}
-    alert("Runs gelöscht.");
-  });
-
-  drawRunChart(runs);
-}
-
-function drawRunChart(runs) {
-  const c = document.getElementById("runChart");
-  if (!c) return;
-  const ctx = c.getContext("2d");
-  ctx.clearRect(0, 0, c.width, c.height);
-
-  // parse pace from detail "Pace: X min/km"
-  const pts = runs
-    .slice()
-    .reverse()
-    .map((r) => {
-      const m = String(r.detail || "").match(/Pace:\s*([\d.]+)\s*min\/km/i);
-      return { date: r.date, pace: m ? parseFloat(m[1]) : null };
-    })
-    .filter(x => x.pace != null);
-
-  if (pts.length < 2) {
-    ctx.font = "22px system-ui";
-    ctx.fillText("Noch nicht genug Daten für Chart.", 24, 60);
-    return;
-  }
-
-  const pad = 30;
-  const W = c.width - pad * 2;
-  const H = c.height - pad * 2;
-
-  const minP = Math.min(...pts.map(p => p.pace));
-  const maxP = Math.max(...pts.map(p => p.pace));
-  const range = Math.max(0.01, maxP - minP);
-
-  ctx.globalAlpha = 0.25;
-  ctx.fillRect(pad, pad + H, W, 2);
-  ctx.globalAlpha = 1;
-
-  ctx.beginPath();
-  pts.forEach((p, i) => {
-    const x = pad + (i / (pts.length - 1)) * W;
-    const y = pad + H - ((p.pace - minP) / range) * H;
-    if (i === 0) ctx.moveTo(x, y);
-    else ctx.lineTo(x, y);
-  });
-  ctx.lineWidth = 3;
-  ctx.stroke();
-
-  pts.forEach((p, i) => {
-    const x = pad + (i / (pts.length - 1)) * W;
-    const y = pad + H - ((p.pace - minP) / range) * H;
-    ctx.beginPath();
-    ctx.arc(x, y, 4, 0, Math.PI * 2);
-    ctx.fill();
-  });
-
-  ctx.font = "18px system-ui";
-  ctx.fillText(`Pace min/km: min ${minP.toFixed(2)} • max ${maxP.toFixed(2)}`, pad, 22);
-}
-
-/* =========================
-   Other Tabs (minimal hook)
-========================= */
-async function renderSkills() {
-  const root = document.getElementById("skills");
-  if (!root) return;
-  root.innerHTML = `<div class="card"><h2>Skilltree</h2><p class="hint">Wird über skilltree.js gerendert (falls aktiv).</p></div>`;
-  try { window.Skilltree?.render?.(root); } catch {}
-}
-
-async function renderAnalytics() {
-  const root = document.getElementById("analytics");
-  if (!root) return;
-  root.innerHTML = `<div class="card"><h2>Analytics</h2><p class="hint">Wird über analytics.js gerendert (falls aktiv).</p></div>`;
-  try { window.Analytics?.render?.(root); } catch {}
-}
-
-async function renderHealth() {
-  const root = document.getElementById("health");
-  if (!root) return;
-  root.innerHTML = `<div class="card"><h2>Health</h2><p class="hint">Wird über health.js gerendert (falls aktiv).</p></div>`;
-  try { window.Health?.render?.(root); } catch {}
-}
-
-async function renderBoss() {
-  const root = document.getElementById("boss");
-  if (!root) return;
-  root.innerHTML = `<div class="card"><h2>Boss</h2><p class="hint">Wird über boss.js gerendert (falls aktiv).</p></div>`;
-  try { window.Boss?.render?.(root); } catch {}
-}
-
-async function renderChallenge() {
-  const root = document.getElementById("challenge");
-  if (!root) return;
-  root.innerHTML = `<div class="card"><h2>Challenge</h2><p class="hint">Wird über challenges.js gerendert (falls aktiv).</p></div>`;
-  try { window.Challenges?.render?.(root); } catch {}
-}
-
-async function renderBackup() {
-  const root = document.getElementById("backup");
-  if (!root) return;
-  root.innerHTML = `<div class="card"><h2>Backup</h2><p class="hint">Wird über backup.js gerendert (falls aktiv).</p></div>`;
-  try { window.Backup?.render?.(root); } catch {}
-}
-
-/* =========================
-   Render All
-========================= */
-async function renderAll() {
-  try {
-    await renderDashboard();
-    await renderLog();
-    await renderJogging();
-    await renderSkills();
-    await renderAnalytics();
-    await renderHealth();
-    await renderBoss();
-    await renderChallenge();
-    await renderBackup();
-
-    const entries = await getEntries();
+    const entries = await db().getAll();
     const totalXp = entries.reduce((s, e) => s + (e.xp || 0), 0);
-    const today = isoDate();
-    const todayXp = computeDayXp(entries)[today] || 0;
 
-    const status = `OK • ${starsForXp(todayXp)} • Streak ${window.Streak?.get?.() ?? 0}`;
-    const info = document.getElementById("playerInfo");
-    if (info) info.textContent = status;
-  } catch (e) {
-    console.warn(e);
-    const info = document.getElementById("playerInfo");
-    if (info) info.textContent = "Anzeige Fehler in JS.";
-  }
-}
+    // Today XP
+    const todayXp = entries.filter((e) => e.date === today).reduce((s, e) => s + (e.xp || 0), 0);
 
-/* =========================
-   Init
-========================= */
-function init() {
-  setupNav();
+    // Week XP (based on start date)
+    const weekXp = entries
+      .filter((e) => getWeekNumber(start, e.date) === week)
+      .reduce((s, e) => s + (e.xp || 0), 0);
 
-  // Service Worker
-  if ("serviceWorker" in navigator) {
-    navigator.serviceWorker.register("sw.js").catch(() => {});
-    navigator.serviceWorker.addEventListener("controllerchange", () => {
-      // optional: reload on update
-      // location.reload();
+    const Prog = pickGlobal("Progression", "IronQuestProgression", "IQProgression");
+    const lvl = Prog?.levelFromXp ? Prog.levelFromXp(totalXp) : { level: 1, next: 0 };
+
+    // Weekly Plan (simple)
+    const plan = [
+      { day: "Mo", focus: "Push", note: "Brust/Schulter/Trizeps" },
+      { day: "Di", focus: "Pull", note: "Rücken/Bizeps" },
+      { day: "Mi", focus: "Recovery", note: "Mobility + Walk" },
+      { day: "Do", focus: "Legs + Core", note: "Beine/Rumpf" },
+      { day: "Fr", focus: "Full Body", note: "Komplexe + Core" },
+      { day: "Sa", focus: "Conditioning", note: "Metcon + Core" },
+      { day: "So", focus: "Recovery", note: "Mobility + Walk" },
+    ];
+
+    root.innerHTML = `
+      <div class="card">
+        <h2>Status</h2>
+        <div class="row">
+          <div class="pill"><b>Start:</b> ${start}</div>
+          <div class="pill"><b>Woche:</b> ${week ? `W${week}` : "—"}</div>
+          <div class="pill"><b>${blockLabel(block)}</b></div>
+        </div>
+
+        <div class="row" style="margin-top:10px;">
+          <div class="pill"><b>Heute:</b> ${todayXp} XP (${starsForXp(todayXp)})</div>
+          <div class="pill"><b>Woche:</b> ${weekXp} XP</div>
+          <div class="pill"><b>Gesamt:</b> ${totalXp} XP</div>
+          <div class="pill"><b>Level:</b> ${lvl.level}</div>
+          <div class="pill"><b>Streak:</b> ${computeTrainingStreak(entries)} Tage</div>
+        </div>
+
+        <div class="hr"></div>
+
+        <label>Startdatum Woche 1</label>
+        <input id="startDateInput" type="date" value="${start}">
+        <button class="secondary" id="saveStartDate">Startdatum speichern</button>
+        <div class="small">Hinweis: Week-Logik basiert auf Startdatum (Sterne fix: ⭐ ab ${STAR_THR.one}, ⭐⭐ ab ${STAR_THR.two}, ⭐⭐⭐ ab ${STAR_THR.three}).</div>
+      </div>
+
+      <div class="card">
+        <h2>Weekly Plan</h2>
+        <div class="grid cols2">
+          ${plan
+            .map(
+              (p) => `
+            <div class="pill" style="border-radius:16px;">
+              <b>${p.day}:</b> ${p.focus}<br><span class="small">${p.note}</span>
+            </div>`
+            )
+            .join("")}
+        </div>
+        <div class="small" style="margin-top:10px;">Joggen: nutze den Tab <b>Joggen</b> → generiert XP + Fortschrittsgrafik.</div>
+      </div>
+    `;
+
+    $("#saveStartDate", root)?.addEventListener("click", async () => {
+      const v = $("#startDateInput", root)?.value;
+      if (!v) return alert("Bitte Startdatum wählen.");
+      localStorage.setItem(KEY_START, v);
+      await renderActive();
+      alert("Startdatum gespeichert ✅");
     });
   }
 
-  renderAll();
-}
+  /* -------------------------
+     Log
+  ------------------------- */
+  async function renderLog() {
+    const root = document.getElementById("log");
+    if (!root) return;
 
-init();
+    const start = ensureStartDate();
+    const today = isoDate(new Date());
+    const week = getWeekNumber(start, today);
+
+    const exercises = (window.IQExercises && window.IQExercises.getAll) ? window.IQExercises.getAll() : [];
+    const entries = await db().getAll();
+
+    const dayTotals = {};
+    for (const e of entries) dayTotals[e.date] = (dayTotals[e.date] || 0) + (e.xp || 0);
+
+    const sortedDates = Object.keys(dayTotals).sort().reverse().slice(0, 14);
+
+    root.innerHTML = `
+      <div class="card">
+        <h2>Neuer Eintrag</h2>
+        <label>Datum</label>
+        <input id="logDate" type="date" value="${today}">
+
+        <label>Übung</label>
+        <select id="logExercise">
+          ${exercises
+            .map((ex) => `<option value="${ex.id}">${ex.name} (${ex.type})</option>`)
+            .join("")}
+        </select>
+
+        <div id="logMeta" class="small"></div>
+
+        <div class="grid cols2">
+          <div>
+            <label>Tatsächliche Sätze</label>
+            <input id="logSets" type="number" min="0" step="1" placeholder="z.B. 4">
+          </div>
+          <div>
+            <label>Tatsächliche Reps pro Satz</label>
+            <input id="logReps" type="number" min="0" step="1" placeholder="z.B. 10">
+          </div>
+        </div>
+
+        <button class="primary" id="logSave">Speichern</button>
+        <div class="small">Heute: ${starsForXp(dayTotals[today] || 0)} • Woche: W${week}</div>
+      </div>
+
+      <div class="card">
+        <h2>Letzte Tage (XP & Sterne)</h2>
+        <ul class="list">
+          ${sortedDates
+            .map((d) => {
+              const xp = dayTotals[d] || 0;
+              return `<li>
+                <div class="top"><b>${d}</b><span class="badge">${xp} XP</span></div>
+                <div class="small">Sterne: ${starsForXp(xp)}</div>
+              </li>`;
+            })
+            .join("") || `<li>Keine Daten.</li>`}
+        </ul>
+      </div>
+
+      <div class="card">
+        <h2>Alle Einträge</h2>
+        <ul class="list" id="entryList"></ul>
+      </div>
+    `;
+
+    const sel = $("#logExercise", root);
+    const meta = $("#logMeta", root);
+
+    function updateMeta() {
+      const id = sel?.value;
+      const ex = exercises.find((x) => String(x.id) === String(id));
+      if (!ex) {
+        meta.textContent = "";
+        return;
+      }
+      meta.innerHTML = `
+        <b>Beschreibung:</b> ${ex.description || "—"}<br>
+        <b>Empfehlung:</b> ${ex.recommendedSets || "—"} Sätze × ${ex.recommendedReps || "—"} Reps
+        <span class="small"> • Typ: ${ex.type}</span>
+      `;
+    }
+
+    sel?.addEventListener("change", updateMeta);
+    updateMeta();
+
+    $("#logSave", root)?.addEventListener("click", async () => {
+      const date = $("#logDate", root)?.value || today;
+      const exId = sel?.value;
+      const ex = exercises.find((x) => String(x.id) === String(exId));
+      if (!ex) return alert("Bitte Übung wählen.");
+
+      const sets = parseInt($("#logSets", root)?.value || "0", 10);
+      const reps = parseInt($("#logReps", root)?.value || "0", 10);
+
+      const xp = window.XPSystem?.calcExerciseXP
+        ? window.XPSystem.calcExerciseXP(ex, { sets, reps })
+        : 100;
+
+      await db().add({
+        date,
+        xp,
+        type: ex.type,
+        exercise: ex.name,
+        detail: `Empf: ${ex.recommendedSets}×${ex.recommendedReps} | Ist: ${sets || 0}×${reps || 0}`
+      });
+
+      $("#logSets", root).value = "";
+      $("#logReps", root).value = "";
+
+      await renderActive();
+      alert(`Gespeichert: +${xp} XP ✅`);
+    });
+
+    const list = $("#entryList", root);
+    if (list) {
+      const sorted = [...entries].sort((a, b) => (a.date < b.date ? 1 : -1));
+      list.innerHTML = sorted
+        .map(
+          (e) => `
+        <li>
+          <div class="top"><b>${e.date}</b><span class="badge">${e.xp} XP</span></div>
+          <div class="small">${e.exercise} • ${e.type} • ${e.detail || ""}</div>
+        </li>`
+        )
+        .join("") || "<li>Keine Einträge.</li>";
+    }
+  }
+
+  /* -------------------------
+     Jogging
+  ------------------------- */
+  async function renderJogging() {
+    const root = document.getElementById("jogging");
+    if (!root) return;
+
+    const today = isoDate(new Date());
+    const entries = await db().getAll();
+    const jogs = entries.filter((e) => e.type === "Jogging").sort((a, b) => (a.date < b.date ? -1 : 1));
+
+    root.innerHTML = `
+      <div class="card">
+        <h2>Joggen</h2>
+        <div class="muted">Trage Distanz & Zeit ein → XP wird generiert + Pace-Chart.</div>
+
+        <label>Datum</label>
+        <input id="jogDate" type="date" value="${today}">
+
+        <div class="grid cols2">
+          <div>
+            <label>Distanz (km)</label>
+            <input id="jogKm" type="number" min="0" step="0.1" placeholder="z.B. 5.0">
+          </div>
+          <div>
+            <label>Zeit (Minuten)</label>
+            <input id="jogMin" type="number" min="0" step="1" placeholder="z.B. 30">
+          </div>
+        </div>
+
+        <button class="primary" id="saveJog">Jog speichern</button>
+
+        <div class="hr"></div>
+
+        <h3>Fortschritt (Pace)</h3>
+        <canvas id="jogChart" height="220"></canvas>
+        <div class="small">Pace = Minuten pro km. Niedriger ist besser.</div>
+      </div>
+
+      <div class="card">
+        <h2>Letzte Läufe</h2>
+        <ul class="list" id="jogList"></ul>
+      </div>
+    `;
+
+    $("#saveJog", root)?.addEventListener("click", async () => {
+      const d = $("#jogDate", root)?.value || today;
+      const km = parseFloat($("#jogKm", root)?.value || "0");
+      const min = parseFloat($("#jogMin", root)?.value || "0");
+      if (!km || !min) return alert("Bitte Distanz und Zeit eintragen.");
+
+      // XP: distance-heavy + time component
+      const baseXP = Math.round(km * 120 + min * 2);
+      const pace = min / km;
+      const detail = `km=${km.toFixed(1)} • min=${Math.round(min)} • pace=${pace.toFixed(2)} min/km`;
+
+      await db().add({
+        date: d,
+        xp: baseXP,
+        type: "Jogging",
+        exercise: "Jogging",
+        detail
+      });
+
+      await renderActive();
+      alert(`Jog gespeichert: +${baseXP} XP ✅`);
+    });
+
+    // list
+    const list = $("#jogList", root);
+    if (list) {
+      list.innerHTML =
+        jogs
+          .slice()
+          .reverse()
+          .slice(0, 20)
+          .map((j) => `<li><div class="top"><b>${j.date}</b><span class="badge">${j.xp} XP</span></div><div class="small">${j.detail}</div></li>`)
+          .join("") || "<li>Noch keine Läufe.</li>";
+    }
+
+    // chart (pace)
+    const canvas = $("#jogChart", root);
+    if (canvas && jogs.length) {
+      const ctx = canvas.getContext("2d");
+      const W = canvas.width = canvas.clientWidth * devicePixelRatio;
+      const H = canvas.height = 220 * devicePixelRatio;
+      ctx.clearRect(0, 0, W, H);
+
+      const pts = jogs.slice(-12).map((j) => {
+        const mKm = /pace=([0-9.]+)/.exec(j.detail || "");
+        return { date: j.date, pace: mKm ? parseFloat(mKm[1]) : 0 };
+      }).filter(p => p.pace > 0);
+
+      if (!pts.length) return;
+
+      const minP = Math.min(...pts.map(p => p.pace));
+      const maxP = Math.max(...pts.map(p => p.pace));
+      const pad = 20 * devicePixelRatio;
+
+      const xFor = (i) => pad + (i / Math.max(1, pts.length - 1)) * (W - pad * 2);
+      const yFor = (v) => pad + (1 - (v - minP) / Math.max(0.0001, (maxP - minP))) * (H - pad * 2);
+
+      ctx.globalAlpha = 0.5;
+      ctx.strokeStyle = "rgba(255,255,255,0.25)";
+      ctx.beginPath();
+      ctx.moveTo(pad, H - pad);
+      ctx.lineTo(W - pad, H - pad);
+      ctx.stroke();
+      ctx.globalAlpha = 1;
+
+      ctx.strokeStyle = "rgba(255,255,255,0.9)";
+      ctx.lineWidth = 3 * devicePixelRatio;
+      ctx.beginPath();
+      pts.forEach((p, i) => {
+        const x = xFor(i);
+        const y = yFor(p.pace);
+        if (i === 0) ctx.moveTo(x, y);
+        else ctx.lineTo(x, y);
+      });
+      ctx.stroke();
+
+      ctx.fillStyle = "rgba(255,255,255,0.95)";
+      pts.forEach((p, i) => {
+        const x = xFor(i);
+        const y = yFor(p.pace);
+        ctx.beginPath();
+        ctx.arc(x, y, 4 * devicePixelRatio, 0, Math.PI * 2);
+        ctx.fill();
+      });
+    }
+  }
+
+  /* -------------------------
+     Other Tabs (real modules)
+  ------------------------- */
+  async function renderSkills() {
+    const root = document.getElementById("skills");
+    if (!root) return;
+
+    const Skill = pickGlobal("IQSkilltree", "Skilltree", "IronQuestSkilltree");
+    if (!Skill?.render) {
+      root.innerHTML = `<div class="card"><h2>Skilltree</h2><div class="muted">Skilltree-Modul nicht gefunden.</div></div>`;
+      return;
+    }
+    await Skill.render(root, db());
+  }
+
+  async function renderAnalytics() {
+    const root = document.getElementById("analytics");
+    if (!root) return;
+
+    const A = pickGlobal("IronQuestAnalytics", "IQAnalytics", "Analytics");
+    if (!A?.render) {
+      root.innerHTML = `<div class="card"><h2>Analytics</h2><div class="muted">Analytics-Modul nicht gefunden.</div></div>`;
+      return;
+    }
+    await A.render(root, db());
+  }
+
+  async function renderHealth() {
+    const root = document.getElementById("health");
+    if (!root) return;
+
+    const H = pickGlobal("IronQuestHealth", "IQHealth", "Health");
+    if (!H?.render) {
+      root.innerHTML = `<div class="card"><h2>Health</h2><div class="muted">Health-Modul nicht gefunden.</div></div>`;
+      return;
+    }
+    await H.render(root);
+  }
+
+  async function renderBoss() {
+    const root = document.getElementById("boss");
+    if (!root) return;
+
+    const B = pickGlobal("IronQuestBoss", "IQBoss", "Boss");
+    if (!B?.render) {
+      root.innerHTML = `<div class="card"><h2>Boss</h2><div class="muted">Boss-Modul nicht gefunden.</div></div>`;
+      return;
+    }
+    await B.render(root, db());
+  }
+
+  async function renderChallenge() {
+    const root = document.getElementById("challenge");
+    if (!root) return;
+
+    const C = pickGlobal("IronQuestChallenges", "IQChallenges", "Challenges");
+    if (!C?.render) {
+      root.innerHTML = `<div class="card"><h2>Challenge</h2><div class="muted">Challenge-Modul nicht gefunden.</div></div>`;
+      return;
+    }
+    await C.render(root, db());
+  }
+
+  async function renderBackup() {
+    const root = document.getElementById("backup");
+    if (!root) return;
+
+    const BK = pickGlobal("IronQuestBackup", "IQBackup", "Backup");
+    if (!BK?.render) {
+      root.innerHTML = `<div class="card"><h2>Backup</h2><div class="muted">Backup-Modul nicht gefunden.</div></div>`;
+      return;
+    }
+    await BK.render(root, db());
+  }
+
+  /* -------------------------
+     Status line
+  ------------------------- */
+  async function renderStatus() {
+    const info = document.getElementById("playerInfo");
+    if (!info) return;
+
+    const entries = await db().getAll();
+    const today = isoDate(new Date());
+    const todayXp = entries.filter((e) => e.date === today).reduce((s, e) => s + (e.xp || 0), 0);
+
+    const status = `OK • ${starsForXp(todayXp)} • Streak ${computeTrainingStreak(entries)}`;
+    info.textContent = status;
+  }
+
+  /* -------------------------
+     Render router
+  ------------------------- */
+  async function renderActive() {
+    const active = $("nav button.active")?.dataset.tab || "dashboard";
+
+    await renderStatus();
+
+    if (active === "dashboard") return renderDashboard();
+    if (active === "log") return renderLog();
+    if (active === "jogging") return renderJogging();
+    if (active === "skills") return renderSkills();
+    if (active === "analytics") return renderAnalytics();
+    if (active === "health") return renderHealth();
+    if (active === "boss") return renderBoss();
+    if (active === "challenge") return renderChallenge();
+    if (active === "backup") return renderBackup();
+  }
+
+  /* -------------------------
+     Init
+  ------------------------- */
+  async function init() {
+    try {
+      wireTabs();
+
+      if ("serviceWorker" in navigator) {
+        navigator.serviceWorker.register("sw.js").catch(() => {});
+      }
+
+      await renderActive();
+    } catch (err) {
+      console.error(err);
+      const dash = document.getElementById("dashboard");
+      if (dash) dash.innerHTML = `<div class="card"><h2>Fehler</h2><div class="muted">JS Fehler: ${String(err?.message || err)}</div></div>`;
+      alert("Anzeige Fehler in JS.");
+    }
+  }
+
+  document.addEventListener("DOMContentLoaded", init);
+})();
