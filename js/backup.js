@@ -1,152 +1,103 @@
-/* =========================
-   IRON QUEST – backup.js (FULL)
-   - Export/Import lokal (JSON Datei)
-   - Optional: Remote Backup wenn URL gesetzt
-========================= */
+// js/backup.js ✅
+// Offline Export/Import + optional Cloud (wenn IronQuestURLs.CLOUD_ENDPOINT gesetzt)
+
 (function () {
-  const KEY = "ironquest_backup_meta_v1";
-
-  async function exportAll() {
-    const db = window.IronQuestDB;
-    if (!db) throw new Error("DB Modul fehlt (IronQuestDB).");
-
-    const entries = await db.getAllEntries();
-    const health = (window.IronQuestHealth?.getAll?.() || []);
-    const skill = (window.IronQuestSkilltree?.getState?.() || null);
-
-    const payload = {
-      meta: { app: "IRON QUEST", version: "v4", exportedAt: new Date().toISOString() },
-      entries,
-      health,
-      skill
-    };
-
-    const blob = new Blob([JSON.stringify(payload, null, 2)], { type: "application/json" });
+  function download(filename, text) {
+    const blob = new Blob([text], { type: "application/json;charset=utf-8" });
     const url = URL.createObjectURL(blob);
     const a = document.createElement("a");
     a.href = url;
-    a.download = `ironquest-backup-${new Date().toISOString().slice(0, 10)}.json`;
+    a.download = filename;
     document.body.appendChild(a);
     a.click();
     a.remove();
     setTimeout(() => URL.revokeObjectURL(url), 1000);
-
-    IQ.saveJSON(KEY, { lastExportAt: new Date().toISOString() });
-    IQ.toast("Backup exportiert ✅");
   }
 
-  async function importAllFromFile(file) {
-    const text = await file.text();
-    const data = IQ.safeJSONParse(text, null);
-    if (!data || typeof data !== "object") throw new Error("Ungültige Backup-Datei.");
+  async function render(container, getAllDataFn, importDataFn) {
+    const urls = window.IronQuestURLs || {};
+    container.innerHTML = `
+      <div class="card">
+        <h2>🌎 Backup</h2>
+        <p class="hint">Export/Import (JSON). Cloud optional über eigenen Endpoint.</p>
 
-    const db = window.IronQuestDB;
-    if (!db) throw new Error("DB Modul fehlt (IronQuestDB).");
+        <div class="row2">
+          <button id="bExport" type="button">Export JSON</button>
+          <label class="secondary" style="display:flex;align-items:center;gap:10px;justify-content:center;">
+            Import JSON
+            <input id="bImport" type="file" accept="application/json" style="display:none;">
+          </label>
+        </div>
 
-    // Sicherheit: nur arrays akzeptieren
-    const entries = Array.isArray(data.entries) ? data.entries : [];
-    const health = Array.isArray(data.health) ? data.health : [];
+        <div class="divider"></div>
 
-    const ok = confirm(
-      "Import startet.\n\n" +
-      "✅ Einträge werden hinzugefügt (du bekommst nichts automatisch gelöscht).\n" +
-      "⚠️ Wenn du doppelte Imports machst, entstehen Duplikate.\n\n" +
-      "Fortfahren?"
-    );
-    if (!ok) return;
+        <h3>🔐 Cloud Sync (optional)</h3>
+        <p class="hint">Endpoint: <b>${urls.CLOUD_ENDPOINT ? urls.CLOUD_ENDPOINT : "— (leer)"}</b></p>
 
-    // add entries
-    for (const e of entries) {
-      // minimal sanitize
-      if (!e || !e.date) continue;
-      await db.addEntry({
-        date: e.date,
-        exercise: e.exercise || "Unbekannt",
-        type: e.type || "Other",
-        week: e.week || 1,
-        xp: Number(e.xp || 0),
-        details: e.details || e.detail || ""
-      });
-    }
+        <div class="row2">
+          <button id="cPush" type="button" class="secondary">Cloud PUSH</button>
+          <button id="cPull" type="button" class="secondary">Cloud PULL</button>
+        </div>
 
-    // health
-    if (window.IronQuestHealth?.importAll) {
-      window.IronQuestHealth.importAll(health);
-    }
-
-    IQ.toast("Import abgeschlossen ✅");
-    IQ.emit("iq:dataChanged");
-  }
-
-  async function remoteBackupPush() {
-    const endpoint = (window.IronQuestURLS?.BACKUP_ENDPOINT || "").trim();
-    if (!endpoint) return alert("BACKUP_ENDPOINT ist leer. (js/urls.js)");
-
-    const db = window.IronQuestDB;
-    const entries = await db.getAllEntries();
-    const health = (window.IronQuestHealth?.getAll?.() || []);
-    const skill = (window.IronQuestSkilltree?.getState?.() || null);
-
-    const payload = {
-      meta: { app: "IRON QUEST", version: "v4", pushedAt: new Date().toISOString() },
-      entries,
-      health,
-      skill
-    };
-
-    const res = await fetch(endpoint, {
-      method: "POST",
-      headers: { "Content-Type": "application/json" },
-      body: JSON.stringify(payload)
-    });
-
-    if (!res.ok) throw new Error("Remote Backup fehlgeschlagen: " + res.status);
-    IQ.toast("Online Backup gesendet ✅");
-  }
-
-  function renderBackupPanel(el) {
-    el.innerHTML = `
-      <h2>Backup</h2>
-      <p class="hint">Lokaler Export/Import (JSON). Optional: Online Backup, wenn du einen Endpoint setzt.</p>
-
-      <div style="display:flex; gap:10px; flex-wrap:wrap;">
-        <button id="bkExport">Backup exportieren</button>
-        <button id="bkImport">Backup importieren</button>
-        <button id="bkRemote" class="secondary">Online Backup senden</button>
-      </div>
-
-      <input id="bkFile" type="file" accept="application/json" style="display:none;" />
-
-      <div class="hint" style="margin-top:12px;">
-        <b>Hinweis:</b> Online Backup benötigt <code>BACKUP_ENDPOINT</code> in <code>js/urls.js</code>.
+        <p class="hint">Cloud funktioniert nur, wenn du in <b>js/urls.js</b> deinen Endpoint einträgst.</p>
       </div>
     `;
 
-    el.querySelector("#bkExport").onclick = () => exportAll().catch(e => {
-      console.error(e);
-      alert("Export Fehler: " + e.message);
+    container.querySelector("#bExport").addEventListener("click", async () => {
+      const data = await getAllDataFn();
+      download("ironquest_backup.json", JSON.stringify(data, null, 2));
     });
 
-    el.querySelector("#bkImport").onclick = () => el.querySelector("#bkFile").click();
-
-    el.querySelector("#bkFile").onchange = async (ev) => {
-      const f = ev.target.files?.[0];
+    const fileInput = container.querySelector("#bImport");
+    fileInput.addEventListener("change", async (e) => {
+      const f = e.target.files?.[0];
       if (!f) return;
+      const txt = await f.text();
       try {
-        await importAllFromFile(f);
-      } catch (e) {
-        console.error(e);
-        alert("Import Fehler: " + e.message);
-      } finally {
-        ev.target.value = "";
+        const data = JSON.parse(txt);
+        await importDataFn(data);
+        alert("Import 완료 ✅ (App neu laden)");
+        location.reload();
+      } catch {
+        alert("Import fehlgeschlagen (ungültiges JSON).");
       }
-    };
+    });
 
-    el.querySelector("#bkRemote").onclick = () => remoteBackupPush().catch(e => {
-      console.error(e);
-      alert("Online Backup Fehler: " + e.message);
+    async function cloudFetch(method, body) {
+      const endpoint = urls.CLOUD_ENDPOINT;
+      if (!endpoint) {
+        alert("Cloud Endpoint ist leer. Trage ihn in js/urls.js ein.");
+        return null;
+      }
+      const headers = { "Content-Type": "application/json" };
+      if (urls.CLOUD_TOKEN) headers["Authorization"] = urls.CLOUD_TOKEN;
+      const res = await fetch(endpoint, { method, headers, body: body ? JSON.stringify(body) : undefined });
+      if (!res.ok) throw new Error("Cloud Error: " + res.status);
+      return await res.json();
+    }
+
+    container.querySelector("#cPush").addEventListener("click", async () => {
+      try {
+        const data = await getAllDataFn();
+        await cloudFetch("PUT", data);
+        alert("Cloud PUSH ✅");
+      } catch (e) {
+        alert(String(e));
+      }
+    });
+
+    container.querySelector("#cPull").addEventListener("click", async () => {
+      try {
+        const data = await cloudFetch("GET");
+        if (!data) return;
+        await importDataFn(data);
+        alert("Cloud PULL ✅ (App neu laden)");
+        location.reload();
+      } catch (e) {
+        alert(String(e));
+      }
     });
   }
 
-  window.IronQuestBackup = { renderBackupPanel };
+  window.IronQuestBackup = { render };
 })();
