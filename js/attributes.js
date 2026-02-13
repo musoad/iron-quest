@@ -1,36 +1,34 @@
-// js/attributes.js ✅
+(function(){
+  function addAttrTotalsFromEntry(totals, entry){
+    const xp = Number(entry.xp||0);
+    const t = entry.type || "";
 
-(function () {
-  function computeAttributes(entries) {
-    const a = { STR: 0, STA: 0, END: 0, MOB: 0 };
-
-    for (const e of entries) {
-      const xp = Number(e.xp || 0);
-      const t = e.type || "";
-
-      if (t === "Mehrgelenkig") a.STR += xp;
-      else if (t === "Unilateral") a.STA += xp;
-      else if (t === "Conditioning") a.END += xp;
-      else if (t === "Core") a.MOB += xp;
-      else if (t === "Komplexe") { a.STR += xp * 0.4; a.STA += xp * 0.2; a.END += xp * 0.2; a.MOB += xp * 0.2; }
-      else if (t === "NEAT") { a.END += xp * 0.7; a.MOB += xp * 0.3; }
+    if (t === "Mehrgelenkig") totals.STR += xp;
+    else if (t === "Unilateral") totals.STA += xp;
+    else if (t === "Conditioning") totals.END += xp;
+    else if (t === "Core") totals.MOB += xp;
+    else if (t === "Komplexe") {
+      totals.STR += xp*0.4; totals.STA += xp*0.2; totals.END += xp*0.2; totals.MOB += xp*0.2;
+    } else if (t === "NEAT") {
+      totals.END += xp*0.7; totals.MOB += xp*0.3;
+    } else if (t === "Boss") {
+      totals.STR += xp*0.25; totals.STA += xp*0.25; totals.END += xp*0.25; totals.MOB += xp*0.25;
     }
-
-    return a;
   }
 
-  function levelFromXP(xp) {
-    xp = Math.max(0, Math.round(xp || 0));
+  function attrLevelFromXP(xp){
     let lvl = 1;
-    let need = 900;
-
-    while (xp >= need && lvl < 999) {
-      xp -= need;
+    let v = Math.max(0, Math.round(xp||0));
+    function req(l){ return 900 + (l-1)*150; }
+    while (v >= req(lvl) && lvl < 999){
+      v -= req(lvl);
       lvl++;
-      need = 900 + (lvl - 1) * 150;
     }
-    return { lvl, into: xp, need };
+    return { lvl, into: v, need: req(lvl) };
   }
 
-  window.IronQuestAttributes = { computeAttributes, levelFromXP };
+  window.IronQuestAttributes = {
+    addAttrTotalsFromEntry,
+    attrLevelFromXP
+  };
 })();
