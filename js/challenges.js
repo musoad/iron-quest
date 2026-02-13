@@ -1,73 +1,64 @@
-/* challenges.js – CLASSIC SCRIPT
-   Exposes: window.IronQuestChallenges
-*/
+// js/challenges.js ✅
 
 (function () {
-  const KEY = "iq_challenges_v4";
+  const KEY = "ironquest_challenges_v1";
 
-  const CHALLENGES = [
-    { id: "c1", name: "5 Trainingstage diese Woche", desc: "Schaffe 5 Tage mit Trainingseinträgen." },
-    { id: "c2", name: "2x ⭐⭐⭐ Tage", desc: "Zwei Tage mit sehr hoher XP-Ausbeute." },
-    { id: "c3", name: "NEAT Streak 3 Tage", desc: "3 Tage Walking/NEAT hintereinander (oder täglich)." },
+  const DEFAULT = [
+    { id: "c1", name: "5 Trainingstage", desc: "Trainiere an 5 Tagen in einer Woche.", reward: "+5% Reward nächste Woche (auto)" },
+    { id: "c2", name: "2x 1600+ XP Tage", desc: "Schaffe 2 starke Tage in einer Woche.", reward: "Motivation Badge" },
+    { id: "c3", name: "NEAT 3x", desc: "3x Walking Desk in einer Woche.", reward: "END-Boost (gefühlter Vorteil)" }
   ];
 
   function load() {
-    return (window.IQ?.loadJSON?.(KEY, {})) || {};
+    try { return JSON.parse(localStorage.getItem(KEY) || "null") || { active: null }; } catch { return { active: null }; }
   }
-  function save(st) {
-    window.IQ?.saveJSON?.(KEY, st);
-  }
+  function save(m) { localStorage.setItem(KEY, JSON.stringify(m)); }
 
-  function renderChallengePanel(targetSelector) {
-    const root = document.querySelector(targetSelector);
-    if (!root) return;
-
+  function render(container) {
     const st = load();
-
-    root.innerHTML = `
+    container.innerHTML = `
       <div class="card">
-        <h2>Challenge Mode</h2>
-        <p class="hint">Einfach & stabil: Challenges abhaken → Motivation.</p>
-        <ul class="checklist" id="chList"></ul>
+        <h2>🏆 Challenge Mode</h2>
+        <p class="hint">Wähle eine Challenge – rein motivational. Rewards sind „soft“.</p>
+
+        <div class="pill"><b>Aktiv:</b> <span id="cActive">${st.active || "—"}</span></div>
         <div class="divider"></div>
-        <button class="danger" id="chReset">Reset</button>
+
+        <ul class="list" id="cList"></ul>
+        <button id="cClear" type="button" class="secondary">Challenge deaktivieren</button>
       </div>
     `;
 
-    const ul = root.querySelector("#chList");
-    ul.innerHTML = "";
-
-    CHALLENGES.forEach((c) => {
-      const done = st[c.id] === true;
+    const ul = container.querySelector("#cList");
+    DEFAULT.forEach(c => {
       const li = document.createElement("li");
       li.innerHTML = `
-        <div class="checkItem">
-          <input type="checkbox" ${done ? "checked" : ""} data-id="${c.id}">
-          <div class="checkMain">
-            <div class="checkTitle">${c.name}</div>
-            <div class="checkSub">${c.desc}</div>
+        <div class="entryRow">
+          <div style="min-width:0;">
+            <b>${c.name}</b>
+            <div class="hint">${c.desc}</div>
+            <div class="hint">Reward: ${c.reward}</div>
           </div>
-          <div class="xpBadge">${done ? "DONE" : "OPEN"}</div>
+          <button class="secondary" type="button" data-c="${c.id}" style="width:auto;">Aktivieren</button>
         </div>
       `;
       ul.appendChild(li);
     });
 
-    ul.querySelectorAll("input[type=checkbox]").forEach((cb) => {
-      cb.onchange = () => {
-        const id = cb.getAttribute("data-id");
-        const s = load();
-        s[id] = cb.checked;
-        save(s);
-      };
+    ul.querySelectorAll("[data-c]").forEach(btn => {
+      btn.addEventListener("click", () => {
+        const id = btn.getAttribute("data-c");
+        save({ active: id });
+        alert("Challenge aktiviert ✅");
+        render(container);
+      });
     });
 
-    root.querySelector("#chReset").onclick = () => {
-      if (!confirm("Challenges zurücksetzen?")) return;
-      save({});
-      renderChallengePanel(targetSelector);
-    };
+    container.querySelector("#cClear").addEventListener("click", () => {
+      save({ active: null });
+      render(container);
+    });
   }
 
-  window.IronQuestChallenges = { renderChallengePanel };
+  window.IronQuestChallenges = { render };
 })();
