@@ -1,32 +1,36 @@
-/* IRON QUEST – attributes.js (classic)
-   ✅ STR/STA/END/MOB aus Einträgen
-*/
+// js/attributes.js ✅
+
 (function () {
-  function fromEntry(e) {
-    const out = { STR:0, STA:0, END:0, MOB:0 };
-    const xp = e.xp || 0;
-    const t = e.type || "";
+  function computeAttributes(entries) {
+    const a = { STR: 0, STA: 0, END: 0, MOB: 0 };
 
-    if (t === "Mehrgelenkig") out.STR += xp;
-    else if (t === "Unilateral") out.STA += xp;
-    else if (t === "Conditioning") out.END += xp;
-    else if (t === "Core") out.MOB += xp;
-    else if (t === "Komplexe") { out.STR += xp*0.4; out.STA += xp*0.2; out.END += xp*0.2; out.MOB += xp*0.2; }
-    else if (t === "NEAT") { out.END += xp*0.7; out.MOB += xp*0.3; }
-    else if (t === "Boss-Workout") { out.STR += xp*0.25; out.STA += xp*0.25; out.END += xp*0.25; out.MOB += xp*0.25; }
-    return out;
-  }
-
-  function sum(entries) {
-    const a = { STR:0, STA:0, END:0, MOB:0 };
     for (const e of entries) {
-      const x = fromEntry(e);
-      a.STR += x.STR; a.STA += x.STA; a.END += x.END; a.MOB += x.MOB;
+      const xp = Number(e.xp || 0);
+      const t = e.type || "";
+
+      if (t === "Mehrgelenkig") a.STR += xp;
+      else if (t === "Unilateral") a.STA += xp;
+      else if (t === "Conditioning") a.END += xp;
+      else if (t === "Core") a.MOB += xp;
+      else if (t === "Komplexe") { a.STR += xp * 0.4; a.STA += xp * 0.2; a.END += xp * 0.2; a.MOB += xp * 0.2; }
+      else if (t === "NEAT") { a.END += xp * 0.7; a.MOB += xp * 0.3; }
     }
-    // round
-    a.STR = Math.round(a.STR); a.STA = Math.round(a.STA); a.END = Math.round(a.END); a.MOB = Math.round(a.MOB);
+
     return a;
   }
 
-  window.IronQuestAttributes = { sum };
+  function levelFromXP(xp) {
+    xp = Math.max(0, Math.round(xp || 0));
+    let lvl = 1;
+    let need = 900;
+
+    while (xp >= need && lvl < 999) {
+      xp -= need;
+      lvl++;
+      need = 900 + (lvl - 1) * 150;
+    }
+    return { lvl, into: xp, need };
+  }
+
+  window.IronQuestAttributes = { computeAttributes, levelFromXP };
 })();
