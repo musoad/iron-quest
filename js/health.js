@@ -1,96 +1,117 @@
-/* health.js – CLASSIC SCRIPT
-   Exposes: window.IronQuestHealth
-*/
+// js/health.js ✅
 
 (function () {
-  const KEY = "iq_health_v4";
+  const KEY = "ironquest_health_v1";
+  const { isoDate } = window.IronQuestProgression;
 
   function load() {
-    return (window.IQ?.loadJSON?.(KEY, [])) || [];
+    try { return JSON.parse(localStorage.getItem(KEY) || "{}"); } catch { return {}; }
+  }
+  function save(m) { localStorage.setItem(KEY, JSON.stringify(m)); }
+
+  function recompositionIndex(weight, waist) {
+    // simpel & motivierend: niedriger = besser
+    const w = Number(weight || 0);
+    const wa = Number(waist || 0);
+    if (w <= 0 || wa <= 0) return null;
+    return (wa / w) * 100;
   }
 
-  function save(rows) {
-    window.IQ?.saveJSON?.(KEY, rows);
-  }
+  function render(container) {
+    const today = isoDate(new Date());
+    const map = load();
+    const d = map[today] || { weight: "", waist: "", sys: "", dia: "", pulse: "" };
 
-  function renderHealthPanel(targetSelector) {
-    const root = document.querySelector(targetSelector);
-    if (!root) return;
-
-    const rows = load();
-
-    root.innerHTML = `
+    container.innerHTML = `
       <div class="card">
-        <h2>Health Tracking</h2>
-        <p class="hint">Blutdruck + Puls + Gewicht (optional). Alles lokal gespeichert.</p>
+        <h2>🫀 Health</h2>
+        <p class="hint">Tageswerte speichern. Recomposition Index = (Waist/Weight)*100.</p>
 
         <div class="row2">
-          <label>Datum <input id="hDate" type="date"></label>
-          <label>Puls (bpm) <input id="hHr" type="number" inputmode="numeric" placeholder="z.B. 62"></label>
+          <label>Datum
+            <input id="hDate" type="date" value="${today}">
+          </label>
+          <div class="pill"><b>Recomp Index:</b> <span id="hRI">—</span></div>
         </div>
 
         <div class="row2">
-          <label>Systole <input id="hSys" type="number" inputmode="numeric" placeholder="z.B. 120"></label>
-          <label>Diastole <input id="hDia" type="number" inputmode="numeric" placeholder="z.B. 75"></label>
+          <label>Gewicht (kg)
+            <input id="hWeight" inputmode="decimal" value="${d.weight}">
+          </label>
+          <label>Taille (cm)
+            <input id="hWaist" inputmode="decimal" value="${d.waist}">
+          </label>
         </div>
 
         <div class="row2">
-          <label>Gewicht (kg) <input id="hW" type="number" step="0.1" inputmode="decimal" placeholder="z.B. 84.5"></label>
-          <button id="hSave">Speichern</button>
+          <label>Blutdruck SYS
+            <input id="hSys" inputmode="numeric" value="${d.sys}">
+          </label>
+          <label>Blutdruck DIA
+            <input id="hDia" inputmode="numeric" value="${d.dia}">
+          </label>
+        </div>
+
+        <div class="row2">
+          <label>Puls (bpm)
+            <input id="hPulse" inputmode="numeric" value="${d.pulse}">
+          </label>
+          <button id="hSave" type="button">Speichern</button>
         </div>
 
         <div class="divider"></div>
-
-        <h3>Letzte Werte</h3>
-        <ul id="hList"></ul>
-        <button id="hClear" class="secondary">Alles löschen</button>
+        <h3>Letzte 7 Tage</h3>
+        <ul class="list" id="hList"></ul>
       </div>
     `;
 
-    const today = window.IQ?.isoDate?.(new Date()) || new Date().toISOString().slice(0, 10);
-    root.querySelector("#hDate").value = today;
-
-    function renderList() {
-      const ul = root.querySelector("#hList");
-      const data = load().slice().sort((a, b) => (a.date < b.date ? 1 : -1)).slice(0, 20);
-      ul.innerHTML = data.length ? "" : "<li>—</li>";
-      data.forEach((r) => {
-        const li = document.createElement("li");
-        li.textContent = `${r.date} • Puls ${r.hr ?? "—"} bpm • BP ${r.sys ?? "—"}/${r.dia ?? "—"} • Gewicht ${r.w ?? "—"} kg`;
-        ul.appendChild(li);
-      });
+    const riEl = container.querySelector("#hRI");
+    function updateRI() {
+      const w = container.querySelector("#hWeight").value;
+      const wa = container.querySelector("#hWaist").value;
+      const ri = recompositionIndex(w, wa);
+      riEl.textContent = ri == null ? "—" : ri.toFixed(2);
     }
+    updateRI();
 
-    root.querySelector("#hSave").onclick = () => {
-      const date = root.querySelector("#hDate").value;
-      const hr = parseInt(root.querySelector("#hHr").value || "", 10);
-      const sys = parseInt(root.querySelector("#hSys").value || "", 10);
-      const dia = parseInt(root.querySelector("#hDia").value || "", 10);
-      const w = parseFloat(root.querySelector("#hW").value || "");
+    ["hWeight", "hWaist"].forEach(id => container.querySelector("#" + id).addEventListener("input", updateRI));
 
-      const row = {
-        date,
-        hr: Number.isFinite(hr) ? hr : null,
-        sys: Number.isFinite(sys) ? sys : null,
-        dia: Number.isFinite(dia) ? dia : null,
-        w: Number.isFinite(w) ? w : null,
+    container.querySelector("#hSave").addEventListener("click", () => {
+      const date = container.querySelector("#hDate").value || today;
+      const m = load();
+      m[date] = {
+        weight: container.querySelector("#hWeight").value || "",
+        waist: container.querySelector("#hWaist").value || "",
+        sys: container.querySelector("#hSys").value || "",
+        dia: container.querySelector("#hDia").value || "",
+        pulse: container.querySelector("#hPulse").value || ""
       };
-
-      const all = load();
-      all.push(row);
-      save(all);
-      renderList();
+      save(m);
       alert("Health gespeichert ✅");
-    };
+      render(container);
+    });
 
-    root.querySelector("#hClear").onclick = () => {
-      if (!confirm("Health Daten wirklich löschen?")) return;
-      save([]);
-      renderList();
-    };
-
-    renderList();
+    // list last 7 days
+    const list = container.querySelector("#hList");
+    list.innerHTML = "";
+    for (let i = 0; i < 7; i++) {
+      const dt = new Date(today);
+      dt.setDate(dt.getDate() - i);
+      const di = isoDate(dt);
+      const x = map[di];
+      const li = document.createElement("li");
+      if (!x) {
+        li.textContent = `${di}: —`;
+      } else {
+        const ri = recompositionIndex(x.weight, x.waist);
+        li.innerHTML = `<div class="entryRow"><div style="min-width:0;">
+          <b>${di}</b> • ${x.weight || "—"} kg • ${x.waist || "—"} cm • BP ${x.sys || "—"}/${x.dia || "—"} • Puls ${x.pulse || "—"}
+          <div class="hint">RI: ${ri == null ? "—" : ri.toFixed(2)}</div>
+        </div></div>`;
+      }
+      list.appendChild(li);
+    }
   }
 
-  window.IronQuestHealth = { renderHealthPanel };
+  window.IronQuestHealth = { render };
 })();
