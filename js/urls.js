@@ -1,13 +1,8 @@
-/* =========================
-   IRON QUEST – urls.js (CLASSIC SCRIPT, FULL)
-   - Keine exports (wichtig für iOS)
-   - Optional: Endpoints für Online Backup / Cloud Sync
-========================= */
-(function () {
-  window.IronQuestURLS = {
-    // Optional: hier kannst du später einen eigenen Server/Worker eintragen
-    // z.B. "https://dein-endpoint.com/ironquest"
-    BACKUP_ENDPOINT: "",
-    SYNC_ENDPOINT: ""
-  };
-})();
+// js/urls.js (NO MODULE EXPORTS) ✅
+// Optional: trage hier später deinen Cloud-Endpoint ein (z.B. Cloudflare Worker / eigener Server).
+// Wenn leer, läuft die App komplett offline.
+
+window.IronQuestURLs = {
+  CLOUD_ENDPOINT: "", // z.B. "https://dein-endpoint.example.com/ironquest"
+  CLOUD_TOKEN: ""     // optional: "Bearer xyz" oder simple token string
+};
