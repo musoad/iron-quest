@@ -1,19 +1,34 @@
-(function(){
-  function $(id){ return document.getElementById(id); }
-  function isoDate(d){
-    const x = (d instanceof Date) ? d : new Date(d);
-    return new Date(x.getTime() - (x.getTimezoneOffset()*60000)).toISOString().slice(0,10);
-  }
-  function clamp(n, a, b){ return Math.max(a, Math.min(b, n)); }
-  function safeJSONParse(s, fallback){
-    try{ return JSON.parse(s) ?? fallback; }catch{ return fallback; }
-  }
-  function loadJSON(key, fallback){
-    return safeJSONParse(localStorage.getItem(key), fallback);
-  }
-  function saveJSON(key, val){
-    localStorage.setItem(key, JSON.stringify(val));
+// js/utils.js
+window.Utils = (function(){
+  const $ = (id) => document.getElementById(id);
+  const isoDate = (d) => new Date(d).toISOString().slice(0,10);
+
+  function safeJsonParse(x, fallback){
+    try { return JSON.parse(x) ?? fallback; } catch { return fallback; }
   }
 
-  window.IQ = { $, isoDate, clamp, loadJSON, saveJSON };
+  function loadJSON(key, fallback){
+    return safeJsonParse(localStorage.getItem(key), fallback);
+  }
+  function saveJSON(key, value){
+    localStorage.setItem(key, JSON.stringify(value));
+  }
+
+  function clamp(n, a, b){ return Math.max(a, Math.min(b, n)); }
+  function sum(arr){ return arr.reduce((s,x)=>s+(Number(x)||0),0); }
+
+  function startOfWeekMonday(dateISO){
+    const d = new Date(dateISO);
+    const day = d.getDay();
+    const diff = (day === 0 ? -6 : 1 - day);
+    d.setDate(d.getDate() + diff);
+    return isoDate(d);
+  }
+  function addDays(dateISO, n){
+    const d = new Date(dateISO);
+    d.setDate(d.getDate() + n);
+    return isoDate(d);
+  }
+
+  return { $, isoDate, loadJSON, saveJSON, clamp, sum, startOfWeekMonday, addDays };
 })();
