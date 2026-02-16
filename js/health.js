@@ -1,150 +1,133 @@
-(function(){
-  const DB = () => window.IronQuestDB;
-  const iso = window.IQ.isoDate;
+// js/health.js
+window.Health = (function(){
+  const { isoDate } = window.Utils;
 
-  function recompIndex(weightKg, bodyFatPct){
-    const w = Number(weightKg||0);
-    const bf = Number(bodyFatPct||0);
-    if (w <= 0 || bf <= 0) return null;
-    const lean = w * (1 - (bf/100));
-    // index = lean mass proxy
-    return Math.round(lean*10)/10;
+  function recompositionIndex(weightKg, waistCm, hipCm){
+    // simple index: lower waist with stable weight improves
+    const w = Math.max(1, Number(weightKg||0));
+    const waist = Math.max(1, Number(waistCm||0));
+    const hip = Math.max(0, Number(hipCm||0));
+    const whr = hip > 0 ? (waist/hip) : null;
+    const wi = w / waist; // weight-to-waist
+    return { wi: Number(wi.toFixed(3)), whr: whr ? Number(whr.toFixed(3)) : null };
   }
 
-  async function addHealth(payload){
-    await DB().add(DB().STORES.health, payload);
-  }
+  async function render(elId){
+    const el = document.getElementById(elId);
+    if (!el) return;
 
-  async function getAllHealth(){
-    const rows = await DB().getAll(DB().STORES.health);
-    rows.sort((a,b)=> (a.date<b.date?-1:1));
-    return rows;
-  }
+    const rows = await window.DB.getAll("health");
+    rows.sort((a,b)=> (a.date<b.date ? 1 : -1));
 
-  function renderHealth(container, entries){
-    container.innerHTML = `
+    el.innerHTML = `
       <div class="card">
-        <h2>Health Tracking</h2>
-        <p class="hint">Gewicht/KFA/Umfang + Blutdruck + Puls. Recomp Index = Lean-Mass Proxy.</p>
+        <h2>Health</h2>
+        <p class="hint">Blutdruck + Puls + Körperdaten. (Alles bleibt lokal in IndexedDB.)</p>
 
-        <div class="row2">
-          <div>
-            <label>Datum</label>
-            <input id="hDate" type="date" value="${iso(new Date())}">
+        <div class="card">
+          <h2>Neuer Eintrag</h2>
+          <label>Datum</label>
+          <input id="hDate" type="date" value="${isoDate(new Date())}">
+
+          <div class="row2">
+            <div>
+              <label>Blutdruck SYS</label>
+              <input id="hSys" type="number" inputmode="numeric" placeholder="z. B. 120">
+            </div>
+            <div>
+              <label>Blutdruck DIA</label>
+              <input id="hDia" type="number" inputmode="numeric" placeholder="z. B. 80">
+            </div>
           </div>
-          <div>
-            <label>Gewicht (kg)</label>
-            <input id="hWeight" inputmode="decimal" placeholder="z.B. 84.2">
+
+          <div class="row2">
+            <div>
+              <label>Puls (bpm)</label>
+              <input id="hPulse" type="number" inputmode="numeric" placeholder="z. B. 60">
+            </div>
+            <div>
+              <label>Gewicht (kg)</label>
+              <input id="hW" type="number" step="0.1" inputmode="decimal" placeholder="z. B. 83.5">
+            </div>
+          </div>
+
+          <div class="row2">
+            <div>
+              <label>Taille (cm)</label>
+              <input id="hWaist" type="number" step="0.1" inputmode="decimal" placeholder="z. B. 85">
+            </div>
+            <div>
+              <label>Hüfte (cm) optional</label>
+              <input id="hHip" type="number" step="0.1" inputmode="decimal" placeholder="z. B. 98">
+            </div>
+          </div>
+
+          <div class="btnRow">
+            <button class="primary" id="hSave">Speichern</button>
+            <button class="secondary" id="hClear">Felder leeren</button>
           </div>
         </div>
 
-        <div class="row2">
-          <div>
-            <label>KFA (%)</label>
-            <input id="hBF" inputmode="decimal" placeholder="z.B. 17.5">
-          </div>
-          <div>
-            <label>Umfang Taille (cm)</label>
-            <input id="hWaist" inputmode="decimal" placeholder="z.B. 88">
-          </div>
+        <div class="card">
+          <h2>Historie</h2>
+          <ul class="list" id="hList"></ul>
         </div>
-
-        <div class="row2">
-          <div>
-            <label>Blutdruck SYS</label>
-            <input id="hSYS" inputmode="numeric" placeholder="z.B. 125">
-          </div>
-          <div>
-            <label>Blutdruck DIA</label>
-            <input id="hDIA" inputmode="numeric" placeholder="z.B. 78">
-          </div>
-        </div>
-
-        <div class="row2">
-          <div>
-            <label>Puls (bpm)</label>
-            <input id="hHR" inputmode="numeric" placeholder="z.B. 62">
-          </div>
-          <div class="pill">
-            <b>Recomp Index:</b> <span id="hRecomp">—</span>
-            <div class="small">Berechnet nach Save.</div>
-          </div>
-        </div>
-
-        <div class="row">
-          <button class="btn primary" id="hSave" type="button">Speichern</button>
-          <button class="btn danger" id="hClear" type="button">Alle Health-Daten löschen</button>
-        </div>
-      </div>
-
-      <div class="card">
-        <h2>History</h2>
-        <ul class="list" id="hList"></ul>
       </div>
     `;
 
-    const hList = document.getElementById("hList");
-    const fillList = async ()=>{
-      const rows = await getAllHealth();
-      hList.innerHTML = rows.length ? "" : "<li>Keine Health-Daten.</li>";
-      rows.slice().reverse().forEach(r=>{
-        const ri = recompIndex(r.weightKg, r.bodyFatPct);
+    const ul = document.getElementById("hList");
+    if (!rows.length) ul.innerHTML = `<li>—</li>`;
+    else {
+      ul.innerHTML = "";
+      rows.slice(0,40).forEach(r=>{
+        const ri = recompositionIndex(r.weightKg, r.waistCm, r.hipCm);
         const li = document.createElement("li");
         li.innerHTML = `
-          <div class="row" style="justify-content:space-between;align-items:center;">
+          <div class="itemTop">
             <div>
               <b>${r.date}</b>
               <div class="small">
-                ${r.weightKg?`Gewicht: ${r.weightKg}kg • `:""}
-                ${r.bodyFatPct?`KFA: ${r.bodyFatPct}% • `:""}
-                ${r.waistCm?`Taille: ${r.waistCm}cm • `:""}
-                ${r.sys&&r.dia?`BP: ${r.sys}/${r.dia} • `:""}
-                ${r.hr?`Puls: ${r.hr}bpm`:""}
+                BP: ${r.sys||"—"}/${r.dia||"—"} • Puls: ${r.pulse||"—"} bpm
+                • Gewicht: ${r.weightKg||"—"} kg • Taille: ${r.waistCm||"—"} cm
+                ${ri.whr ? `• WHR: ${ri.whr}` : ""} • W/T: ${ri.wi}
               </div>
-              <div class="small">Recomp: ${ri ?? "—"}</div>
             </div>
+            <button class="danger" data-del="${r.id}">Delete</button>
           </div>
         `;
-        hList.appendChild(li);
+        ul.appendChild(li);
+      });
+    }
+
+    ul.querySelectorAll("[data-del]").forEach(btn=>{
+      btn.onclick = async ()=>{
+        const id = Number(btn.getAttribute("data-del"));
+        if (!confirm("Eintrag löschen?")) return;
+        await window.DB.del("health", id);
+        await render(elId);
+      };
+    });
+
+    document.getElementById("hClear").onclick = ()=>{
+      ["hSys","hDia","hPulse","hW","hWaist","hHip"].forEach(id=>{
+        const x = document.getElementById(id);
+        if (x) x.value = "";
       });
     };
 
-    const calcPreview = ()=>{
-      const w = Number(document.getElementById("hWeight").value || 0);
-      const bf = Number(document.getElementById("hBF").value || 0);
-      document.getElementById("hRecomp").textContent = recompIndex(w,bf) ?? "—";
+    document.getElementById("hSave").onclick = async ()=>{
+      const date = document.getElementById("hDate").value || isoDate(new Date());
+      const sys = Number(document.getElementById("hSys").value||0) || null;
+      const dia = Number(document.getElementById("hDia").value||0) || null;
+      const pulse = Number(document.getElementById("hPulse").value||0) || null;
+      const weightKg = Number(document.getElementById("hW").value||0) || null;
+      const waistCm = Number(document.getElementById("hWaist").value||0) || null;
+      const hipCm = Number(document.getElementById("hHip").value||0) || null;
+
+      await window.DB.add("health", { date, sys, dia, pulse, weightKg, waistCm, hipCm });
+      await render(elId);
     };
-
-    ["hWeight","hBF"].forEach(id=>{
-      document.getElementById(id).addEventListener("input", calcPreview);
-    });
-
-    document.getElementById("hSave").addEventListener("click", async ()=>{
-      const date = document.getElementById("hDate").value || iso(new Date());
-      const weightKg = Number(document.getElementById("hWeight").value || 0) || null;
-      const bodyFatPct = Number(document.getElementById("hBF").value || 0) || null;
-      const waistCm = Number(document.getElementById("hWaist").value || 0) || null;
-      const sys = Number(document.getElementById("hSYS").value || 0) || null;
-      const dia = Number(document.getElementById("hDIA").value || 0) || null;
-      const hr = Number(document.getElementById("hHR").value || 0) || null;
-
-      await addHealth({
-        date, weightKg, bodyFatPct, waistCm, sys, dia, hr,
-        recomp: recompIndex(weightKg, bodyFatPct)
-      });
-
-      await fillList();
-      alert("Health gespeichert ✅");
-    });
-
-    document.getElementById("hClear").addEventListener("click", async ()=>{
-      if (!confirm("Alle Health-Daten wirklich löschen?")) return;
-      await DB().clear(DB().STORES.health);
-      await fillList();
-    });
-
-    fillList();
   }
 
-  window.IronQuestHealth = { renderHealth };
+  return { render };
 })();
