@@ -1,11 +1,11 @@
 /* =========================
-   IRON QUEST – sw.js (FULL)
+   IRON QUEST — sw.js (FULL)
    ✅ Offline Cache
    ✅ Auto-Update (skipWaiting + clients.claim)
    ✅ Cache bust via SW_VERSION
 ========================= */
 
-const SW_VERSION = "v4.0.29";
+const SW_VERSION = "v4.0.30"; // <-- bei JEDEM Update hochzählen
 const CACHE_NAME = `ironquest-${SW_VERSION}`;
 
 const ASSETS = [
@@ -14,50 +14,53 @@ const ASSETS = [
   "./style.css",
   "./manifest.json",
   "./sw.js",
-
-  "./js/utils.js",
-  "./js/urls.js",
   "./js/db.js",
   "./js/exercises.js",
   "./js/xpSystem.js",
   "./js/progression.js",
+  "./js/attributes.js",
   "./js/skilltree.js",
   "./js/analytics.js",
   "./js/health.js",
   "./js/boss.js",
   "./js/challenges.js",
   "./js/backup.js",
-  "./js/app.js",
+  "./js/urls.js",
+  "./js/utils.js",
+  "./js/app.js"
 ];
 
 self.addEventListener("install", (event) => {
   self.skipWaiting();
-  event.waitUntil(caches.open(CACHE_NAME).then((cache) => cache.addAll(ASSETS)));
+  event.waitUntil(
+    caches.open(CACHE_NAME).then((cache) => cache.addAll(ASSETS))
+  );
 });
 
 self.addEventListener("activate", (event) => {
   event.waitUntil((async () => {
     const keys = await caches.keys();
-    await Promise.all(keys.map((k) => (k !== CACHE_NAME ? caches.delete(k) : null)));
+    await Promise.all(keys.map((k) => {
+      if (k !== CACHE_NAME) return caches.delete(k);
+    }));
     await self.clients.claim();
   })());
 });
 
 self.addEventListener("message", (event) => {
-  if (event.data && event.data.type === "SKIP_WAITING") self.skipWaiting();
+  if (event.data && event.data.type === "SKIP_WAITING") {
+    self.skipWaiting();
+  }
 });
 
-// Network-first for HTML, cache-first for others
+// Network-first for HTML, cache-first for other assets
 self.addEventListener("fetch", (event) => {
   const req = event.request;
   const url = new URL(req.url);
 
   if (url.origin !== self.location.origin) return;
 
-  const accept = req.headers.get("accept") || "";
-  const isHTML = req.mode === "navigate" || accept.includes("text/html");
-
-  if (isHTML) {
+  if (req.mode === "navigate" || (req.headers.get("accept") || "").includes("text/html")) {
     event.respondWith((async () => {
       try {
         const fresh = await fetch(req);
@@ -75,6 +78,7 @@ self.addEventListener("fetch", (event) => {
   event.respondWith((async () => {
     const cached = await caches.match(req);
     if (cached) return cached;
+
     const fresh = await fetch(req);
     const cache = await caches.open(CACHE_NAME);
     cache.put(req, fresh.clone());
