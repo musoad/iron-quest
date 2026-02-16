@@ -46,12 +46,12 @@
     el.innerHTML = `
       <div class="card">
         <h2>Dashboard</h2>
-        <p class="hint">Dein System ist stabil. Jetzt bauen wir Feature-Power oben drauf.</p>
+        <p class="hint">Dein System ist stabil. Jetzt ist es ein echtes RPG.</p>
       </div>
 
       <div class="card">
         <h2>Challenge Start</h2>
-        <p class="hint">Startdatum bestimmt Woche 1 (auch rückwirkend). Änderung wirkt sofort auf Weekly/Boss/Challenge.</p>
+        <p class="hint">Startdatum bestimmt Woche 1 (auch rückwirkend). Änderung wirkt sofort.</p>
         <label>Startdatum</label>
         <input id="startDateInput" type="date" value="${start}">
         <div class="btnRow">
@@ -63,7 +63,6 @@
       <div id="attrMount"></div>
     `;
 
-    // Attribute RPG Panel
     if (window.IronQuestAttributes?.renderAttributes){
       window.IronQuestAttributes.renderAttributes(el.querySelector("#attrMount"));
     }
@@ -83,24 +82,39 @@
   }
 
   async function renderLog(el){
-    const exercises = window.IronQuestExercises.EXERCISES;
+    const plan = window.IronQuestExercises?.TRAINING_PLAN;
+    const allExercises = window.IronQuestExercises?.EXERCISES || [];
     const entries = await window.IronDB.getAllEntries();
     entries.sort((a,b)=> (a.date < b.date ? 1 : -1));
 
     const today = window.Utils.isoDate(new Date());
 
+    // Default Day: 1
+    const dayDefault = 1;
+
     el.innerHTML = `
       <div class="card">
         <h2>Log</h2>
-        <p class="hint">Übung auswählen, empfohlene Sets/Reps sehen, tatsächliche Werte eingeben, XP live berechnen und speichern.</p>
+        <p class="hint">Trainingstag per Dropdown wählen (1–5). Übungen, Empfehlungen, Beschreibung, Live-XP.</p>
 
         <div class="card">
           <h2>Neuer Eintrag</h2>
-          <label>Datum</label>
-          <input id="lDate" type="date" value="${today}">
+
+          <div class="row2">
+            <div>
+              <label>Datum</label>
+              <input id="lDate" type="date" value="${today}">
+            </div>
+            <div>
+              <label>Trainingstag</label>
+              <select id="lDay"></select>
+            </div>
+          </div>
 
           <label>Übung</label>
           <select id="lExercise"></select>
+
+          <div class="pill" id="lDesc"><b>Ausführung:</b> —</div>
 
           <div class="row2">
             <div class="pill" id="lRec"><b>Empfohlen:</b> —</div>
@@ -109,12 +123,12 @@
 
           <div class="row2">
             <div>
-              <label>Sets (geleistet)</label>
+              <label>Sätze (geleistet)</label>
               <input id="lSets" type="number" step="1" placeholder="z. B. 4">
             </div>
             <div>
-              <label>Reps pro Set (geleistet)</label>
-              <input id="lReps" type="number" step="1" placeholder="z. B. 6">
+              <label>Wdh pro Satz (geleistet)</label>
+              <input id="lReps" type="number" step="1" placeholder="z. B. 8">
             </div>
           </div>
 
@@ -136,24 +150,54 @@
       </div>
     `;
 
-    const sel = el.querySelector("#lExercise");
-    exercises
-      .filter(x=>x.type !== "Joggen") // Joggen läuft über Jogging Tab
-      .forEach(ex=>{
-        const opt = document.createElement("option");
-        opt.value = ex.name;
-        opt.textContent = ex.name;
-        sel.appendChild(opt);
-      });
+    // Day dropdown
+    const daySel = el.querySelector("#lDay");
+    for (let d=1; d<=5; d++){
+      const name = plan?.days?.[d]?.name ? `Tag ${d}: ${plan.days[d].name}` : `Tag ${d}`;
+      const opt = document.createElement("option");
+      opt.value = String(d);
+      opt.textContent = name;
+      if (d === dayDefault) opt.selected = true;
+      daySel.appendChild(opt);
+    }
 
+    const exSel = el.querySelector("#lExercise");
     const recEl = el.querySelector("#lRec");
     const typeEl = el.querySelector("#lType");
     const volEl = el.querySelector("#lVol");
     const xpEl  = el.querySelector("#lXp");
+    const descEl= el.querySelector("#lDesc");
+
+    function exercisesForDay(day){
+      return allExercises.filter(x => Number(x.day||0) === Number(day) && x.type !== "Joggen");
+    }
+
+    function rebuildExerciseOptions(){
+      const day = Number(daySel.value || 1);
+      const list = exercisesForDay(day);
+
+      exSel.innerHTML = "";
+      list.forEach(ex=>{
+        const opt = document.createElement("option");
+        opt.value = ex.name;
+        opt.textContent = ex.name;
+        exSel.appendChild(opt);
+      });
+
+      // fallback falls Tag leer
+      if (!list.length){
+        const opt = document.createElement("option");
+        opt.value = "";
+        opt.textContent = "Keine Übungen für diesen Tag";
+        exSel.appendChild(opt);
+      }
+
+      recalc();
+    }
 
     function getSelected(){
-      const name = sel.value;
-      return exercises.find(x=>x.name === name);
+      const name = exSel.value;
+      return allExercises.find(x=>x.name === name);
     }
 
     function recalc(){
@@ -161,8 +205,18 @@
       const sets = Number(el.querySelector("#lSets").value || 0);
       const reps = Number(el.querySelector("#lReps").value || 0);
 
+      if (!ex){
+        recEl.innerHTML = `<b>Empfohlen:</b> —`;
+        typeEl.innerHTML = `<b>Typ:</b> —`;
+        descEl.innerHTML = `<b>Ausführung:</b> —`;
+        volEl.innerHTML = `<b>Volumen:</b> —`;
+        xpEl.innerHTML = `<b>XP:</b> —`;
+        return { ex:null, sets, reps, xp:0 };
+      }
+
       recEl.innerHTML = `<b>Empfohlen:</b> ${ex.recSets}×${ex.recReps}`;
       typeEl.innerHTML = `<b>Typ:</b> ${ex.type}`;
+      descEl.innerHTML = `<b>Ausführung:</b> ${ex.description || "—"}`;
 
       const vol = Math.max(0, sets*reps);
       volEl.innerHTML = `<b>Volumen:</b> ${vol}`;
@@ -180,13 +234,17 @@
       return { ex, sets, reps, xp };
     }
 
-    sel.addEventListener("change", recalc);
+    // events
+    daySel.addEventListener("change", rebuildExerciseOptions);
+    exSel.addEventListener("change", recalc);
     el.querySelector("#lSets").addEventListener("input", recalc);
     el.querySelector("#lReps").addEventListener("input", recalc);
-    recalc();
+
+    rebuildExerciseOptions();
 
     el.querySelector("#lSave").addEventListener("click", async ()=>{
       const { ex, sets, reps, xp } = recalc();
+      if (!ex) return;
       if (!sets || !reps) return;
 
       const date = el.querySelector("#lDate").value || today;
@@ -197,7 +255,7 @@
         week,
         type: ex.type,
         exercise: ex.name,
-        detail: `Rec ${ex.recSets}×${ex.recReps} • Did ${sets}×${reps}`,
+        detail: `Rec ${ex.recSets}×${ex.recReps} • Did ${sets}×${reps} • Day ${daySel.value}`,
         xp
       };
 
@@ -211,7 +269,7 @@
       await renderLog(el);
     });
 
-    // log list
+    // list render
     const ul = el.querySelector("#logList");
     if (!entries.length) ul.innerHTML = `<li>—</li>`;
     else {
