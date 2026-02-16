@@ -469,3 +469,22 @@ nav.bottom-nav button:active{
 nav + main{
   margin-top: 0;
 }
+
+/* FIX: grüner Querbalken / Overlay entfernen */
+body{
+  background:
+    radial-gradient(1200px 800px at 20% 0%, rgba(76,255,155,.06), transparent 62%),
+    radial-gradient(900px 700px at 80% 20%, rgba(255,215,0,.05), transparent 58%),
+    #0b0b0c;
+}
+
+/* Bottom Nav: kein “grüner Film”, sondern clean dark */
+nav.bottom-nav{
+  background: rgba(11,11,12,.92) !important;
+  border-top: 1px solid rgba(255,255,255,.08);
+}
+
+/* Optional: verhindert, dass Fixed Nav “durchscheint” */
+main{
+  background: transparent;
+}
