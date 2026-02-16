@@ -1,42 +1,34 @@
-// js/xpSystem.js
-window.XP = (function(){
-  const BASE = {
+(() => {
+  const BASE_XP = {
     Mehrgelenkig: 180,
     Unilateral: 200,
     Core: 140,
     Conditioning: 240,
     Komplexe: 260,
     NEAT: 0,
-    Rest: 0,
-    Jogging: 0
+    Joggen: 0
   };
 
-  function neatXP(minutes){
-    const m = Math.max(0, Number(minutes||0));
-    return Math.round(m * 2.5); // 60min=150
+  function volumeMultiplier(actualSets, actualReps, recSets, recReps) {
+    const a = Math.max(1, Number(actualSets || 0) * Number(actualReps || 0));
+    const r = Math.max(1, Number(recSets || 0) * Number(recReps || 0));
+    const ratio = a / r;
+    if (ratio >= 1.25) return 1.10;
+    if (ratio >= 1.00) return 1.00;
+    if (ratio >= 0.80) return 0.90;
+    return 0.80;
   }
 
-  // Jogging XP:
-  // - Base: 120 XP pro km
-  // - Pace Bonus: schneller -> mehr XP (über km/h)
-  function joggingXP(distanceKm, timeMin){
-    const dist = Math.max(0, Number(distanceKm||0));
-    const t = Math.max(1, Number(timeMin||0));
-    if (dist <= 0) return 0;
-
-    const speed = dist / (t/60);         // km/h
-    const base = dist * 120;
-
-    // Bonus: ab 8 km/h +30 XP pro km/h über 8 (gedeckelt)
-    const bonus = Math.max(0, Math.min(6, speed - 8)) * 30 * dist;
-    return Math.round(base + bonus);
+  function jogXP(distanceKm, minutes) {
+    const km = Math.max(0, Number(distanceKm || 0));
+    const min = Math.max(0, Number(minutes || 0));
+    // simple & motivierend: 80 XP pro km + 1 XP pro Minute
+    return Math.round(km * 80 + min * 1);
   }
 
-  function baseXPForType(type, payload){
-    if (type === "NEAT") return neatXP(payload?.minutes || 0);
-    if (type === "Jogging") return joggingXP(payload?.distanceKm || 0, payload?.timeMin || 0);
-    return BASE[type] ?? 0;
-  }
-
-  return { baseXPForType, neatXP, joggingXP };
+  window.IronQuestXP = {
+    BASE_XP,
+    volumeMultiplier,
+    jogXP
+  };
 })();
