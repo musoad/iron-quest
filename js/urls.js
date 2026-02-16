@@ -1,8 +1,11 @@
-// js/urls.js (NO MODULE EXPORTS) ✅
-// Optional: trage hier später deinen Cloud-Endpoint ein (z.B. Cloudflare Worker / eigener Server).
-// Wenn leer, läuft die App komplett offline.
+// js/urls.js
+window.URLS = (function(){
+  // Optional: Trage hier eine Backup-URL ein (eigener Server/Webhook).
+  // Die App sendet dann JSON Backups per POST.
+  // Beispiel: https://dein-server.de/ironquest-backup
+  const DEFAULT_BACKUP_ENDPOINT = "";
 
-window.IronQuestURLs = {
-  CLOUD_ENDPOINT: "", // z.B. "https://dein-endpoint.example.com/ironquest"
-  CLOUD_TOKEN: ""     // optional: "Bearer xyz" oder simple token string
-};
+  return {
+    DEFAULT_BACKUP_ENDPOINT
+  };
+})();
