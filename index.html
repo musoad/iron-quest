@@ -1,0 +1,67 @@
+<!DOCTYPE html>
+<html lang="de">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <title>IRON QUEST v5 PRO (Stable)</title>
+
+  <link rel="manifest" href="manifest.json">
+  <link rel="stylesheet" href="style.css">
+
+  <meta name="theme-color" content="#0f0f0f">
+  <meta name="apple-mobile-web-app-capable" content="yes">
+  <meta name="apple-mobile-web-app-status-bar-style" content="black-translucent">
+</head>
+
+<body>
+  <header>
+    <h1>⚔ IRON QUEST v5 PRO</h1>
+    <div id="playerInfo"></div>
+  </header>
+
+  <nav>
+    <button data-tab="dashboard">Dashboard</button>
+    <button data-tab="log">Log</button>
+    <button data-tab="jogging">Joggen</button>
+    <button data-tab="skills">Skilltree</button>
+    <button data-tab="analytics">Analytics</button>
+    <button data-tab="health">Health</button>
+    <button data-tab="boss">Boss</button>
+    <button data-tab="challenge">Challenge</button>
+    <button data-tab="backup">Backup</button>
+  </nav>
+
+  <main>
+    <section id="dashboard" class="tab active"></section>
+    <section id="log" class="tab"></section>
+    <section id="jogging" class="tab"></section>
+    <section id="skills" class="tab"></section>
+    <section id="analytics" class="tab"></section>
+    <section id="health" class="tab"></section>
+    <section id="boss" class="tab"></section>
+    <section id="challenge" class="tab"></section>
+    <section id="backup" class="tab"></section>
+  </main>
+
+  <!-- Reihenfolge ist wichtig -->
+  <script src="js/utils.js"></script>
+  <script src="js/urls.js"></script>
+  <script src="js/db.js"></script>
+
+  <script src="js/exercises.js"></script>
+  <script src="js/xpSystem.js"></script>
+  <script src="js/progression.js"></script>
+  <script src="js/attributes.js"></script>
+  <script src="js/skilltree.js"></script>
+
+  <script src="js/jogging.js"></script>
+  <script src="js/analytics.js"></script>
+  <script src="js/health.js"></script>
+  <script src="js/boss.js"></script>
+  <script src="js/challenges.js"></script>
+  <script src="js/backup.js"></script>
+
+  <!-- NUR EINMAL -->
+  <script src="js/app.js"></script>
+</body>
+</html>
