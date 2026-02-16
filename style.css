@@ -375,3 +375,97 @@ a:hover{ text-decoration: underline; }
 ::selection{
   background: rgba(76,255,155,.22);
 }
+
+/* =========================
+   Bottom Navigation (App-like)
+========================= */
+
+/* Platz unten schaffen, damit nichts hinter der Nav verschwindet */
+main{
+  padding-bottom: calc(92px + env(safe-area-inset-bottom));
+}
+
+/* Alte Sticky-Nav Regeln neutralisieren, nur für bottom-nav */
+nav.bottom-nav{
+  position: fixed;
+  left: 0;
+  right: 0;
+  bottom: 0;
+  top: auto;
+
+  z-index: 50;
+  display: flex;
+  gap: 8px;
+
+  padding: 10px 10px calc(10px + env(safe-area-inset-bottom));
+  background: linear-gradient(180deg, rgba(11,11,12,.35), rgba(11,11,12,.92));
+  border-top: 1px solid rgba(255,255,255,.08);
+
+  backdrop-filter: blur(14px);
+  -webkit-backdrop-filter: blur(14px);
+
+  overflow-x: auto;
+  -webkit-overflow-scrolling: touch;
+  scrollbar-width: none;
+}
+nav.bottom-nav::-webkit-scrollbar{ display:none; }
+
+nav.bottom-nav button{
+  flex: 0 0 auto;
+  min-width: 74px;
+
+  display: grid;
+  place-items: center;
+  gap: 6px;
+
+  padding: 10px 10px;
+  border-radius: 18px;
+
+  font-weight: 900;
+  letter-spacing: .2px;
+
+  border: 1px solid rgba(255,255,255,.10);
+  background: rgba(255,255,255,.03);
+
+  box-shadow: 0 10px 24px rgba(0,0,0,.25);
+}
+
+/* Emoji/Icon oben, Label unten */
+nav.bottom-nav button span{
+  display:block;
+  font-size: 11px;
+  font-weight: 850;
+  color: rgba(255,255,255,.75);
+  line-height: 1;
+}
+
+/* Active Zustand bleibt kompatibel mit deinem app.js (button.active) */
+nav.bottom-nav button.active{
+  border-color: rgba(76,255,155,.55);
+  background: rgba(76,255,155,.10);
+  box-shadow: 0 0 0 2px rgba(76,255,155,.10), 0 12px 28px rgba(0,0,0,.28);
+}
+nav.bottom-nav button.active span{
+  color: rgba(255,255,255,.92);
+}
+
+/* Tap feedback */
+nav.bottom-nav button:active{
+  transform: scale(.985);
+}
+
+/* Auf sehr kleinen Screens Labels etwas kompakter */
+@media(max-width: 380px){
+  nav.bottom-nav button{
+    min-width: 68px;
+    padding: 10px 8px;
+  }
+  nav.bottom-nav button span{
+    font-size: 10px;
+  }
+}
+
+/* Optional: Header etwas Luft, weil Nav nicht mehr sticky oben ist */
+nav + main{
+  margin-top: 0;
+}
