@@ -138,4 +138,127 @@
 
     const sel = el.querySelector("#lExercise");
     exercises
-      .filter(x=>x.type !== "Jogge
+      .filter(x=>x.type !== "Joggen") // Joggen läuft über Jogging Tab
+      .forEach(ex=>{
+        const opt = document.createElement("option");
+        opt.value = ex.name;
+        opt.textContent = ex.name;
+        sel.appendChild(opt);
+      });
+
+    const recEl = el.querySelector("#lRec");
+    const typeEl = el.querySelector("#lType");
+    const volEl = el.querySelector("#lVol");
+    const xpEl  = el.querySelector("#lXp");
+
+    function getSelected(){
+      const name = sel.value;
+      return exercises.find(x=>x.name === name);
+    }
+
+    function recalc(){
+      const ex = getSelected();
+      const sets = Number(el.querySelector("#lSets").value || 0);
+      const reps = Number(el.querySelector("#lReps").value || 0);
+
+      recEl.innerHTML = `<b>Empfohlen:</b> ${ex.recSets}×${ex.recReps}`;
+      typeEl.innerHTML = `<b>Typ:</b> ${ex.type}`;
+
+      const vol = Math.max(0, sets*reps);
+      volEl.innerHTML = `<b>Volumen:</b> ${vol}`;
+
+      const xp = window.IronQuestXP.calcExerciseXP({
+        type: ex.type,
+        recSets: ex.recSets,
+        recReps: ex.recReps,
+        sets,
+        reps,
+        entries
+      });
+
+      xpEl.innerHTML = `<b>XP:</b> ${xp || "—"}`;
+      return { ex, sets, reps, xp };
+    }
+
+    sel.addEventListener("change", recalc);
+    el.querySelector("#lSets").addEventListener("input", recalc);
+    el.querySelector("#lReps").addEventListener("input", recalc);
+    recalc();
+
+    el.querySelector("#lSave").addEventListener("click", async ()=>{
+      const { ex, sets, reps, xp } = recalc();
+      if (!sets || !reps) return;
+
+      const date = el.querySelector("#lDate").value || today;
+      const week = window.IronQuestProgression.getWeekNumberFor(date);
+
+      const entry = {
+        date,
+        week,
+        type: ex.type,
+        exercise: ex.name,
+        detail: `Rec ${ex.recSets}×${ex.recReps} • Did ${sets}×${reps}`,
+        xp
+      };
+
+      await window.IronDB.addEntry(entry);
+
+      // RPG Stats mitleveln
+      if (window.IronQuestAttributes?.addXPForEntry){
+        window.IronQuestAttributes.addXPForEntry(entry);
+      }
+
+      await renderLog(el);
+    });
+
+    // log list
+    const ul = el.querySelector("#logList");
+    if (!entries.length) ul.innerHTML = `<li>—</li>`;
+    else {
+      ul.innerHTML = "";
+      entries.slice(0, 250).forEach(e=>{
+        const li = document.createElement("li");
+        li.innerHTML = `
+          <div class="itemTop">
+            <div>
+              <b>${e.date}</b> • W${e.week||"?"} • ${e.exercise || e.type || "Entry"}
+              <div class="hint">${e.detail || ""}</div>
+            </div>
+            <span class="badge">${Math.round(e.xp||0)} XP</span>
+          </div>
+        `;
+        ul.appendChild(li);
+      });
+    }
+
+    el.querySelector("#logClear").addEventListener("click", async ()=>{
+      await window.IronDB.clearAllEntries();
+      alert("Log gelöscht ✅");
+      await renderLog(el);
+    });
+  }
+
+  async function renderAnalytics(el){
+    const entries = await window.IronDB.getAllEntries();
+    const today = window.Utils.isoDate(new Date());
+    const curWeek = window.IronQuestProgression.getWeekNumberFor(today);
+    const map = weekXpMap(entries);
+
+    const weeks = [];
+    for (let w = Math.max(1, curWeek-7); w <= curWeek; w++) weeks.push(w);
+    const vals = weeks.map(w=>map[w]||0);
+    const labels = weeks.map(w=>`W${w}`);
+
+    el.innerHTML = `
+      <div class="card">
+        <h2>Analytics</h2>
+        <p class="hint">Wochen-XP (letzte 8 Wochen)</p>
+        <canvas id="anChart" width="900" height="260"></canvas>
+      </div>
+    `;
+
+    drawBars(el.querySelector("#anChart"), labels, vals);
+  }
+
+  window.IronQuestAnalytics = { renderDashboard, renderLog, renderAnalytics };
+})();
