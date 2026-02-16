@@ -18,60 +18,25 @@ window.XP = (function(){
 
   // Jogging XP:
   // - Base: 120 XP pro km
-  // - Speed Bonus: ab 8.0 km/h +30 XP pro km/h über 8 (gedeckelt)
+  // - Pace Bonus: schneller -> mehr XP (über km/h)
   function joggingXP(distanceKm, timeMin){
     const dist = Math.max(0, Number(distanceKm||0));
     const t = Math.max(1, Number(timeMin||0));
-    const speed = dist / (t/60); // km/h
+    if (dist <= 0) return 0;
 
+    const speed = dist / (t/60);         // km/h
     const base = dist * 120;
-    const bonus = Math.max(0, Math.min(6, speed - 8)) * 30; // max +180
+
+    // Bonus: ab 8 km/h +30 XP pro km/h über 8 (gedeckelt)
+    const bonus = Math.max(0, Math.min(6, speed - 8)) * 30 * dist;
     return Math.round(base + bonus);
   }
 
-  // preview/compute XP with multipliers from other modules
-  function compute(entry){
-    const type = entry.type || "Mehrgelenkig";
-
-    let base = 0;
-    if(type === "NEAT") base = neatXP(entry.minutes || 0);
-    else if(type === "Jogging") base = joggingXP(entry.distanceKm || 0, entry.timeMin || 0);
-    else base = BASE[type] ?? 0;
-
-    // Volume multiplier (optional)
-    let vol = 1.0;
-    if(entry.sets && entry.reps && (type !== "NEAT" && type !== "Rest" && type !== "Jogging")){
-      const sets = Math.max(0, Number(entry.sets||0));
-      const reps = Math.max(0, Number(entry.reps||0));
-      const volScore = sets * reps;
-      // soft scaling: 30 reps = baseline
-      vol = Math.max(0.85, Math.min(1.25, volScore / 30));
-    }
-
-    const week = Number(entry.week || 1);
-
-    // mutation: Jogging zählt wie Conditioning
-    const mutType = (type === "Jogging") ? "Conditioning" : type;
-    const mut = (window.Progression?.mutationMultiplier?.(mutType, week)) ?? 1.0;
-
-    const streak = (window.Progression?.streakMultiplier?.()) ?? 1.0;
-
-    // skill: Jogging zählt wie END (siehe skilltree.js Update)
-    const skill = (window.SkillTree?.getMultiplier?.(type)) ?? 1.0;
-
-    const xp = Math.round(base * vol * mut * streak * skill);
-
-    return {
-      xp,
-      breakdown: {
-        base: Math.round(base),
-        vol: Number(vol.toFixed(2)),
-        mut: Number(mut.toFixed(2)),
-        streak: Number(streak.toFixed(2)),
-        skill: Number(skill.toFixed(2))
-      }
-    };
+  function baseXPForType(type, payload){
+    if (type === "NEAT") return neatXP(payload?.minutes || 0);
+    if (type === "Jogging") return joggingXP(payload?.distanceKm || 0, payload?.timeMin || 0);
+    return BASE[type] ?? 0;
   }
 
-  return { BASE, neatXP, joggingXP, compute };
+  return { baseXPForType, neatXP, joggingXP };
 })();
