@@ -488,3 +488,38 @@ nav.bottom-nav{
 main{
   background: transparent;
 }
+
+.attrGrid{
+  display:grid;
+  grid-template-columns: 1fr 1fr;
+  gap:12px;
+}
+@media(max-width:700px){ .attrGrid{ grid-template-columns: 1fr; } }
+
+.attrCard{
+  border:1px solid rgba(255,255,255,.08);
+  background: rgba(0,0,0,.18);
+  border-radius: 18px;
+  padding:12px;
+}
+
+.attrTop{
+  display:flex;
+  justify-content:space-between;
+  align-items:center;
+  gap:10px;
+  margin-bottom:10px;
+}
+.attrName{ font-weight:950; }
+.attrLvl{ opacity:.85; font-weight:900; }
+
+.attrBar{
+  height:10px;
+  border-radius:999px;
+  background: rgba(255,255,255,.08);
+  overflow:hidden;
+}
+.attrFill{
+  height:100%;
+  background: rgba(76,255,155,.55);
+}
