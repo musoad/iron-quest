@@ -1,119 +1,135 @@
-(function(){
-  const KEY_START = "iq_start_v4";
-  const KEY_STREAK = "iq_streak_v4";
+// js/progression.js
+window.Progression = (function(){
+  const { isoDate, loadJSON, saveJSON, clamp } = window.Utils;
+
+  const KEY_START = "ironquest_startdate_v4";
+  const KEY_STREAK = "ironquest_streak_v4";
 
   function ensureStartDate(){
     let s = localStorage.getItem(KEY_START);
-    if (!s){
-      s = window.IQ.isoDate(new Date());
-      localStorage.setItem(KEY_START, s);
-    }
+    if (!s) { s = isoDate(new Date()); localStorage.setItem(KEY_START, s); }
     return s;
   }
-  function setStartDate(iso){
-    localStorage.setItem(KEY_START, iso);
-  }
+  function setStartDate(iso){ localStorage.setItem(KEY_START, iso); }
 
   function daysBetween(aISO, bISO){
-    const a = new Date(aISO);
-    const b = new Date(bISO);
-    return Math.floor((b - a) / 86400000);
+    return Math.floor((new Date(bISO) - new Date(aISO)) / 86400000);
   }
-  function weekForDate(dateISO){
+  function weekNumberFor(dateISO){
     const start = ensureStartDate();
     const diff = daysBetween(start, dateISO);
-    const w = diff < 0 ? 1 : (Math.floor(diff/7) + 1);
-    return window.IQ.clamp(w, 1, 99);
+    if (diff < 0) return 0;
+    return Math.floor(diff/7) + 1;
   }
 
-  function xpNeeded(level){
-    const l = Math.max(1, Number(level||1));
-    return Math.round(350 + 120*l + 32*Math.pow(l, 1.75));
+  function clampWeek(w){ return clamp(w||1, 1, 52); }
+  function weekBlock(w){
+    const ww = clampWeek(w);
+    return ww <= 4 ? 1 : (ww <= 8 ? 2 : 3);
   }
-  function levelFromXP(total){
-    let lvl = 1;
-    let xp = Math.max(0, Math.round(total||0));
-    while (xp >= xpNeeded(lvl) && lvl < 999){
-      xp -= xpNeeded(lvl);
-      lvl++;
+
+  function starThresholds(){ return { one:1200, two:1600, three:2000 }; }
+  function starsForXP(xp){
+    const t = starThresholds();
+    if (xp >= t.three) return "⭐⭐⭐";
+    if (xp >= t.two) return "⭐⭐";
+    if (xp >= t.one) return "⭐";
+    return "—";
+  }
+
+  function xpNeededForNextLevel(level){
+    const l = Math.max(1, level);
+    return Math.round(350 + 120*l + 32*(l**1.75));
+  }
+  function levelFromTotalXP(total){
+    let lvl=1, xp=Math.max(0, Math.round(total||0));
+    while(true){
+      const need = xpNeededForNextLevel(lvl);
+      if (xp >= need){ xp -= need; lvl++; }
+      else break;
+      if (lvl>999) break;
     }
-    return { lvl, into: xp, need: xpNeeded(lvl) };
+    return { lvl, into: xp, need: xpNeededForNextLevel(lvl) };
   }
   function titleForLevel(lvl){
-    if (lvl >= 60) return "Mythic";
-    if (lvl >= 40) return "Legend";
-    if (lvl >= 25) return "Elite";
-    if (lvl >= 15) return "Veteran";
-    if (lvl >= 8) return "Krieger";
+    if (lvl>=60) return "Mythic";
+    if (lvl>=40) return "Legend";
+    if (lvl>=25) return "Elite";
+    if (lvl>=15) return "Veteran";
+    if (lvl>=8) return "Krieger";
     return "Anfänger";
   }
 
-  // Streak: count consecutive days with >= 1 entry that is not Rest
-  function loadStreak(){
-    try{ return JSON.parse(localStorage.getItem(KEY_STREAK)) || { count:0, lastDay:null }; }
-    catch{ return { count:0, lastDay:null }; }
-  }
-  function saveStreak(s){ localStorage.setItem(KEY_STREAK, JSON.stringify(s)); }
-
-  function updateStreakFromEntries(entries){
-    const today = window.IQ.isoDate(new Date());
-    const byDay = {};
+  // Streak: zählt Tage mit >= ⭐
+  function computeStreak(entries){
+    const t = starThresholds();
+    const map = {};
     for (const e of entries){
-      if (!e.date) continue;
-      if (e.type === "Rest") continue;
-      byDay[e.date] = true;
+      map[e.date] = (map[e.date]||0) + (e.xp||0);
     }
-    // compute streak backwards
-    let count = 0;
-    let day = today;
-    while (byDay[day]){
-      count++;
-      const d = new Date(day);
-      d.setDate(d.getDate()-1);
-      day = window.IQ.isoDate(d);
-      if (count > 999) break;
+    const days = Object.keys(map).sort(); // ASC
+    if (!days.length) return { current:0, best:0 };
+
+    let best=0, cur=0;
+    let prev=null;
+
+    for (const d of days){
+      const ok = (map[d]||0) >= t.one;
+      if (!ok) continue;
+
+      if (!prev){
+        cur=1; best=Math.max(best,cur); prev=d; continue;
+      }
+      const gap = Math.round((new Date(d)-new Date(prev))/86400000);
+      if (gap === 1) cur++;
+      else cur = 1;
+      prev = d;
+      best = Math.max(best, cur);
     }
-    const s = { count, lastDay: today };
-    saveStreak(s);
-    return s;
+
+    // current streak: walk backwards from today
+    const today = isoDate(new Date());
+    let c=0;
+    for (let i=0;i<366;i++){
+      const dd = isoDate(new Date(Date.now() - i*86400000));
+      const xp = map[dd]||0;
+      if (xp >= t.one) c++;
+      else break;
+      if (dd === "1970-01-01") break;
+    }
+
+    const saved = loadJSON(KEY_STREAK, { best:0 });
+    if (best > (saved.best||0)) { saved.best = best; saveJSON(KEY_STREAK, saved); }
+    return { current:c, best: Math.max(saved.best||0, best) };
   }
 
-  function streakMultiplier(streakCount){
-    const s = Math.max(0, Number(streakCount||0));
-    if (s >= 30) return 1.15;
-    if (s >= 14) return 1.10;
-    if (s >= 7) return 1.06;
-    if (s >= 3) return 1.03;
-    return 1.0;
+  // Empfehlungen: abhängig von Block
+  function recommendedSets(type, week){
+    const b = weekBlock(week);
+    if (type==="NEAT") return "Minuten statt Sätze";
+    if (type==="Jogging") return "Distanz + Zeit";
+    if (type==="Rest") return "—";
+    if (type==="Conditioning") return b===1 ? "4–5 Runden" : (b===2 ? "5–6 Runden" : "5–6 Runden");
+    if (type==="Core") return b===1 ? "3 Sätze" : "4 Sätze";
+    if (type==="Komplexe") return b===1 ? "4–5 Runden" : (b===2 ? "5–6 Runden" : "6 Runden");
+    return b===1 ? "3–4 Sätze" : (b===2 ? "4–5 Sätze" : "4–5 Sätze");
+  }
+  function recommendedReps(type, week){
+    const b = weekBlock(week);
+    if (type==="NEAT") return "30–60 Min";
+    if (type==="Jogging") return "z. B. 2–6 km locker";
+    if (type==="Rest") return "Mobility/Recovery 10–20 Min";
+    if (type==="Core") return b===1 ? "30–45s" : "40–60s";
+    if (type==="Conditioning") return b===1 ? "30–40s Arbeit / 60s Pause" : (b===2 ? "35–45s / 45–60s" : "40–45s / 30–45s");
+    if (type==="Komplexe") return b===1 ? "6–8 Wdh pro Movement" : "6 Wdh pro Movement";
+    return b===1 ? "10–12 Wdh" : (b===2 ? "8–10 Wdh" : "6–8 Wdh");
   }
 
-  // Adaptive recommendation: simple (based on last week XP)
-  function adaptiveHint(entries, currentWeek){
-    const cur = Number(currentWeek||1);
-    const prev = cur-1;
-    if (prev < 1) return { note:"Startwoche: neutral.", setDelta:0, repDelta:0 };
-
-    let curXP = 0, prevXP = 0;
-    for (const e of entries){
-      if (e.week === cur) curXP += (e.xp||0);
-      if (e.week === prev) prevXP += (e.xp||0);
-    }
-    if (prevXP <= 0) return { note:`W${prev}: keine Daten → neutral.`, setDelta:0, repDelta:0 };
-
-    const ratio = curXP / prevXP;
-    if (ratio >= 1.15) return { note:"Stark im Trend → +1 Satz oder +1-2 Reps (wenn sauber).", setDelta:+1, repDelta:+1 };
-    if (ratio <= 0.75) return { note:"Drop → Deload: -1 Satz oder Fokus Technik/ROM.", setDelta:-1, repDelta:-1 };
-    return { note:"Stabil → neutral.", setDelta:0, repDelta:0 };
-  }
-
-  window.IronQuestProgression = {
-    ensureStartDate,
-    setStartDate,
-    weekForDate,
-    levelFromXP,
-    titleForLevel,
-    updateStreakFromEntries,
-    streakMultiplier,
-    adaptiveHint
+  return {
+    ensureStartDate, setStartDate, weekNumberFor, clampWeek, weekBlock,
+    starThresholds, starsForXP,
+    levelFromTotalXP, titleForLevel,
+    computeStreak,
+    recommendedSets, recommendedReps
   };
 })();
