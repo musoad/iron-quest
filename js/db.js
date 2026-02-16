@@ -1,254 +1,132 @@
-/* =========================
-   IRON QUEST – js/db.js
-   ✅ IndexedDB Wrapper (Safari iOS friendly)
-   ✅ Robust Upgrade: creates missing stores by bumping DB_VERSION
-   ✅ Legacy-Migration: versucht alte Daten aus früheren DB-Namen zu importieren
-   ========================= */
-
-(() => {
-  const DB_NAME = "ironquest_v4_pro";
-  const DB_VERSION = 3; // ⬅️ WICHTIG: hochgezählt (fix für „object store not found“)
+// js/db.js
+window.DB = (function(){
+  const DB_NAME = "ironquest_db";     // ✅ wichtig: alter Name (Entries bleiben)
+  const DB_VERSION = 6;              // ✅ hoch, damit Upgrade sicher läuft
 
   const STORES = {
-    entries: "entries",   // Trainings-Entries (XP etc.)
-    health:  "health",    // Blutdruck/Puls/Recomp etc.
-    runs:    "runs",      // Jogging
-    settings:"settings"   // App-Settings (Startdatum usw.) optional
+    entries:   { keyPath:"id", autoIncrement:true, indexes:[{name:"date", key:"date"},{name:"week", key:"week"}] },
+    health:    { keyPath:"id", autoIncrement:true, indexes:[{name:"date", key:"date"}] },
+    runs:      { keyPath:"id", autoIncrement:true, indexes:[{name:"date", key:"date"}] },
+    settings:  { keyPath:"key", autoIncrement:false, indexes:[] },
+    prs:       { keyPath:"id", autoIncrement:true, indexes:[{name:"exercise", key:"exercise"}] }
   };
 
-  function openDB() {
-    return new Promise((resolve, reject) => {
-      const req = indexedDB.open(DB_NAME, DB_VERSION);
-
+  function open(name){
+    return new Promise((resolve, reject)=>{
+      const req = indexedDB.open(name, DB_VERSION);
       req.onupgradeneeded = () => {
         const db = req.result;
 
-        // Helper: create store if missing
-        const ensureStore = (name, opts, indexes = []) => {
+        Object.entries(STORES).forEach(([storeName, cfg])=>{
           let store;
-          if (!db.objectStoreNames.contains(name)) {
-            store = db.createObjectStore(name, opts);
+          if (!db.objectStoreNames.contains(storeName)){
+            store = db.createObjectStore(storeName, { keyPath: cfg.keyPath, autoIncrement: cfg.autoIncrement });
           } else {
-            store = req.transaction.objectStore(name);
+            store = req.transaction.objectStore(storeName);
           }
-          indexes.forEach(ix => {
-            try {
-              if (!store.indexNames.contains(ix.name)) store.createIndex(ix.name, ix.keyPath, ix.options || {});
-            } catch (e) {
-              // ignore index errors (old Safari quirks)
+          (cfg.indexes||[]).forEach(ix=>{
+            if (!store.indexNames.contains(ix.name)){
+              store.createIndex(ix.name, ix.key, { unique:false });
             }
           });
-        };
-
-        ensureStore(STORES.entries, { keyPath: "id", autoIncrement: true }, [
-          { name: "date", keyPath: "date", options: { unique: false } },
-          { name: "week", keyPath: "week", options: { unique: false } },
-          { name: "type", keyPath: "type", options: { unique: false } }
-        ]);
-
-        ensureStore(STORES.health, { keyPath: "id", autoIncrement: true }, [
-          { name: "date", keyPath: "date", options: { unique: false } }
-        ]);
-
-        ensureStore(STORES.runs, { keyPath: "id", autoIncrement: true }, [
-          { name: "date", keyPath: "date", options: { unique: false } }
-        ]);
-
-        ensureStore(STORES.settings, { keyPath: "key" }, []);
+        });
       };
-
-      req.onsuccess = () => resolve(req.result);
-      req.onerror = () => reject(req.error);
+      req.onsuccess = ()=> resolve(req.result);
+      req.onerror = ()=> reject(req.error);
     });
   }
 
-  async function txStore(storeName, mode = "readonly") {
-    const db = await openDB();
-
-    // Defensive: if store somehow missing (corrupt/old DB), throw a clearer error
-    if (!db.objectStoreNames.contains(storeName)) {
+  async function tx(storeName, mode="readonly"){
+    const db = await open(DB_NAME);
+    if (!db.objectStoreNames.contains(storeName)){
+      // force open again (in case an old cached version created partial DB)
       db.close();
-      throw new Error(`DB store missing: ${storeName} (DB_VERSION=${DB_VERSION}).`);
-    }
-
-    const tx = db.transaction(storeName, mode);
-    return tx.objectStore(storeName);
-  }
-
-  // ---------- Basic CRUD ----------
-  async function getAll(storeName) {
-    const store = await txStore(storeName, "readonly");
-    return new Promise((resolve, reject) => {
-      const req = store.getAll();
-      req.onsuccess = () => resolve(req.result || []);
-      req.onerror = () => reject(req.error);
-    });
-  }
-
-  async function add(storeName, value) {
-    const store = await txStore(storeName, "readwrite");
-    return new Promise((resolve, reject) => {
-      const req = store.add(value);
-      req.onsuccess = () => resolve(req.result);
-      req.onerror = () => reject(req.error);
-    });
-  }
-
-  async function put(storeName, value) {
-    const store = await txStore(storeName, "readwrite");
-    return new Promise((resolve, reject) => {
-      const req = store.put(value);
-      req.onsuccess = () => resolve(req.result);
-      req.onerror = () => reject(req.error);
-    });
-  }
-
-  async function del(storeName, id) {
-    const store = await txStore(storeName, "readwrite");
-    return new Promise((resolve, reject) => {
-      const req = store.delete(id);
-      req.onsuccess = () => resolve(true);
-      req.onerror = () => reject(req.error);
-    });
-  }
-
-  async function clear(storeName) {
-    const store = await txStore(storeName, "readwrite");
-    return new Promise((resolve, reject) => {
-      const req = store.clear();
-      req.onsuccess = () => resolve(true);
-      req.onerror = () => reject(req.error);
-    });
-  }
-
-  // ---------- Settings (key/value) ----------
-  async function getSetting(key, fallback = null) {
-    const store = await txStore(STORES.settings, "readonly");
-    return new Promise((resolve) => {
-      const req = store.get(key);
-      req.onsuccess = () => resolve(req.result ? req.result.value : fallback);
-      req.onerror = () => resolve(fallback);
-    });
-  }
-
-  async function setSetting(key, value) {
-    const store = await txStore(STORES.settings, "readwrite");
-    return new Promise((resolve, reject) => {
-      const req = store.put({ key, value });
-      req.onsuccess = () => resolve(true);
-      req.onerror = () => reject(req.error);
-    });
-  }
-
-  // ---------- Legacy Migration ----------
-  async function tryReadLegacyDB(legacyName, legacyStores = ["entries"]) {
-    return new Promise((resolve) => {
-      const req = indexedDB.open(legacyName);
-      req.onerror = () => resolve(null);
-      req.onsuccess = () => {
-        const db = req.result;
-        try {
-          const found = [];
-          for (const s of legacyStores) {
-            if (db.objectStoreNames.contains(s)) found.push(s);
-          }
-          if (!found.length) { db.close(); return resolve(null); }
-
-          const tx = db.transaction(found, "readonly");
-          const out = {};
-          let pending = found.length;
-
-          found.forEach((s) => {
-            const r = tx.objectStore(s).getAll();
-            r.onsuccess = () => {
-              out[s] = r.result || [];
-              pending -= 1;
-              if (!pending) { db.close(); resolve(out); }
-            };
-            r.onerror = () => {
-              out[s] = [];
-              pending -= 1;
-              if (!pending) { db.close(); resolve(out); }
-            };
-          });
-        } catch {
-          try { db.close(); } catch {}
-          resolve(null);
-        }
-      };
-    });
-  }
-
-  async function migrateFromLegacyIfEmpty() {
-    // only migrate if our current DB looks empty
-    const existing = await getAll(STORES.entries).catch(() => []);
-    if (existing && existing.length) return { migrated: false, reason: "entries-not-empty" };
-
-    const legacyCandidates = [
-      { name: "ironquest_db", stores: ["entries"] },
-      { name: "ironquest_db", stores: ["workouts", "entries"] },
-      { name: "ironquest_db", stores: ["log", "entries"] },
-      { name: "ironquest_db", stores: ["entries", "health", "runs"] },
-      { name: "ironquest_db_v3", stores: ["entries"] },
-      { name: "ironquest_v3_pro", stores: ["entries"] },
-      { name: "ironquest_db_v20", stores: ["entries"] },
-    ];
-
-    for (const c of legacyCandidates) {
-      const data = await tryReadLegacyDB(c.name, c.stores);
-      if (!data) continue;
-
-      const legacyEntries = data.entries || data.workouts || data.log || [];
-      if (legacyEntries.length) {
-        // normalize
-        for (const e of legacyEntries) {
-          const clean = {
-            date: e.date || e.day || null,
-            week: e.week || e.weekNum || null,
-            exercise: e.exercise || e.name || e.title || "Legacy Entry",
-            type: e.type || e.kind || "Legacy",
-            detail: e.detail || e.notes || "",
-            xp: typeof e.xp === "number" ? e.xp : (typeof e.points === "number" ? e.points : 0),
-          };
-          if (!clean.date) continue;
-          await add(STORES.entries, clean);
-        }
-        return { migrated: true, from: c.name, count: legacyEntries.length };
+      const db2 = await open(DB_NAME);
+      if (!db2.objectStoreNames.contains(storeName)){
+        throw new Error(`ObjectStore missing: ${storeName}`);
       }
+      return db2.transaction(storeName, mode).objectStore(storeName);
     }
-    return { migrated: false, reason: "no-legacy-found" };
+    return db.transaction(storeName, mode).objectStore(storeName);
   }
 
-  async function init() {
-    // open once to ensure upgrade runs
-    await openDB();
-    // try migration (best effort)
-    try {
-      return await migrateFromLegacyIfEmpty();
+  async function getAll(storeName){
+    const store = await tx(storeName, "readonly");
+    return new Promise((resolve, reject)=>{
+      const r = store.getAll();
+      r.onsuccess = ()=> resolve(r.result || []);
+      r.onerror = ()=> reject(r.error);
+    });
+  }
+
+  async function add(storeName, obj){
+    const store = await tx(storeName, "readwrite");
+    return new Promise((resolve, reject)=>{
+      const r = store.add(obj);
+      r.onsuccess = ()=> resolve(r.result);
+      r.onerror = ()=> reject(r.error);
+    });
+  }
+
+  async function put(storeName, obj){
+    const store = await tx(storeName, "readwrite");
+    return new Promise((resolve, reject)=>{
+      const r = store.put(obj);
+      r.onsuccess = ()=> resolve(r.result);
+      r.onerror = ()=> reject(r.error);
+    });
+  }
+
+  async function del(storeName, key){
+    const store = await tx(storeName, "readwrite");
+    return new Promise((resolve, reject)=>{
+      const r = store.delete(key);
+      r.onsuccess = ()=> resolve(true);
+      r.onerror = ()=> reject(r.error);
+    });
+  }
+
+  async function clear(storeName){
+    const store = await tx(storeName, "readwrite");
+    return new Promise((resolve, reject)=>{
+      const r = store.clear();
+      r.onsuccess = ()=> resolve(true);
+      r.onerror = ()=> reject(r.error);
+    });
+  }
+
+  // Optional: Migration attempt from older DB names (falls du mal umbenannt hattest)
+  async function tryMigrateFrom(dbName){
+    if (dbName === DB_NAME) return { migrated:false, count:0 };
+    try{
+      const old = await open(dbName);
+      if (!old.objectStoreNames.contains("entries")) return { migrated:false, count:0 };
+      const entries = await new Promise((resolve, reject)=>{
+        const t = old.transaction("entries","readonly");
+        const r = t.objectStore("entries").getAll();
+        r.onsuccess = ()=> resolve(r.result||[]);
+        r.onerror = ()=> reject(r.error);
+      });
+      old.close();
+      if (!entries.length) return { migrated:false, count:0 };
+
+      const cur = await getAll("entries");
+      const sig = new Set(cur.map(e=>`${e.date}|${e.exercise}|${e.xp}|${e.week}`));
+
+      let added = 0;
+      for (const e of entries){
+        const k = `${e.date}|${e.exercise}|${e.xp}|${e.week}`;
+        if (sig.has(k)) continue;
+        const copy = { ...e };
+        delete copy.id; // new auto id
+        await add("entries", copy);
+        added++;
+      }
+      return { migrated: added>0, count: added };
     } catch {
-      return { migrated: false, reason: "migration-error" };
+      return { migrated:false, count:0 };
     }
   }
 
-  // expose
-  window.IronDB = {
-    STORES,
-    init,
-    getAllEntries: () => getAll(STORES.entries),
-    addEntry: (e) => add(STORES.entries, e),
-    updateEntry: (e) => put(STORES.entries, e),
-    deleteEntry: (id) => del(STORES.entries, id),
-    clearEntries: () => clear(STORES.entries),
-
-    getAllHealth: () => getAll(STORES.health),
-    addHealth: (h) => add(STORES.health, h),
-    deleteHealth: (id) => del(STORES.health, id),
-
-    getAllRuns: () => getAll(STORES.runs),
-    addRun: (r) => add(STORES.runs, r),
-    deleteRun: (id) => del(STORES.runs, id),
-
-    getSetting,
-    setSetting,
-  };
+  return { getAll, add, put, del, clear, tryMigrateFrom };
 })();
