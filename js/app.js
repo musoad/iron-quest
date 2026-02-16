@@ -4,6 +4,7 @@
    ✅ No Tab render collisions
    ✅ Central Render Engine
    ✅ DB init once
+   ✅ Force SW update + debug
 ========================= */
 
 (() => {
@@ -70,37 +71,48 @@
     dashEl.prepend(card);
   }
 
-  // Zentrale Render Engine: nur diese Funktion darf rendern
+  function ensureStatusLine(text) {
+    const header = document.querySelector("header h1");
+    let statusLine = document.querySelector("header .statusLine");
+    if (!statusLine) {
+      statusLine = document.createElement("div");
+      statusLine.className = "statusLine";
+      header?.insertAdjacentElement("afterend", statusLine);
+    }
+    statusLine.textContent = text;
+  }
+
   async function renderRoute(route) {
     const el = document.getElementById(route);
     if (!el) return;
 
-    // DB sicher einmal ready
     await window.IronDB.init();
 
-    // registry: hier hängen wir die Module stabil ein
     const modules = {
       dashboard: async (container) => {
-        if (window.IronQuestAnalytics?.renderDashboard) await window.IronQuestAnalytics.renderDashboard(container);
-        else container.innerHTML = `<div class="card"><h2>Dashboard</h2><p class="hint">OK</p></div>`;
+        // Debug: zeigt ob Analytics geladen ist
+        const ok = !!(window.IronQuestAnalytics && typeof window.IronQuestAnalytics.renderDashboard === "function");
+        ensureStatusLine(ok ? "Modules: OK" : "Modules: MISSING (Analytics)");
+
+        if (ok) await window.IronQuestAnalytics.renderDashboard(container);
+        else container.innerHTML = `
+          <div class="card">
+            <h2>Dashboard</h2>
+            <p class="hint">OK</p>
+            <div class="hint">⚠️ window.IronQuestAnalytics fehlt. Das ist fast immer ein Service-Worker Cache Problem.</div>
+            <div class="hint">Lösung: PWA neu laden oder Cache löschen (siehe Anleitung).</div>
+          </div>
+        `;
 
         const stats = await computeCoreStats();
         renderDashboardTopBar(container, stats);
-
-        // StatusLine
-        const header = document.querySelector("header h1");
-        let statusLine = document.querySelector("header .statusLine");
-        if (!statusLine) {
-          statusLine = document.createElement("div");
-          statusLine.className = "statusLine";
-          header?.insertAdjacentElement("afterend", statusLine);
-        }
-        statusLine.textContent = `OK • ${stats.weekLabel} • ${stats.levelLabel}`;
+        ensureStatusLine(`OK • ${stats.weekLabel} • ${stats.levelLabel}`);
       },
 
       log: async (container) => {
         if (window.IronQuestAnalytics?.renderLog) return window.IronQuestAnalytics.renderLog(container);
-        container.innerHTML = `<div class="card"><h2>Log</h2><p class="hint">Log Renderer nicht gefunden.</p></div>`;
+        container.innerHTML = `<div class="card"><h2>Log</h2><p class="hint">Log Renderer nicht gefunden.</p>
+          <div class="hint">Check: window.IronQuestAnalytics in der Konsole.</div></div>`;
       },
 
       jogging: async (container) => {
@@ -170,21 +182,43 @@
     renderRoute(startTab);
   }
 
-  async function init() {
-    // SW
+  async function initServiceWorker() {
     try {
-      if ("serviceWorker" in navigator) {
-        await navigator.serviceWorker.register("./sw.js");
-        navigator.serviceWorker.addEventListener("controllerchange", () => location.reload());
+      if (!("serviceWorker" in navigator)) return;
+
+      const reg = await navigator.serviceWorker.register("./sw.js");
+
+      // Force update check
+      try { await reg.update(); } catch {}
+
+      // If a new SW is waiting, activate it now
+      if (reg.waiting) {
+        reg.waiting.postMessage({ type: "SKIP_WAITING" });
       }
+
+      reg.addEventListener("updatefound", () => {
+        const sw = reg.installing;
+        if (!sw) return;
+        sw.addEventListener("statechange", () => {
+          if (sw.state === "installed" && reg.waiting) {
+            reg.waiting.postMessage({ type: "SKIP_WAITING" });
+          }
+        });
+      });
+
+      navigator.serviceWorker.addEventListener("controllerchange", () => {
+        location.reload();
+      });
+
     } catch (e) {
       console.warn("SW error:", e);
     }
+  }
 
-    // DB ready once
+  async function init() {
+    await initServiceWorker();
     await window.IronDB.init();
 
-    // Header clean
     const playerInfo = $("#playerInfo");
     if (playerInfo) playerInfo.innerHTML = "";
 
