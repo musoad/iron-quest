@@ -5,7 +5,7 @@
    ✅ Cache bust via SW_VERSION
 ========================= */
 
-const SW_VERSION = "v4.0.28";
+const SW_VERSION = "v4.0.29";
 const CACHE_NAME = `ironquest-${SW_VERSION}`;
 
 const ASSETS = [
