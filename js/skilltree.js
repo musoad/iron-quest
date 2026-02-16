@@ -1,67 +1,100 @@
 // js/skilltree.js
-window.SkillTree = (function(){
-  const KEY = "ironquest_skill_v1";
-  const TYPE_BUCKET = {
-    Mehrgelenkig: "STR",
-    Unilateral: "STA",
-    Conditioning: "END",
-    Jogging: "END",      // ✅ Jogging = END
-    Core: "MOB",
-    Komplexe: "ELITE"
-  };
+window.Skilltree = (function(){
+  const { loadJSON, saveJSON } = window.Utils;
+  const KEY = "ironquest_skilltree_v4";
+
+  const TREES = [
+    { key:"Mehrgelenkig", label:"STR – Mehrgelenkig" },
+    { key:"Unilateral",   label:"STA – Unilateral" },
+    { key:"Core",         label:"MOB – Core" },
+    { key:"Conditioning", label:"END – Conditioning" },
+    { key:"Komplexe",     label:"ELITE – Komplexe" },
+    { key:"Jogging",      label:"RUN – Jogging" },
+  ];
 
   function load(){
-    try { return JSON.parse(localStorage.getItem(KEY)) || { STR:0, STA:0, END:0, MOB:0, ELITE:0 }; }
-    catch { return { STR:0, STA:0, END:0, MOB:0, ELITE:0 }; }
-  }
-  function save(s){ localStorage.setItem(KEY, JSON.stringify(s)); }
-
-  function addPoint(bucket){
-    const s = load();
-    s[bucket] = (s[bucket]||0) + 1;
-    save(s);
+    const fallback = { points:0, unlocked:{} };
+    const s = loadJSON(KEY, fallback);
+    s.points = Number(s.points||0);
+    s.unlocked = s.unlocked || {};
     return s;
   }
+  function save(s){ saveJSON(KEY, s); }
 
-  function getMultiplier(type){
+  // +2% pro Unlock, cap +15% pro Tree
+  function multiplierFor(type){
     const s = load();
-    const bucket = TYPE_BUCKET[type] || null;
-    if(!bucket) return 1.0;
-    const pts = Number(s[bucket]||0);
-    // 2% pro Punkt + Capstone (wenn >=10) extra 5%
-    let mult = 1 + pts*0.02;
-    if(pts >= 10) mult += 0.05;
-    return Number(mult.toFixed(4));
+    const n = Number(s.unlocked[type]||0);
+    const mult = 1 + Math.min(0.15, n*0.02);
+    return mult;
   }
 
-  function render(container){
+  function render(elId){
+    const el = document.getElementById(elId);
+    if (!el) return;
+
     const s = load();
-    container.innerHTML = `
+
+    el.innerHTML = `
       <div class="card">
         <h2>Skilltree</h2>
-        <p class="sub">+1 Punkt = +2% XP (ab 10 Punkten +5% extra)</p>
-
-        <div class="grid2">
-          ${["STR","STA","END","MOB","ELITE"].map(k=>`
-            <div class="mini">
-              <div class="row">
-                <b>${k}</b>
-                <span class="pill">${s[k]||0} Punkte</span>
-              </div>
-              <button class="btn" data-skill="${k}">+1 Punkt</button>
-            </div>
-          `).join("")}
+        <p class="hint">Skillpunkte: Du kannst sie manuell vergeben (Motivation). Jeder Unlock gibt +2% XP für den Typ (max +15%).</p>
+        <div class="row2">
+          <div class="pill"><b>Verfügbare Skillpunkte:</b> <span id="stPoints">${s.points}</span></div>
+          <div class="pill"><b>Hinweis:</b> Skilltree beeinflusst XP direkt.</div>
+        </div>
+        <hr>
+        <div id="stList"></div>
+        <div class="btnRow">
+          <button class="secondary" id="stAddPoint">+1 Skillpunkt</button>
+          <button class="danger" id="stReset">Reset Skilltree</button>
         </div>
       </div>
     `;
 
-    container.querySelectorAll("[data-skill]").forEach(btn=>{
-      btn.addEventListener("click", ()=>{
-        addPoint(btn.getAttribute("data-skill"));
-        render(container);
-      });
+    const list = document.getElementById("stList");
+    TREES.forEach(t=>{
+      const unlocked = Number(s.unlocked[t.key]||0);
+      const mult = (1 + Math.min(0.15, unlocked*0.02)).toFixed(2);
+      const div = document.createElement("div");
+      div.className = "card";
+      div.innerHTML = `
+        <div class="itemTop">
+          <div>
+            <div><b>${t.label}</b></div>
+            <div class="small">Unlocks: ${unlocked} • Mult: x${mult}</div>
+          </div>
+          <button class="primary" data-unlock="${t.key}">Unlock (-1 SP)</button>
+        </div>
+      `;
+      list.appendChild(div);
+    });
+
+    document.getElementById("stAddPoint").onclick = ()=>{
+      const s2 = load();
+      s2.points += 1;
+      save(s2);
+      render(elId);
+    };
+
+    document.getElementById("stReset").onclick = ()=>{
+      if (!confirm("Skilltree wirklich zurücksetzen?")) return;
+      save({ points:0, unlocked:{} });
+      render(elId);
+    };
+
+    list.querySelectorAll("[data-unlock]").forEach(btn=>{
+      btn.onclick = ()=>{
+        const k = btn.getAttribute("data-unlock");
+        const s2 = load();
+        if (s2.points <= 0) return alert("Keine Skillpunkte verfügbar.");
+        s2.points -= 1;
+        s2.unlocked[k] = Number(s2.unlocked[k]||0) + 1;
+        save(s2);
+        render(elId);
+      };
     });
   }
 
-  return { load, addPoint, getMultiplier, render };
+  return { multiplierFor, render };
 })();
