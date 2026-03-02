@@ -1,100 +1,78 @@
 (() => {
   "use strict";
 
-  function download(filename, content){
-    const blob=new Blob([content],{type:"application/json;charset=utf-8"});
-    const url=URL.createObjectURL(blob);
-    const a=document.createElement("a");
-    a.href=url; a.download=filename;
-    document.body.appendChild(a);
-    a.click(); a.remove();
-    setTimeout(()=>URL.revokeObjectURL(url), 800);
+  const KEY="ironquest_attributes_v5";
+
+  const ATTRS = [
+    { key:"STR",  name:"Stärke",   types:["Mehrgelenkig"] },
+    { key:"UNI",  name:"Unilateral",types:["Unilateral"] },
+    { key:"CORE", name:"Core",     types:["Core"] },
+    { key:"END",  name:"Ausdauer", types:["Conditioning","NEAT","Joggen"] },
+    { key:"SKILL",name:"Skill",    types:["Komplexe"] },
+  ];
+
+  function load(){ try{ return JSON.parse(localStorage.getItem(KEY))||{}; }catch{ return {}; } }
+  function save(st){ localStorage.setItem(KEY, JSON.stringify(st)); }
+
+  function xpNeeded(level){
+    const l=Math.max(1,Number(level||1));
+    return Math.round(250 + 120*l + 30*(l**1.7));
   }
 
-  async function renderBackup(el){
-    el.innerHTML=`
+  function getState(){
+    const st = load();
+    const out = {};
+    for (const a of ATTRS){
+      out[a.key] = st[a.key] || { xp:0, level:1 };
+    }
+    return out;
+  }
+
+  function addXPForEntry(entry){
+    const st = load();
+    const type = entry?.type || "";
+    const xp = Math.max(0, Number(entry?.xp||0));
+
+    for (const a of ATTRS){
+      if (!a.types.includes(type)) continue;
+      if (!st[a.key]) st[a.key]={xp:0, level:1};
+      st[a.key].xp += xp;
+
+      while(st[a.key].xp >= xpNeeded(st[a.key].level)){
+        st[a.key].xp -= xpNeeded(st[a.key].level);
+        st[a.key].level += 1;
+        if (st[a.key].level>999) break;
+      }
+    }
+    save(st);
+  }
+
+  function renderAttributes(container){
+    const st = getState();
+    container.innerHTML = `
       <div class="card">
-        <h2>Backup</h2>
-        <p class="hint">Export/Import deiner lokalen Daten.</p>
-
-        <div class="card">
-          <h2>Export</h2>
-          <button class="primary" id="ex">Backup JSON herunterladen</button>
-        </div>
-
-        <div class="card">
-          <h2>Import</h2>
-          <input id="file" type="file" accept="application/json">
-          <button class="secondary" id="im">Importieren (Merge)</button>
+        <h2>Stats (Solo-Levelling)</h2>
+        <p class="hint">Deine Attribute leveln automatisch durch XP – je höher, desto langsamer.</p>
+        <div class="attrGrid">
+          ${ATTRS.map(a=>{
+            const s=st[a.key];
+            const need=xpNeeded(s.level);
+            const pct = Math.max(0, Math.min(100, (s.xp/need)*100));
+            return `
+              <div class="attrCard">
+                <div class="attrTop">
+                  <div class="attrName">${a.name}</div>
+                  <div class="attrLvl">Lv ${s.level}</div>
+                </div>
+                <div class="attrBar"><div class="attrFill" style="width:${pct}%;"></div></div>
+                <div class="hint">${Math.round(s.xp)} / ${need} XP</div>
+              </div>
+            `;
+          }).join("")}
         </div>
       </div>
     `;
-
-    el.querySelector("#ex").onclick = async ()=>{
-      const snapshot = {
-        meta:{createdAt:new Date().toISOString(), version:"v5-solo"},
-        entries: await window.DB.getAll("entries"),
-        health: await window.DB.getAll("health"),
-        runs: await window.DB.getAll("runs"),
-        local:{
-          start: localStorage.getItem("ironquest_startdate_v5"),
-          skilltree: localStorage.getItem("ironquest_skilltree_v5"),
-          attributes: localStorage.getItem("ironquest_attributes_v5"),
-          rpg: localStorage.getItem("ironquest_rpg_v5"),
-          boss: localStorage.getItem("ironquest_boss_state_v5"),
-          loot: localStorage.getItem("ironquest_loot_v5"),
-          session: localStorage.getItem("ironquest_session_v5"),
-          coach: localStorage.getItem("ironquest_coach_v5"),
-        }
-      };
-      download(`ironquest_backup_${window.Utils.isoDate(new Date())}.json`, JSON.stringify(snapshot,null,2));
-      window.Toast?.toast("Backup exported");
-    };
-
-    el.querySelector("#im").onclick = async ()=>{
-      const f = el.querySelector("#file").files?.[0];
-      if(!f) return window.Toast?.toast("Import", "Bitte JSON wählen.");
-      const text = await f.text();
-      let snap=null;
-      try{ snap=JSON.parse(text); }catch{ return window.Toast?.toast("Import", "Ungültiges JSON."); }
-
-      const mergeStore = async (storeName, rows, sigFn)=>{
-        const cur = await window.DB.getAll(storeName);
-        const sig = new Set(cur.map(sigFn));
-        for(const r of (rows||[])){
-          const copy={...r}; delete copy.id;
-          const k=sigFn(copy);
-          if(sig.has(k)) continue;
-          await window.DB.add(storeName, copy);
-          sig.add(k);
-        }
-      };
-
-      await mergeStore("entries", snap.entries, (e)=>`${e.date}|${e.exercise}|${e.xp}|${e.week}|${e.type}`);
-      await mergeStore("health", snap.health, (h)=>`${h.date}|${h.sys}|${h.dia}|${h.pulse}|${h.weight}|${h.waist}`);
-      await mergeStore("runs", snap.runs, (r)=>`${r.date}|${r.km}|${r.minutes}|${r.xp}`);
-
-      if(snap.local){
-        const map = {
-          start:"ironquest_startdate_v5",
-          skilltree:"ironquest_skilltree_v5",
-          attributes:"ironquest_attributes_v5",
-          rpg:"ironquest_rpg_v5",
-          boss:"ironquest_boss_state_v5",
-          loot:"ironquest_loot_v5",
-          session:"ironquest_session_v5",
-          coach:"ironquest_coach_v5",
-        };
-        for(const [k,v] of Object.entries(snap.local)){
-          if(v==null) continue;
-          const key = map[k];
-          if (key) localStorage.setItem(key, String(v));
-        }
-      }
-
-      window.Toast?.toast("Import done", "Daten gemerged ✅");
-    };
   }
 
-  window.IronQuestBackup = { renderBackup };
+  window.IronQuestAttributes = { ATTRS, xpNeeded, getState, addXPForEntry, renderAttributes };
 })();
