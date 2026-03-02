@@ -43,12 +43,12 @@
     const modules = {
       dashboard: async(c)=> window.IronQuestAnalytics.renderDashboard(c),
       log: async(c)=> window.IronQuestAnalytics.renderLog(c),
-      gates: async(c)=> window.IronQuestGates.renderGates(c),
       jogging: async(c)=> window.IronQuestRunning.renderRunning(c),
       skills: async(c)=> window.IronQuestSkilltree.renderSkilltree(c),
       analytics: async(c)=> window.IronQuestAnalytics.renderAnalytics(c),
       health: async(c)=> window.IronQuestHealth.renderHealth(c),
       boss: async(c)=> window.IronQuestBoss.renderBoss(c),
+      gates: async(c)=> window.IronQuestGates.renderGates(c),
       challenge: async(c)=> window.IronQuestChallenges.renderChallenges(c),
       backup: async(c)=> window.IronQuestBackup.renderBackup(c),
     };
@@ -80,19 +80,17 @@
     renderRoute(startTab);
   }
 
-  async function hookDB(){
+  async function hookCore(){
+    // Hook: every entry updates attributes + rpg tracker
     const orig = window.IronDB.addEntry;
     window.IronDB.addEntry = async(entry)=>{
       const id = await orig(entry);
 
-      // attribute xp
+      // Attribute leveling (ignore Quest/Boss? they are fine, but only mapped types are used)
       window.IronQuestAttributes?.addXPForEntry?.(entry);
 
-      // PRs
-      try { window.IronQuestCoach?.updatePR?.(entry); } catch {}
-
-      // Levelup + RPG progress
-      try { await window.IronQuestLevelUp?.checkLevelUp?.(); } catch {}
+      // RPG
+      await window.IronQuestRPG?.onNewEntry?.();
 
       return id;
     };
@@ -102,12 +100,14 @@
     setStatus("Boot…");
     await initServiceWorker();
     await window.IronDB.init();
-    await hookDB();
+    await hookCore();
 
-    // init story/quests state
+    // Ensure RPG/loot/session state exists
     window.IronQuestRPG.getState();
+    window.IronQuestLoot.getState();
+    window.IronQuestSession.getState();
 
-    setStatus("OK • v6 Solo Ascension");
+    setStatus("OK • Solo-Levelling Mode");
     wireTabs();
   }
 
