@@ -19,7 +19,7 @@
     el.innerHTML = `
       <div class="card">
         <h2>Run</h2>
-        <p class="hint">Distanz + Zeit → Pace + XP. (Wird auch ins Log geschrieben.)</p>
+        <p class="hint">Distanz + Zeit → Pace + XP. (Wird ins Log geschrieben.)</p>
 
         <div class="card">
           <h2>Neuer Lauf</h2>
@@ -84,6 +84,7 @@
       });
 
       window.Toast?.toast("Run saved", `+${xp} XP`);
+      await window.IronQuestLevelUp.checkLevelUp();
       await renderRunning(el);
     };
 
