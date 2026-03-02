@@ -10,7 +10,6 @@
     NEAT: 80,
     Joggen: 0,
     Quest: 0,
-    Gate: 0,
     Boss: 0
   };
 
@@ -49,10 +48,8 @@
   }
 
   function skillMultiplierForType(type){
-    const a = window.IronQuestSkilltree?.multiplierForType ? window.IronQuestSkilltree.multiplierForType(type) : 1;
-    const b = window.IronQuestClasses?.multiplierForType ? window.IronQuestClasses.multiplierForType(type) : 1;
-    const c = window.IronQuestEquipment?.multiplierForType ? window.IronQuestEquipment.multiplierForType(type) : 1;
-    return a*b*c;
+    if (!window.IronQuestSkilltree?.multiplierForType) return 1;
+    return window.IronQuestSkilltree.multiplierForType(type);
   }
 
   function calcExerciseXP({type,recSets,recReps,sets,reps,entries}){
@@ -63,14 +60,20 @@
     xp *= volumeMultiplier(sets,reps,recSets,recReps);
     xp *= streakMultiplier(streakFromEntries(entries||[]));
     xp *= skillMultiplierForType(type);
+    // Class bonus
+    try { xp *= (window.IronQuestClass?.multiplierForType?.(type) || 1); } catch {}
+    // Equipment bonus (relic)
+    try {
+      const m = window.IronQuestEquipment?.multipliersFor?.(type);
+      if (m){ xp *= (m.global || 1); xp *= (m.type || 1); }
+    } catch {}
     return Math.round(xp);
   }
 
   function jogXP(distanceKm, minutes){
     const km = Math.max(0, Number(distanceKm||0));
     const min = Math.max(0, Number(minutes||0));
-    // A bit more RPG-ish scaling
-    return Math.round(km*85 + min*1.2);
+    return Math.round(km*80 + min*1);
   }
 
   window.IronQuestXP = { BASE_XP, calcExerciseXP, jogXP, streakFromEntries };
