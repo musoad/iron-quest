@@ -110,25 +110,6 @@
 
     const achUl = el.querySelector("#achList");
     achUl.innerHTML="";
-    const invUl = el.querySelector("#invList");
-    const loot = window.IronQuestLoot?.getState?.();
-    const inv = loot?.inv || [];
-    if (invUl){
-      invUl.innerHTML = inv.length ? inv.slice().reverse().map(it=>`<li><div class="itemTop"><div><b>${it.name}</b><div class="hint">${it.kind.toUpperCase()} • ${it.date||""}</div></div></div></li>`).join("") : "<li>—</li>";
-    }
-
-    const oc = el.querySelector("#openChestQ");
-    if (oc){
-      oc.onclick = ()=>{
-        const res = window.IronQuestLoot.rollDrop();
-        if (!res.ok) return window.Toast?.toast("Chest", "No chests available.");
-        window.IronQuestUI?.systemMessage?.(res.drop ? `Loot acquired: ${res.drop}` : "Loot acquired: XP shard");
-        renderChallenges(el);
-      };
-    }
-
-    const em = el.querySelector("#equipMountQ");
-    if (em && window.IronQuestEquipment?.renderEquipmentPanel) window.IronQuestEquipment.renderEquipmentPanel(em);
 
     window.IronQuestRPG.ACHIEVEMENTS.forEach(a=>{
       const done = !!state.ach?.[a.id]?.done;
