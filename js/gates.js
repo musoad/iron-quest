@@ -1,140 +1,205 @@
 (() => {
   "use strict";
-
-  const KEY = "ironquest_gates_v6";
-
-  const RANKS = [
-    { r:"E", minLvl:1,  minStr:1,  minEnd:1,  weeklyXp:2000,  hp: 3000, rewardXp:600,  chest:1 },
-    { r:"D", minLvl:8,  minStr:6,  minEnd:5,  weeklyXp:4000,  hp: 5000, rewardXp:900,  chest:1 },
-    { r:"C", minLvl:15, minStr:10, minEnd:9,  weeklyXp:6500,  hp: 8000, rewardXp:1300, chest:2 },
-    { r:"B", minLvl:25, minStr:16, minEnd:14, weeklyXp:9000,  hp:11000, rewardXp:1800, chest:2 },
-    { r:"A", minLvl:40, minStr:22, minEnd:20, weeklyXp:12000, hp:15000, rewardXp:2400, chest:3 },
-    { r:"S", minLvl:60, minStr:30, minEnd:28, weeklyXp:16000, hp:20000, rewardXp:3200, chest:4 },
+  const KEY="ironquest_gates_v8";
+  const GATE_TYPES=[
+    { id:"standard", name:"Standard Gate", desc:"Alle XP zählt normal." },
+    { id:"strength", name:"Strength Gate", desc:"Mehrgelenkig/Unilateral zählt stärker." },
+    { id:"core", name:"Core Gate", desc:"Core XP zählt stärker." },
+    { id:"endurance", name:"Endurance Gate", desc:"Conditioning/NEAT zählt stärker." },
+    { id:"highrisk", name:"High Risk Gate", desc:"-15% XP, aber +Loot Chance." },
+    { id:"timelimited", name:"Time Limited Gate", desc:"Ziel: 3 Trainingstage bis Freitag." },
   ];
 
-  function load(){
-    try { return JSON.parse(localStorage.getItem(KEY)) || { cleared:{} }; }
-    catch { return { cleared:{} }; }
-  }
+  function load(){ try{ return JSON.parse(localStorage.getItem(KEY))||{ clearedWeeks:{} }; }catch{ return { clearedWeeks:{} }; } }
   function save(st){ localStorage.setItem(KEY, JSON.stringify(st)); }
 
-  function currentRank(week){
-    // rotate difficulty by week, slowly ramps
-    const idx = Math.min(RANKS.length-1, Math.floor((week-1)/2));
-    return RANKS[idx];
+  function gateOfWeek(week){
+    const idx = (week-1) % GATE_TYPES.length;
+    return GATE_TYPES[idx];
   }
 
-  async function awardGateClear(rank){
-    const date = window.Utils.isoDate(new Date());
-    const week = window.IronQuestProgression.getWeekNumberFor(date);
-
-    await window.IronDB.addEntry({
-      date, week,
-      type:"Gate",
-      exercise:`Gate ${rank.r}-Rank Cleared`,
-      detail:`Reward: +${rank.rewardXp} XP • Chests: +${rank.chest}`,
-      xp: rank.rewardXp
-    });
-
-    window.IronQuestLoot?.addChest?.(rank.chest);
+  function baseHPForRank(rank){
+    const map={ E:4000, D:6500, C:9000, B:12000, A:16000, S:22000 };
+    return map[rank] || 4000;
   }
 
-  function meetsReq(rank, levelObj, attrs, weekXp){
-    const str = attrs?.STR?.level || 1;
-    const end = attrs?.END?.level || 1;
-    const okLvl = (levelObj?.lvl || 1) >= rank.minLvl;
-    const okStr = str >= rank.minStr;
-    const okEnd = end >= rank.minEnd;
-    const okXp  = Number(weekXp||0) >= rank.weeklyXp;
-    return { ok: okLvl && okStr && okEnd && okXp, okLvl, okStr, okEnd, okXp, str, end };
+  function computeDamage(entries, week, rank){
+    const gate = gateOfWeek(week);
+    let dmg=0;
+    for(const e of entries){
+      if(Number(e.week||0)!==week) continue;
+      const xp=Number(e.xp||0);
+      if(!xp) continue;
+
+      let mult=1;
+      if(gate.id==="strength" && (e.type==="Mehrgelenkig" || e.type==="Unilateral")) mult=1.25;
+      if(gate.id==="core" && e.type==="Core") mult=1.6;
+      if(gate.id==="endurance" && (e.type==="Conditioning" || e.type==="NEAT")) mult=1.5;
+      if(gate.id==="highrisk") mult=1.15; // damage stays, XP reduced elsewhere (not implemented)
+      dmg += xp*mult;
+    }
+
+    // equipment + active buffs affect gate damage
+    const eq=window.IronQuestEquipment.bonuses();
+    const active=window.__IQ_ACTIVE_BUFFS?.gateDmg || 1;
+    dmg *= (eq.gateDmg||1) * active;
+
+    // rank scales damage slightly
+    const rankMult = { E:1.0, D:1.03, C:1.06, B:1.09, A:1.12, S:1.15 }[rank] || 1.0;
+    dmg *= rankMult;
+
+    return Math.round(dmg);
   }
 
-  async function renderGates(el){
-    const entries = await window.IronDB.getAllEntries();
-    const today = window.Utils.isoDate(new Date());
-    const week = window.IronQuestProgression.getWeekNumberFor(today);
+  async function render(container){
+    const entries=await window.IronDB.getAllEntries();
+    const today=window.Utils.isoDate(new Date());
+    const week=window.IronQuestProgression.getWeekNumberFor(today);
 
     const totalXp = entries.reduce((s,e)=>s+Number(e.xp||0),0);
     const L = window.IronQuestProgression.levelFromTotalXp(totalXp);
-    const attrs = window.IronQuestAttributes?.getState?.() || {};
-    const weekXp = entries.filter(e=>Number(e.week||0)===week).reduce((s,e)=>s+Number(e.xp||0),0);
+    const rankKey = window.IronQuestHunterRank.compute(L.lvl, totalXp);
+    const rankMeta = window.IronQuestHunterRank.getMeta(rankKey);
 
-    const st = load();
-    const rank = currentRank(week);
-    const cleared = !!st.cleared?.[week];
-
-    const req = meetsReq(rank, L, attrs, weekXp);
-    const hp = rank.hp;
-    const dmg = Math.min(hp, Math.round(weekXp * 0.9)); // weekly effort damages gate core
+    const gate = gateOfWeek(week);
+    const hp = baseHPForRank(rankKey);
+    const dmg = computeDamage(entries, week, rankKey);
+    const remaining = Math.max(0, hp-dmg);
     const pct = Math.max(0, Math.min(100, (dmg/hp)*100));
 
-    el.innerHTML = `
-      <div class="card gateArena">
-        <h2>Gate Detected</h2>
-        <div class="systemBox">[ SYSTEM ] New Gate has appeared. Rank: <b>${rank.r}</b></div>
+    const st=load();
+    const cleared=!!st.clearedWeeks[String(week)];
 
-        <div class="statRow">
-          <div class="pill"><b>Week:</b> W${week}</div>
-          <div class="pill"><b>Gate HP:</b> ${hp}</div>
-          <div class="pill"><b>Damage:</b> ${dmg}</div>
-          <div class="pill"><b>Weekly XP:</b> ${Math.round(weekXp)}</div>
+    container.innerHTML = `
+      <div class="card">
+        <h2>Gates</h2>
+        <p class="hint">Wöchentliches Gate. Damage kommt aus deiner Wochen-Performance. Hybrid-UI: ruhig, aber „SYSTEM“-Momente bei Clear.</p>
+      </div>
+
+      <div class="card soft">
+        <div class="itemTop">
+          <div>
+            <b>Aktuelles Gate (W${week})</b>
+            <div class="hint">${gate.name} • ${gate.desc}</div>
+            <div class="hint">Hunter Rank: <span class="badge ${rankMeta.color}">${rankKey}</span> ${rankMeta.name}</div>
+          </div>
+          <span class="badge ${cleared?"ok":"gold"}">${cleared?"CLEARED":"ACTIVE"}</span>
         </div>
 
-        <div class="hpBar"><div class="hpFill" style="width:${pct}%;"></div></div>
-        <div class="hint">Deal damage by training this week. When HP reaches 100% and requirements are met, you can clear the Gate.</div>
-
-        <hr>
-        <h2>Requirements</h2>
-        <div class="row2">
-          <div class="pill ${req.okLvl?'okPill':''}"><b>Level:</b> ${L.lvl} / ${rank.minLvl}</div>
-          <div class="pill ${req.okStr?'okPill':''}"><b>STR:</b> ${req.str} / ${rank.minStr}</div>
-          <div class="pill ${req.okEnd?'okPill':''}"><b>END:</b> ${req.end} / ${rank.minEnd}</div>
-          <div class="pill ${req.okXp?'okPill':''}"><b>Weekly XP:</b> ${Math.round(weekXp)} / ${rank.weeklyXp}</div>
-        </div>
-
-        <hr>
-        <h2>Rewards</h2>
-        <div class="statRow">
-          <div class="pill"><b>XP:</b> +${rank.rewardXp}</div>
-          <div class="pill"><b>Chests:</b> +${rank.chest}</div>
+        <div style="margin-top:12px;">
+          <div class="hint">Gate HP</div>
+          <div class="bar" style="margin-top:8px;">
+            <div class="barFill" style="width:${pct}%;"></div>
+          </div>
+          <div class="row2" style="margin-top:10px;">
+            <div class="pill"><b>Damage:</b> ${window.Utils.fmt(dmg)}</div>
+            <div class="pill"><b>Remaining:</b> ${window.Utils.fmt(remaining)}</div>
+          </div>
         </div>
 
         <div class="btnRow">
-          <button class="primary" id="enterGate" ${(cleared || !req.ok || dmg < hp) ? "disabled":""}>Clear Gate</button>
-          <span class="badge ${cleared?'ok':'gold'}">${cleared ? "CLEARED" : "OPEN"}</span>
+          <button class="primary" id="btnEnter" ${cleared?"disabled":""}>Enter Gate</button>
+          <button class="secondary" id="btnOpenChest">Open Chest</button>
         </div>
 
-        ${cleared ? `<div class="hint">Cleared on: ${st.cleared[week].date}</div>` : `<div class="hint">Tip: hit the weekly XP goal to unlock the clear.</div>`}
+        <div class="hint">Clear: Damage ≥ HP. Reward: 1 Chest + Gate Clear Counter.</div>
       </div>
 
       <div class="card">
-        <h2>Chests</h2>
-        <div class="pill"><b>Available:</b> ${window.IronQuestLoot?.getState?.().chests || 0}</div>
-        <div class="btnRow">
-          <button class="secondary" id="openChest">Open Chest</button>
-        </div>
-        <div class="hint" id="dropResult">—</div>
+        <h2>Inventory & Equipment</h2>
+        <div id="invMount"></div>
       </div>
     `;
 
-    el.querySelector("#openChest").onclick = ()=>{
-      const res = window.IronQuestLoot.rollDrop();
-      if (!res.ok) return window.Toast?.toast("Chest", "No chests available.");
-      window.Toast?.toast("Loot", res.drop ? res.drop : "XP shard");
-      el.querySelector("#dropResult").textContent = res.drop ? `You obtained: ${res.drop}` : "Nothing found… but you gained resolve.";
+    // Inventory UI
+    renderInventory(container.querySelector("#invMount"));
+
+    container.querySelector("#btnOpenChest").onclick=()=>{
+      const res=window.IronQuestLoot.roll();
+      if(!res.ok) return window.Toast?.toast("Chest", "Keine Chests verfügbar.");
+      window.Toast?.toast("Chest", res.msg);
+      renderInventory(container.querySelector("#invMount"));
     };
 
-    el.querySelector("#enterGate").onclick = async ()=>{
-      if (cleared) return;
-      const st2 = load();
-      st2.cleared = st2.cleared || {};
-      st2.cleared[week] = { date: window.Utils.isoDate(new Date()), rank: rank.r };
-      save(st2);
-      await awardGateClear(rank);
-      window.Toast?.toast("Gate Cleared!", `Rank ${rank.r} (+${rank.rewardXp} XP)`);
-      await renderGates(el);
+    container.querySelector("#btnEnter").onclick=async()=>{
+      if(cleared) return;
+      if(dmg < hp){
+        window.IronQuestUIFX.showSystem(`Gate not cleared.\n\nDamage: ${dmg} / ${hp}\nTrain more this week.`);
+        return;
+      }
+
+      // Clear reward
+      st.clearedWeeks[String(week)] = { date: today, rank: rankKey, gate: gate.id };
+      save(st);
+
+      window.IronQuestLoot.addChests(1);
+      window.IronQuestHunterRank.recordGateClear();
+
+      await window.IronDB.addSystem({ date: today, msg:`Gate cleared (W${week}) — Rank ${rankKey}. Reward: +1 Chest.` });
+
+      window.IronQuestUIFX.showSystem(`Gate cleared.\n\n[ REWARD ]\n+1 Chest\nHunter Rank progress increased.`);
+      window.Toast?.toast("Gate cleared", "+1 Chest");
+
+      await render(container);
     };
   }
 
-  window.IronQuestGates = { RANKS, renderGates };
+  function renderInventory(mount){
+    const loot=window.IronQuestLoot.load();
+    const eq=window.IronQuestEquipment.load();
+    const names=window.IronQuestEquipment.equippedNames();
+
+    const inv=loot.inv||[];
+    const byKind={ title:[], badge:[], aura:[], relic:[] };
+    inv.forEach(i=>{ if(byKind[i.kind]) byKind[i.kind].push(i); });
+
+    mount.innerHTML = `
+      <div class="card soft" style="margin:0;">
+        <div class="row2">
+          <div class="pill"><b>Chests:</b> ${loot.chests||0}</div>
+          <div class="pill"><b>Equipped Relic:</b> ${names.relic}</div>
+        </div>
+
+        <div class="descBox" style="border-color: rgba(255,212,106,.25);">
+          <div class="descTitle">Equipment</div>
+          <div class="descText">
+Title: ${names.title}\n
+Badge: ${names.badge}\n
+Aura: ${names.aura}\n
+Relic: ${names.relic}
+          </div>
+        </div>
+
+        <div class="row2">
+          ${["title","badge","aura","relic"].map(slot=>{
+            const list=byKind[slot];
+            return `
+              <div class="card soft" style="margin:0; padding:12px;">
+                <div class="itemTop">
+                  <div><b>${slot.toUpperCase()}</b><div class="hint">Wähle aus Inventory</div></div>
+                  <span class="badge">${eq[slot]?"ON":"—"}</span>
+                </div>
+                <select data-eq="${slot}">
+                  <option value="">—</option>
+                  ${list.map(it=>`<option value="${it.id}" ${eq[slot]===it.id?"selected":""}>${it.name}</option>`).join("")}
+                </select>
+              </div>
+            `;
+          }).join("")}
+        </div>
+      </div>
+    `;
+
+    mount.querySelectorAll("[data-eq]").forEach(sel=>{
+      sel.onchange=()=>{
+        const slot=sel.getAttribute("data-eq");
+        const id=sel.value||null;
+        window.IronQuestEquipment.equip(slot, id);
+        window.Toast?.toast("Equipment updated", `${slot.toUpperCase()} equipped.`);
+        renderInventory(mount);
+      };
+    });
+  }
+
+  window.IronQuestGates={ render, gateOfWeek, GATE_TYPES };
 })();
