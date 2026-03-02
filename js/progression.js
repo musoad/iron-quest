@@ -1,7 +1,7 @@
 (() => {
   "use strict";
 
-  const KEY_START = "ironquest_startdate_v6";
+  const KEY_START = "ironquest_startdate_v5";
 
   function getStartDate(){
     let s = localStorage.getItem(KEY_START);
@@ -22,7 +22,7 @@
 
   function xpNeededForNextLevel(level){
     const l = Math.max(1, Number(level||1));
-    return Math.round(380 + 140*l + 34*(l**1.78));
+    return Math.round(350 + 120*l + 32*(l**1.75));
   }
 
   function levelFromTotalXp(totalXp){
