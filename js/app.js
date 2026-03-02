@@ -41,6 +41,9 @@
     const renders={
       home: window.IronQuestHome.render,
       log: window.IronQuestLog.render,
+      run: window.IronQuestRunning.renderRunning,
+      stats: window.IronQuestAnalytics.renderAnalytics,
+      quests: window.IronQuestChallenges.renderChallenges,
       gates: window.IronQuestGates.render,
       boss: window.IronQuestBossArena.render,
       skills: window.IronQuestSkillsScreen.render,
