@@ -32,22 +32,24 @@
 
     el.querySelector("#ex").onclick = async ()=>{
       const snapshot = {
-        meta:{createdAt:new Date().toISOString(), version:"v5-solo"},
+        meta:{createdAt:new Date().toISOString(), version:"v6-solo"},
         entries: await window.DB.getAll("entries"),
         health: await window.DB.getAll("health"),
         runs: await window.DB.getAll("runs"),
         local:{
-          start: localStorage.getItem("ironquest_startdate_v5"),
-          skilltree: localStorage.getItem("ironquest_skilltree_v5"),
-          attributes: localStorage.getItem("ironquest_attributes_v5"),
-          rpg: localStorage.getItem("ironquest_rpg_v5"),
-          boss: localStorage.getItem("ironquest_boss_state_v5"),
-          loot: localStorage.getItem("ironquest_loot_v5"),
-          session: localStorage.getItem("ironquest_session_v5"),
-          coach: localStorage.getItem("ironquest_coach_v5"),
+          start: localStorage.getItem("ironquest_startdate_v6"),
+          skilltree: localStorage.getItem("ironquest_skilltree_v6"),
+          attributes: localStorage.getItem("ironquest_attributes_v6"),
+          rpg: localStorage.getItem("ironquest_rpg_v6"),
+          boss: localStorage.getItem("ironquest_boss_state_v6"),
+          classes: localStorage.getItem("ironquest_class_v6"),
+          equipment: localStorage.getItem("ironquest_equipment_v6"),
+          loot: localStorage.getItem("ironquest_loot_v6"),
+          lastLevel: localStorage.getItem("ironquest_lastlevel_v6"),
+          gates: localStorage.getItem("ironquest_gates_v6"),
         }
       };
-      download(`ironquest_backup_${window.Utils.isoDate(new Date())}.json`, JSON.stringify(snapshot,null,2));
+      download(`ironquest_v6_backup_${window.Utils.isoDate(new Date())}.json`, JSON.stringify(snapshot,null,2));
       window.Toast?.toast("Backup exported");
     };
 
@@ -75,20 +77,21 @@
       await mergeStore("runs", snap.runs, (r)=>`${r.date}|${r.km}|${r.minutes}|${r.xp}`);
 
       if(snap.local){
-        const map = {
-          start:"ironquest_startdate_v5",
-          skilltree:"ironquest_skilltree_v5",
-          attributes:"ironquest_attributes_v5",
-          rpg:"ironquest_rpg_v5",
-          boss:"ironquest_boss_state_v5",
-          loot:"ironquest_loot_v5",
-          session:"ironquest_session_v5",
-          coach:"ironquest_coach_v5",
-        };
         for(const [k,v] of Object.entries(snap.local)){
           if(v==null) continue;
-          const key = map[k];
-          if (key) localStorage.setItem(key, String(v));
+          const map = {
+            start:"ironquest_startdate_v6",
+            skilltree:"ironquest_skilltree_v6",
+            attributes:"ironquest_attributes_v6",
+            rpg:"ironquest_rpg_v6",
+            boss:"ironquest_boss_state_v6",
+            classes:"ironquest_class_v6",
+            equipment:"ironquest_equipment_v6",
+            loot:"ironquest_loot_v6",
+            lastLevel:"ironquest_lastlevel_v6",
+            gates:"ironquest_gates_v6",
+          };
+          if (map[k]) localStorage.setItem(map[k], String(v));
         }
       }
 
