@@ -1,70 +1,55 @@
 (() => {
   "use strict";
-
-  const KEY="ironquest_attributes_v5";
-
-  const ATTRS = [
-    { key:"STR",  name:"Stärke",   types:["Mehrgelenkig"] },
-    { key:"UNI",  name:"Unilateral",types:["Unilateral"] },
-    { key:"CORE", name:"Core",     types:["Core"] },
-    { key:"END",  name:"Ausdauer", types:["Conditioning","NEAT","Joggen"] },
-    { key:"SKILL",name:"Skill",    types:["Komplexe"] },
+  const KEY="ironquest_attributes_v8";
+  const ATTRS=[
+    { key:"STR", name:"Stärke", type:"Mehrgelenkig" },
+    { key:"UNI", name:"Unilateral", type:"Unilateral" },
+    { key:"CORE", name:"Core", type:"Core" },
+    { key:"END", name:"Ausdauer", type:"Conditioning" },
+    { key:"SKILL", name:"Skill", type:"Komplexe" },
   ];
-
   function load(){ try{ return JSON.parse(localStorage.getItem(KEY))||{}; }catch{ return {}; } }
   function save(st){ localStorage.setItem(KEY, JSON.stringify(st)); }
-
-  function xpNeeded(level){
-    const l=Math.max(1,Number(level||1));
-    return Math.round(250 + 120*l + 30*(l**1.7));
-  }
-
-  function getState(){
-    const st = load();
-    const out = {};
-    for (const a of ATTRS){
-      out[a.key] = st[a.key] || { xp:0, level:1 };
+  function xpNeed(l){ const L=Math.max(1,Number(l||1)); return Math.round(260 + 120*L + 28*(L**1.7)); }
+  function get(){
+    const raw=load();
+    const st={};
+    for(const a of ATTRS){
+      st[a.key]=raw[a.key]||{ level:1, xp:0 };
     }
-    return out;
+    return st;
   }
-
-  function addXPForEntry(entry){
-    const st = load();
-    const type = entry?.type || "";
-    const xp = Math.max(0, Number(entry?.xp||0));
-
-    for (const a of ATTRS){
-      if (!a.types.includes(type)) continue;
-      if (!st[a.key]) st[a.key]={xp:0, level:1};
-      st[a.key].xp += xp;
-
-      while(st[a.key].xp >= xpNeeded(st[a.key].level)){
-        st[a.key].xp -= xpNeeded(st[a.key].level);
-        st[a.key].level += 1;
-        if (st[a.key].level>999) break;
+  function addXP(type, xp){
+    const raw=load();
+    for(const a of ATTRS){
+      if(a.type!==type) continue;
+      raw[a.key]=raw[a.key]||{ level:1, xp:0 };
+      raw[a.key].xp += Math.max(0, Number(xp||0));
+      while(raw[a.key].xp >= xpNeed(raw[a.key].level)){
+        raw[a.key].xp -= xpNeed(raw[a.key].level);
+        raw[a.key].level += 1;
       }
     }
-    save(st);
+    save(raw);
   }
-
-  function renderAttributes(container){
-    const st = getState();
+  function render(container){
+    const st=get();
     container.innerHTML = `
-      <div class="card">
-        <h2>Stats (Solo-Levelling)</h2>
-        <p class="hint">Deine Attribute leveln automatisch durch XP – je höher, desto langsamer.</p>
-        <div class="attrGrid">
+      <div class="card soft">
+        <h2>Attributes</h2>
+        <p class="hint">Langsames Leveln wie im RPG. Jede Trainingseinheit macht dich stärker.</p>
+        <div class="row2">
           ${ATTRS.map(a=>{
             const s=st[a.key];
-            const need=xpNeeded(s.level);
-            const pct = Math.max(0, Math.min(100, (s.xp/need)*100));
+            const need=xpNeed(s.level);
+            const pct=Math.max(0, Math.min(100, (s.xp/need)*100));
             return `
-              <div class="attrCard">
-                <div class="attrTop">
-                  <div class="attrName">${a.name}</div>
-                  <div class="attrLvl">Lv ${s.level}</div>
+              <div class="card soft" style="margin:0; padding:12px;">
+                <div class="itemTop">
+                  <div><b>${a.name}</b><div class="hint">${a.key}</div></div>
+                  <span class="badge">${"Lv "+s.level}</span>
                 </div>
-                <div class="attrBar"><div class="attrFill" style="width:${pct}%;"></div></div>
+                <div class="bar" style="margin-top:10px;"><div class="barFill" style="width:${pct}%;"></div></div>
                 <div class="hint">${Math.round(s.xp)} / ${need} XP</div>
               </div>
             `;
@@ -73,6 +58,5 @@
       </div>
     `;
   }
-
-  window.IronQuestAttributes = { ATTRS, xpNeeded, getState, addXPForEntry, renderAttributes };
+  window.IronQuestAttributes={ ATTRS, get, addXP, render, xpNeed };
 })();
