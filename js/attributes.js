@@ -1,7 +1,7 @@
 (() => {
   "use strict";
 
-  const KEY = "ironquest_attributes_v5";
+  const KEY="ironquest_attributes_v5";
 
   const ATTRS = [
     { key:"STR",  name:"Stärke",   types:["Mehrgelenkig"] },
@@ -11,16 +11,11 @@
     { key:"SKILL",name:"Skill",    types:["Komplexe"] },
   ];
 
-  function load(){
-    try{
-      return JSON.parse(localStorage.getItem(KEY)) || {};
-    } catch { return {}; }
-  }
+  function load(){ try{ return JSON.parse(localStorage.getItem(KEY))||{}; }catch{ return {}; } }
   function save(st){ localStorage.setItem(KEY, JSON.stringify(st)); }
 
   function xpNeeded(level){
-    // wird immer langsamer: exponentiell
-    const l = Math.max(1, Number(level||1));
+    const l=Math.max(1,Number(level||1));
     return Math.round(250 + 120*l + 30*(l**1.7));
   }
 
@@ -28,8 +23,7 @@
     const st = load();
     const out = {};
     for (const a of ATTRS){
-      const cur = st[a.key] || { xp:0, level:1 };
-      out[a.key] = { ...cur };
+      out[a.key] = st[a.key] || { xp:0, level:1 };
     }
     return out;
   }
@@ -41,14 +35,13 @@
 
     for (const a of ATTRS){
       if (!a.types.includes(type)) continue;
-      if (!st[a.key]) st[a.key] = { xp:0, level:1 };
+      if (!st[a.key]) st[a.key]={xp:0, level:1};
       st[a.key].xp += xp;
 
-      // Level-ups
       while(st[a.key].xp >= xpNeeded(st[a.key].level)){
         st[a.key].xp -= xpNeeded(st[a.key].level);
         st[a.key].level += 1;
-        if (st[a.key].level > 999) break;
+        if (st[a.key].level>999) break;
       }
     }
     save(st);
@@ -58,12 +51,12 @@
     const st = getState();
     container.innerHTML = `
       <div class="card">
-        <h2>Stats</h2>
-        <p class="hint">Diese Werte leveln automatisch mit deinen Trainings-XP (immer langsamer).</p>
+        <h2>Stats (Solo-Levelling)</h2>
+        <p class="hint">Deine Attribute leveln automatisch durch XP – je höher, desto langsamer.</p>
         <div class="attrGrid">
           ${ATTRS.map(a=>{
-            const s = st[a.key];
-            const need = xpNeeded(s.level);
+            const s=st[a.key];
+            const need=xpNeeded(s.level);
             const pct = Math.max(0, Math.min(100, (s.xp/need)*100));
             return `
               <div class="attrCard">
@@ -81,11 +74,5 @@
     `;
   }
 
-  window.IronQuestAttributes = {
-    ATTRS,
-    xpNeeded,
-    getState,
-    addXPForEntry,
-    renderAttributes
-  };
+  window.IronQuestAttributes = { ATTRS, xpNeeded, getState, addXPForEntry, renderAttributes };
 })();
