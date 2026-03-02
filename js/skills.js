@@ -40,6 +40,17 @@
         <div class="hint">${L.lvl<10?"Locked bis Level 10.":"Änderung wirkt sofort auf XP-Multiplikatoren."}</div>
       </div>
 
+
+      <div class="card soft">
+        <h2>Periodization</h2>
+        <p class="hint">Wähle deinen Trainings-Fokus. Wir passen XP-Bias leicht an, ohne die Balance zu zerstören.</p>
+        <label>Phase</label>
+        <select id="periSel">
+          ${window.IronQuestPeriodization.MODES.map(m=>`<option value="${m.key}" ${m.key===window.IronQuestPeriodization.getMode().key?"selected":""}>${m.name}</option>`).join("")}
+        </select>
+        <div class="hint" id="periDesc"></div>
+      </div>
+
       <div class="card">
         <h2>Passive Skilltree</h2>
         <p class="hint">+2% XP pro Punkt (max 25%).</p>
@@ -72,6 +83,23 @@
       window.IronQuestClasses.set(e.target.value);
       window.Toast?.toast("Klasse gewählt", window.IronQuestClasses.meta(e.target.value).name);
     };
+
+    // Periodization wiring
+    const periSel = container.querySelector("#periSel");
+    const periDesc = container.querySelector("#periDesc");
+    const updPeri = ()=>{
+      const m = window.IronQuestPeriodization.getMode();
+      periDesc.textContent = m.desc + (m.changedAt ? ` (since ${m.changedAt})` : "");
+    };
+    if(periSel){
+      periSel.onchange=()=>{
+        window.IronQuestPeriodization.setMode(periSel.value);
+        window.Toast?.toast("Phase updated", window.IronQuestPeriodization.getMode().name);
+        updPeri();
+      };
+      updPeri();
+    }
+
 
     // passive grid
     const grid=container.querySelector("#passiveGrid");
