@@ -1,14 +1,14 @@
 (() => {
   "use strict";
 
-  const KEY="ironquest_attributes_v5";
+  const KEY="ironquest_attributes_v6";
 
   const ATTRS = [
-    { key:"STR",  name:"Stärke",   types:["Mehrgelenkig"] },
+    { key:"STR",  name:"Stärke",    types:["Mehrgelenkig"] },
     { key:"UNI",  name:"Unilateral",types:["Unilateral"] },
-    { key:"CORE", name:"Core",     types:["Core"] },
-    { key:"END",  name:"Ausdauer", types:["Conditioning","NEAT","Joggen"] },
-    { key:"SKILL",name:"Skill",    types:["Komplexe"] },
+    { key:"CORE", name:"Core",      types:["Core"] },
+    { key:"END",  name:"Ausdauer",  types:["Conditioning","NEAT","Joggen"] },
+    { key:"SKILL",name:"Skill",     types:["Komplexe"] },
   ];
 
   function load(){ try{ return JSON.parse(localStorage.getItem(KEY))||{}; }catch{ return {}; } }
@@ -16,7 +16,7 @@
 
   function xpNeeded(level){
     const l=Math.max(1,Number(level||1));
-    return Math.round(250 + 120*l + 30*(l**1.7));
+    return Math.round(260 + 135*l + 34*(l**1.7));
   }
 
   function getState(){
@@ -51,7 +51,7 @@
     const st = getState();
     container.innerHTML = `
       <div class="card">
-        <h2>Stats (Solo-Levelling)</h2>
+        <h2>Stats</h2>
         <p class="hint">Deine Attribute leveln automatisch durch XP – je höher, desto langsamer.</p>
         <div class="attrGrid">
           ${ATTRS.map(a=>{
