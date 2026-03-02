@@ -45,5 +45,5 @@
     return { ok:true, item:null, msg:"Duplicate → converted to XP dust" };
   }
 
-  window.IronQuestLoot={ load, save, addChests, roll, DROP_TABLE };
+  window.IronQuestLoot={ load, save, addChests, addChest:(n=1)=>addChests(n), roll, rollDrop:()=>roll(), getState:()=>load(), DROP_TABLE };
 })();
