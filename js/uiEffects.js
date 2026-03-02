@@ -1,44 +1,52 @@
 (() => {
   "use strict";
 
-  function ensureSystemOverlay(){
+  function ensureOverlay(){
     let el = document.getElementById("systemOverlay");
     if (!el){
       el = document.createElement("div");
       el.id = "systemOverlay";
-      el.style.position = "fixed";
-      el.style.left = "12px";
-      el.style.right = "12px";
-      el.style.top = "12px";
-      el.style.zIndex = "110";
-      el.style.pointerEvents = "none";
+      el.innerHTML = `<div class="sysCard"><div class="sysTitle">[ SYSTEM ]</div><div class="sysBody" id="sysBody"></div></div>`;
       document.body.appendChild(el);
     }
     return el;
   }
 
-  function systemMessage(lines, ms=2600){
-    const host = ensureSystemOverlay();
-    const box = document.createElement("div");
-    box.className = "systemPanel";
-    box.style.pointerEvents = "none";
-    box.style.marginBottom = "10px";
-    const text = Array.isArray(lines) ? lines.join("\n") : String(lines||"");
-    box.innerHTML = `
-      <div class="sysHead">[ SYSTEM ]</div>
-      <div class="sysBody">${escapeHTML(text)}</div>
-    `;
-    host.appendChild(box);
-    setTimeout(()=>{ box.style.opacity="0"; box.style.transform="translateY(-6px)"; }, ms);
-    setTimeout(()=>{ box.remove(); }, ms+380);
+  function systemMessage(text, ms=1800){
+    const ov = ensureOverlay();
+    const body = ov.querySelector("#sysBody");
+    body.textContent = text;
+    ov.classList.add("show");
+    setTimeout(()=>ov.classList.remove("show"), ms);
   }
 
-  function escapeHTML(str){
-    return String(str)
-      .replaceAll("&","&amp;")
-      .replaceAll("<","&lt;")
-      .replaceAll(">","&gt;");
+  function xpPop(xp){
+    const n = document.createElement("div");
+    n.className = "xpPop";
+    n.textContent = `+${Math.round(Number(xp||0))} XP`;
+    document.body.appendChild(n);
+    setTimeout(()=>n.remove(), 900);
   }
 
-  window.UIEffects = { systemMessage };
+  function levelUpOverlay(level){
+    let el = document.getElementById("levelUpOverlay");
+    if (!el){
+      el = document.createElement("div");
+      el.id = "levelUpOverlay";
+      el.innerHTML = `
+        <div class="lvlCard">
+          <div class="lvlBig">LEVEL UP</div>
+          <div class="lvlSub">Hunter Rank Increased</div>
+          <div class="lvlNum" id="lvlNum"></div>
+          <button class="primary" id="lvlOk">Continue</button>
+        </div>
+      `;
+      document.body.appendChild(el);
+      el.querySelector("#lvlOk").onclick = ()=> el.classList.remove("show");
+    }
+    el.querySelector("#lvlNum").textContent = `Lv ${level}`;
+    el.classList.add("show");
+  }
+
+  window.IronQuestUI = { systemMessage, xpPop, levelUpOverlay };
 })();
