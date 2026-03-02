@@ -103,7 +103,7 @@
 
         await window.IronDB.addSystem({ date: today, msg:`Boss defeated: ${boss.name}. Reward: +${boss.reward} chest.` });
 
-        window.IronQuestUIFX.showSystem(`FINISH!\n\n${boss.name} defeated.\nReward: +${boss.reward} Chest\nBonus: +${boss.xp} XP`);
+        window.IronQuestUIFX.showFinish(`FINISH!\n\n${boss.name} defeated.\nReward: +${boss.reward} Chest\nBonus: +${boss.xp} XP`);
         window.Toast?.toast("Boss defeated", `+${boss.reward} Chest`);
 
         await render(container);
