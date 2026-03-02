@@ -3,7 +3,7 @@
 
   async function renderChallenges(el){
     const state = window.IronQuestRPG.getState();
-    const loot = window.IronQuestLoot.getState();
+    const loot = (window.IronQuestLoot?.getState ? window.IronQuestLoot.getState() : (window.IronQuestLoot?.load ? window.IronQuestLoot.load() : { chests:0, inv:[] }));
     const entries = await window.IronDB.getAllEntries();
     const summary = window.IronQuestRPG.summarize(entries);
 
@@ -91,9 +91,15 @@
     };
 
     el.querySelector("#openChest").onclick = ()=>{
-      const res = window.IronQuestLoot.rollDrop();
-      if (!res.ok) return window.Toast?.toast("Chest", "Keine Chest verfügbar.");
-      window.Toast?.toast("Chest opened", res.drop || "Nothing (XP shard)");
+      const api = window.IronQuestLoot;
+      const res = api?.rollDrop ? api.rollDrop() : (api?.roll ? api.roll() : { ok:false });
+      if (!res || !res.ok) return window.Toast?.toast("Chest", "Keine Chest verfügbar.");
+
+      // Support multiple loot response shapes
+      const msg = res.drop || res.msg || (res.item?.name ? `Obtained: ${res.item.name}` : "Nothing (XP dust)");
+      window.Toast?.toast("Chest opened", msg);
+
+      // refresh UI
       renderChallenges(el);
     };
 
