@@ -60,6 +60,9 @@
     // class bonus
     xp *= window.IronQuestClasses?.multiplierForType?.(type) || 1;
 
+    // periodization bias
+    xp *= window.IronQuestPeriodization?.multiplierForType?.(type) || 1;
+
     // active buffs (session scoped)
     if(buffs?.globalXp) xp *= buffs.globalXp;
     if(type==="Core" && buffs?.coreXp) xp *= buffs.coreXp;
