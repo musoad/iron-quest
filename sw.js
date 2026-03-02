@@ -1,65 +1,57 @@
-const SW_VERSION = "v6.5.0-solo-premium";
-const CACHE_NAME = `ironquest-${SW_VERSION}`;
-
-const ASSETS = [
+const SW_VERSION="v8.0.0-hunter-ascended";
+const CACHE_NAME=`ironquest-${SW_VERSION}`;
+const ASSETS=[
   "./",
   "./index.html",
   "./style.css",
   "./manifest.json",
   "./sw.js",
-
   "./js/utils.js",
+  "./js/ui_effects.js",
   "./js/toast.js",
-  "./js/uiEffects.js",
-  "./js/urls.js",
   "./js/db.js",
-
   "./js/exercises.js",
-  "./js/xpSystem.js",
   "./js/progression.js",
-  "./js/skilltree.js",
-  "./js/attributes.js",
-  "./js/rpg.js",
+  "./js/hunterRank.js",
   "./js/classes.js",
-  "./js/equipment.js",
-  "./js/gates.js",
-  "./js/coach.js",
+  "./js/skilltree_v2.js",
+  "./js/xpSystem.js",
   "./js/loot.js",
-  "./js/session.js",
-
-  "./js/jogging.js",
-  "./js/analytics.js",
+  "./js/equipment.js",
+  "./js/attributes.js",
+  "./js/coach_engine.js",
+  "./js/home.js",
+  "./js/skills.js",
+  "./js/logFeature.js",
+  "./js/gates.js",
+  "./js/bossArena.js",
+  "./js/review.js",
   "./js/health.js",
-  "./js/boss.js",
-  "./js/challenges.js",
   "./js/backup.js",
-  "./js/app.js",
+  "./js/app.js"
 ];
 
-self.addEventListener("install",(event)=>{
+self.addEventListener("install",(e)=>{
   self.skipWaiting();
-  event.waitUntil(caches.open(CACHE_NAME).then(c=>c.addAll(ASSETS)));
+  e.waitUntil(caches.open(CACHE_NAME).then(c=>c.addAll(ASSETS)));
 });
-
-self.addEventListener("activate",(event)=>{
-  event.waitUntil((async()=>{
+self.addEventListener("activate",(e)=>{
+  e.waitUntil((async()=>{
     const keys=await caches.keys();
     await Promise.all(keys.map(k=>k!==CACHE_NAME?caches.delete(k):null));
     await self.clients.claim();
   })());
 });
-
-self.addEventListener("message",(event)=>{
-  if(event.data && event.data.type==="SKIP_WAITING") self.skipWaiting();
+self.addEventListener("message",(e)=>{
+  if(e.data && e.data.type==="SKIP_WAITING") self.skipWaiting();
 });
-
-self.addEventListener("fetch",(event)=>{
-  const req=event.request;
+self.addEventListener("fetch",(e)=>{
+  const req=e.request;
   const url=new URL(req.url);
   if(url.origin!==self.location.origin) return;
 
   if(req.mode==="navigate"){
-    event.respondWith((async()=>{
+    e.respondWith((async()=>{
       try{
         const fresh=await fetch(req);
         const cache=await caches.open(CACHE_NAME);
@@ -72,7 +64,7 @@ self.addEventListener("fetch",(event)=>{
     return;
   }
 
-  event.respondWith((async()=>{
+  e.respondWith((async()=>{
     const cached=await caches.match(req);
     if(cached) return cached;
     const fresh=await fetch(req);
