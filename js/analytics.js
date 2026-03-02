@@ -42,25 +42,23 @@
     return m;
   }
 
+  function escapeHTML(str){
+    return String(str)
+      .replaceAll("&","&amp;")
+      .replaceAll("<","&lt;")
+      .replaceAll(">","&gt;");
+  }
+
   async function renderDashboard(el){
     const entries = await window.IronDB.getAllEntries();
     const totalXp = entries.reduce((s,e)=>s+Number(e.xp||0),0);
     const L = window.IronQuestProgression.levelFromTotalXp(totalXp);
     const rank = window.IronQuestRPG.getRankName(L.lvl);
-
-    const start = window.IronQuestProgression.getStartDate();
     const week = window.IronQuestProgression.getWeekNumber();
-
     const s = window.IronQuestRPG.summarize(entries);
-    const deload = window.IronQuestCoach.deloadHint(entries);
+    const fatigue = window.IronQuestCoach.deloadHint(entries);
 
-    const rpgState = window.IronQuestRPG.getState();
-    const dailyDef = window.IronQuestRPG.DAILY_POOL.find(x=>x.id===rpgState.daily.id);
-    const weeklyDef = window.IronQuestRPG.WEEKLY_POOL.find(x=>x.id===rpgState.weekly.id);
-
-    const story = window.IronQuestRPG.storyStatus(rpgState, s, entries.length);
-    const loot = window.IronQuestLoot.getState();
-    const sess = window.IronQuestSession.getState();
+    const lootState = window.IronQuestLoot.getState();
 
     el.innerHTML = `
       <div class="card">
@@ -70,115 +68,68 @@
           <div class="pill"><b>Lv:</b> ${L.lvl} (${L.title})</div>
           <div class="pill"><b>Woche:</b> W${week}</div>
           <div class="pill"><b>Streak:</b> ${s.streak}</div>
-          <div class="pill"><b>Total XP:</b> ${Math.round(totalXp)}</div>
+          <div class="pill"><b>Chests:</b> ${lootState.chests}</div>
         </div>
-        <p class="hint">„Arise.“ – Jede Session macht dich stärker.</p>
-        ${deload.heavy ? `<p class="hint">⚠️ Deload Hint: Woche sehr heavy (${Math.round(deload.weekXp)} XP, ${deload.days} Tage). Nächste Woche Volumen -30% empfohlen.</p>` : ""}
+        <div class="hint">${fatigue.heavy ? "⚠️ SYSTEM: Signs of fatigue detected. Consider a deload." : "SYSTEM: Status stable."}</div>
       </div>
 
       <div class="card">
-        <h2>Session</h2>
-        <p class="hint">Optionaler Workout-Flow (ohne Zwang). Du kannst trotzdem alles normal loggen.</p>
-        <div class="row2">
-          <div class="pill"><b>Status:</b> ${sess.active ? "ACTIVE" : "OFF"}</div>
-          <div class="pill"><b>Chests:</b> ${loot.chests||0}</div>
-        </div>
-        <div class="btnRow">
-          <button class="secondary" id="goLog">Zum Log</button>
-          <button class="primary" id="openChest" ${((loot.chests||0)>0)?"":"disabled"}>Chest öffnen</button>
-        </div>
-        <div class="hint">${loot.lastDrop ? `Letzter Drop: ${loot.lastDrop}` : ""}</div>
-      </div>
-
-      <div class="card">
-        <h2>Challenge Start</h2>
-        <p class="hint">Startdatum bestimmt Woche 1 (auch rückwirkend).</p>
-        <label>Startdatum</label>
-        <input id="startDateInput" type="date" value="${start}">
-        <div class="btnRow">
-          <button class="primary" id="startSave">Speichern</button>
-          <button class="danger" id="startReset">Heute als Start</button>
+        <h2>System</h2>
+        <div class="systemPanel">
+          <div class="sysHead">[ SYSTEM ]</div>
+          <div class="sysBody">Weekly XP: ${Math.round(fatigue.weekXp)}\nTraining Days: ${fatigue.days}\nKomplexe Count: ${fatigue.complexCount}</div>
         </div>
       </div>
 
       <div id="attrMount"></div>
+      <div id="classMount"></div>
 
       <div class="card">
-        <h2>Quests</h2>
-        <div class="row2">
-          <div class="skillbox">
-            <h3>Daily Quest</h3>
-            <div class="hint">${dailyDef?.title||"—"} – ${dailyDef?.desc||""}</div>
-            <div class="pill"><b>Reward:</b> +${dailyDef?.reward||0} XP</div>
-            <div class="btnRow">
-              <button class="secondary" id="claimDaily" ${rpgState.daily.claimed?"disabled":""}>Claim</button>
-              <span class="badge ${rpgState.daily.claimed?"ok":"gold"}">${rpgState.daily.claimed?"CLAIMED":"OPEN"}</span>
-            </div>
-          </div>
+        <h2>Quick Actions</h2>
+        <div class="btnRow">
+          <button class="primary" id="goLog">Open Training Log</button>
+          <button class="purple" id="goGate">Go to Gates</button>
+          <button class="secondary" id="openChest">Open Chest</button>
+        </div>
+        <div class="hint">Last drop: ${lootState.lastDrop || "—"}</div>
+      </div>
 
-          <div class="skillbox">
-            <h3>Weekly Quest</h3>
-            <div class="hint">${weeklyDef?.title||"—"} – ${weeklyDef?.desc||""}</div>
-            <div class="pill"><b>Reward:</b> +${weeklyDef?.reward||0} XP</div>
-            <div class="btnRow">
-              <button class="secondary" id="claimWeekly" ${rpgState.weekly.claimed?"disabled":""}>Claim</button>
-              <span class="badge ${rpgState.weekly.claimed?"ok":"gold"}">${rpgState.weekly.claimed?"CLAIMED":"OPEN"}</span>
-            </div>
-          </div>
-        </div>
-        <hr>
-        <div class="skillbox">
-          <h3>Story Quest</h3>
-          <div class="hint"><b>${story.cur?.title||"—"}</b></div>
-          <div class="hint">${story.cur?.desc||""}</div>
-          <div class="pill"><b>Reward:</b> +${story.cur?.reward||0} XP + 1 Chest</div>
-          <div class="btnRow">
-            <button class="primary" id="claimStory" ${(!story.done || story.claimed)?"disabled":""}>Claim Story</button>
-            <span class="badge ${story.claimed?"ok":(story.done?"gold":"lock")}">${story.claimed?"CLAIMED":(story.done?"READY":"LOCKED")}</span>
-          </div>
-        </div>
+      <div class="card">
+        <h2>Equipment</h2>
+        <div id="equipMount"></div>
+      </div>
+
+      <div class="card">
+        <h2>Story</h2>
+        <div class="hint">Unlocked chapters:</div>
+        <ul class="list" id="storyList"></ul>
       </div>
     `;
 
-    if (window.IronQuestAttributes?.renderAttributes){
-      window.IronQuestAttributes.renderAttributes(el.querySelector("#attrMount"));
-    }
+    window.IronQuestAttributes.renderAttributes(el.querySelector("#attrMount"));
+    window.IronQuestClasses.renderClassPanel(el.querySelector("#classMount"), L.lvl);
+    window.IronQuestEquipment.renderEquipment(el.querySelector("#equipMount"), lootState.inv);
 
-    el.querySelector("#startSave").onclick=()=>{
-      const v=el.querySelector("#startDateInput").value;
-      if(!v) return;
-      localStorage.setItem("ironquest_startdate_v5", v);
-      window.Toast?.toast("Startdatum gespeichert", v);
-    };
-    el.querySelector("#startReset").onclick=()=>{
-      const today=window.Utils.isoDate(new Date());
-      localStorage.setItem("ironquest_startdate_v5", today);
-      el.querySelector("#startDateInput").value=today;
-      window.Toast?.toast("Startdatum gesetzt", today);
-    };
+    const story = window.IronQuestRPG.getStoryUnlocked();
+    const ul = el.querySelector("#storyList");
+    ul.innerHTML = story.length ? "" : "<li>—</li>";
+    story.slice(-6).forEach(ch=>{
+      const li = document.createElement("li");
+      li.innerHTML = `
+        <div><b>${ch.title}</b></div>
+        <div class="hint">${escapeHTML(ch.text)}</div>
+      `;
+      ul.appendChild(li);
+    });
 
-    el.querySelector("#claimDaily").onclick = async ()=>{
-      const ok = await window.IronQuestRPG.claimDaily();
-      if(!ok) window.Toast?.toast("Daily Quest", "Noch nicht erfüllt oder bereits geclaimed.");
-    };
-    el.querySelector("#claimWeekly").onclick = async ()=>{
-      const ok = await window.IronQuestRPG.claimWeekly();
-      if(!ok) window.Toast?.toast("Weekly Quest", "Noch nicht erfüllt oder bereits geclaimed.");
-    };
-    el.querySelector("#claimStory").onclick = async ()=>{
-      const ok = await window.IronQuestRPG.claimStory();
-      if(!ok) window.Toast?.toast("Story Quest", "Noch nicht bereit oder bereits geclaimed.");
-    };
-
-    el.querySelector("#openChest").onclick = ()=>{
-      const res = window.IronQuestLoot.rollDrop();
-      if (!res.ok) return window.Toast?.toast("Chest", "Keine Chest verfügbar.");
-      window.Toast?.toast("Chest opened", res.drop || "Nothing (XP shard)");
+    el.querySelector("#goLog").onclick=()=>{ document.querySelector('nav button[data-tab="log"]').click(); };
+    el.querySelector("#goGate").onclick=()=>{ document.querySelector('nav button[data-tab="gates"]').click(); };
+    el.querySelector("#openChest").onclick=()=>{
+      const r = window.IronQuestLoot.rollDrop();
+      if(!r.ok) return window.Toast?.toast("Chest", "Keine Chests verfügbar.");
+      window.UIEffects?.systemMessage([`Chest opened`, `${r.drop||"XP shard"}`]);
+      window.Toast?.toast("Chest opened", r.drop||"XP shard");
       renderDashboard(el);
-    };
-
-    el.querySelector("#goLog").onclick = ()=>{
-      document.querySelector('nav button[data-tab="log"]')?.click();
     };
   }
 
@@ -191,26 +142,10 @@
     const today = window.Utils.isoDate(new Date());
     const dayDefault = 1;
 
-    const sess = window.IronQuestSession.getState();
-
     el.innerHTML = `
       <div class="card">
         <h2>Training Log</h2>
         <p class="hint">Wähle den Trainingstag (1–5). Preview zeigt den Übungs-Pool. Dann Übung wählen & Sets/Reps eintragen.</p>
-
-        <div class="card">
-          <h2>Workout Session Mode</h2>
-          <div class="row2">
-            <div class="pill"><b>Status:</b> ${sess.active ? "ACTIVE" : "OFF"}</div>
-            <div class="pill"><b>Day:</b> ${sess.day || dayDefault}</div>
-          </div>
-          <div class="btnRow">
-            <button class="secondary" id="sessStart" ${sess.active?"disabled":""}>Start Session</button>
-            <button class="danger" id="sessStop" ${sess.active?"":"disabled"}>Stop</button>
-            <button class="primary" id="sessFinish" ${sess.active?"":"disabled"}>Finish (+Chest)</button>
-          </div>
-          <p class="hint small">Session ist optional. Finish gibt 1 Chest. Du kannst trotzdem normal loggen.</p>
-        </div>
 
         <div class="card">
           <h2>Neuer Eintrag</h2>
@@ -261,10 +196,7 @@
             <div class="pill" id="lXp"><b>XP:</b> —</div>
           </div>
 
-          <div class="btnRow">
-            <button class="primary" id="lSave">Speichern</button>
-            <button class="secondary" id="markDone" ${sess.active?"":"disabled"}>Session: Done</button>
-          </div>
+          <button class="primary" id="lSave">Speichern</button>
         </div>
 
         <div class="card">
@@ -282,7 +214,7 @@
       const opt=document.createElement("option");
       opt.value=String(d);
       opt.textContent=`Tag ${d}: ${plan.days[d].name}`;
-      if((sess.active?Number(sess.day):dayDefault)===d) opt.selected=true;
+      if(d===dayDefault) opt.selected=true;
       daySel.appendChild(opt);
     }
 
@@ -296,24 +228,6 @@
     const previewTitle = el.querySelector("#dayTitle");
     const previewHint  = el.querySelector("#dayHint");
     const previewList  = el.querySelector("#dayPreviewList");
-
-
-    function escapeHTML(str){
-      return String(str)
-        .replaceAll("&","&amp;")
-        .replaceAll("<","&lt;")
-        .replaceAll(">","&gt;");
-    }
-
-    function formatDesc(text){
-      const t = String(text || "").trim();
-      if (!t) return "—";
-      if (t.includes("\n")) return t;
-      return t
-        .replaceAll(". ", ".\n")
-        .replaceAll("! ", "!\n")
-        .replaceAll("? ", "?\n");
-    }
 
     function listForDay(day){
       return allExercises.filter(x=>Number(x.day||0)===Number(day) && x.type!=="Joggen");
@@ -343,19 +257,16 @@
       previewList.innerHTML="";
       if(!list.length){ previewList.innerHTML="<li>—</li>"; return; }
 
-      const sessionState = window.IronQuestSession.getState();
-
       list.forEach(ex=>{
-        const done = sessionState.active && sessionState.done.includes(ex.name);
         const li=document.createElement("li");
         li.innerHTML=`
           <div class="itemTop">
             <div style="min-width:0; width:100%;">
-              <b>${done ? "✅ " : ""}${ex.name}</b>
+              <b>${ex.name}</b>
 
               <div class="descBox" style="margin-top:10px;">
                 <div class="descTitle">Ausführung</div>
-                <div class="descText">${escapeHTML(formatDesc(ex.description || "—"))}</div>
+                <div class="descText">${escapeHTML(ex.description || "—")}</div>
               </div>
 
               <div class="previewMeta">
@@ -363,6 +274,7 @@
                 <div class="hint">Typ: ${ex.type}</div>
               </div>
             </div>
+
             <button class="secondary" data-pick="${ex.name}">Wählen</button>
           </div>
         `;
@@ -391,7 +303,7 @@
       if(!ex){
         recEl.innerHTML="<b>Empfohlen:</b> —";
         typeEl.innerHTML="<b>Typ:</b> —";
-        descEl.textContent = "—";
+        descEl.textContent="—";
         volEl.innerHTML="<b>Volumen:</b> —";
         xpEl.innerHTML="<b>XP:</b> —";
         return {ex:null,sets,reps,xp:0};
@@ -399,7 +311,7 @@
 
       recEl.innerHTML=`<b>Empfohlen:</b> ${ex.recSets}×${ex.recReps}`;
       typeEl.innerHTML=`<b>Typ:</b> ${ex.type}`;
-      descEl.textContent = formatDesc(ex.description || "—");
+      descEl.textContent=ex.description||"—";
       volEl.innerHTML=`<b>Volumen:</b> ${Math.max(0,sets*reps)}`;
 
       const xp = window.IronQuestXP.calcExerciseXP({
@@ -419,32 +331,6 @@
     rebuildPreview();
     recalc();
 
-    el.querySelector("#sessStart").onclick = ()=>{
-      const day = Number(daySel.value||1);
-      window.IronQuestSession.start(day);
-      window.Toast?.toast("Session started", `Day ${day}`);
-      renderLog(el);
-    };
-    el.querySelector("#sessStop").onclick = ()=>{
-      window.IronQuestSession.stop();
-      window.Toast?.toast("Session stopped");
-      renderLog(el);
-    };
-    el.querySelector("#sessFinish").onclick = ()=>{
-      const res = window.IronQuestSession.finishAndReward();
-      if (!res.ok) return;
-      window.Toast?.toast("Session finished", "+1 Chest");
-      renderLog(el);
-    };
-
-    el.querySelector("#markDone").onclick = ()=>{
-      const ex=getSelected();
-      if (!ex) return;
-      window.IronQuestSession.toggleDone(ex.name);
-      rebuildPreview();
-      window.Toast?.toast("Session", `Done: ${ex.name}`);
-    };
-
     el.querySelector("#lSave").onclick = async ()=>{
       const {ex,sets,reps,xp} = recalc();
       if(!ex || !sets || !reps) return;
@@ -456,17 +342,17 @@
         date, week,
         type: ex.type,
         exercise: ex.name,
-        detail: `Rec ${ex.recSets}×${ex.recReps} • Did ${sets}x${reps} • Day ${daySel.value}`,
+        detail: `Rec ${ex.recSets}×${ex.recReps} • Did ${sets}×${reps} • Day ${daySel.value}`,
         xp
       };
 
       await window.IronDB.addEntry(entry);
-
-      // Coach PR
       const pr = window.IronQuestCoach.updatePR(entry);
-      if (pr?.isNew) window.Toast?.toast("NEW PR!", `${ex.name} volume ${pr.best.bestVolume}`);
-
+      if (pr.isNew){
+        window.UIEffects?.systemMessage([`PR unlocked: ${ex.name}`, `Best Volume: ${pr.best.bestVolume}`]);
+      }
       window.Toast?.toast("Entry saved", `${ex.name} (+${xp} XP)`);
+      await window.IronQuestLevelUp.checkLevelUp();
       await renderLog(el);
     };
 
@@ -480,7 +366,7 @@
           <div class="itemTop">
             <div>
               <b>${e.date}</b> • W${e.week||"?"} • ${e.exercise||e.type||"Entry"}
-              <div class="hint">${e.detail||""}</div>
+              <div class="hint">${escapeHTML(e.detail||"")}</div>
             </div>
             <span class="badge">${Math.round(e.xp||0)} XP</span>
           </div>
