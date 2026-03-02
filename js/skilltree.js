@@ -1,6 +1,6 @@
 (() => {
   "use strict";
-  const KEY="ironquest_skilltree_v5";
+  const KEY="ironquest_skilltree_v6";
 
   function load(){
     try{ return JSON.parse(localStorage.getItem(KEY)) || { multi:0, uni:0, core:0, cond:0, comp:0 }; }
@@ -14,7 +14,7 @@
       type==="Mehrgelenkig" ? "multi" :
       type==="Unilateral" ? "uni" :
       type==="Core" ? "core" :
-      (type==="Conditioning" || type==="NEAT" || type==="Joggen") ? "cond" :
+      type==="Conditioning" || type==="NEAT" || type==="Joggen" ? "cond" :
       type==="Komplexe" ? "comp" : null;
     if (!k) return 1;
     const pts = Number(st[k]||0);
@@ -27,7 +27,7 @@
       ["multi","MULTI (Mehrgelenkig)"],
       ["uni","UNI (Unilateral)"],
       ["core","CORE"],
-      ["cond","END (Conditioning/NEAT)"],
+      ["cond","END (Conditioning/NEAT/Run)"],
       ["comp","SKILL (Komplex)"],
     ];
 
