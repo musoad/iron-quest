@@ -1,11 +1,12 @@
 (() => {
   "use strict";
-  const DB_NAME="ironquest_v8_ascended";
-  const DB_VERSION=1;
+  const DB_NAME="ironquest_unified_final";
+  const DB_VERSION=2;
   const STORES={
     entries:{ keyPath:"id", autoIncrement:true },
     health:{ keyPath:"id", autoIncrement:true },
-    system:{ keyPath:"id", autoIncrement:true }
+    system:{ keyPath:"id", autoIncrement:true },
+    runs:{ keyPath:"id", autoIncrement:true }
   };
   let _db=null;
 
@@ -53,6 +54,9 @@
     getAllHealth: ()=>getAll("health"),
     addSystem: (m)=>add("system", m),
     getAllSystem: ()=>getAll("system"),
-    clearSystem: ()=>clear("system")
+    clearSystem: ()=>clear("system"),
+    addRun: (r)=>add("runs", r),
+    getAllRuns: ()=>getAll("runs"),
+    clearRuns: ()=>clear("runs")
   };
 })();
