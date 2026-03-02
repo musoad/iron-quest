@@ -3,17 +3,16 @@
 
   async function renderChallenges(el){
     const state = window.IronQuestRPG.getState();
+    const loot = window.IronQuestLoot.getState();
     const entries = await window.IronDB.getAllEntries();
     const summary = window.IronQuestRPG.summarize(entries);
 
     const dailyDef = window.IronQuestRPG.DAILY_POOL.find(x=>x.id===state.daily.id);
     const weeklyDef = window.IronQuestRPG.WEEKLY_POOL.find(x=>x.id===state.weekly.id);
+    const story = window.IronQuestRPG.storyStatus(state, summary, entries.length);
 
-    const totalXp = summary.totalXp;
-    const lvl = window.IronQuestProgression.levelFromTotalXp(totalXp);
+    const lvl = window.IronQuestProgression.levelFromTotalXp(summary.totalXp);
     const rank = window.IronQuestRPG.getRankName(lvl.lvl);
-
-    const loot = window.IronQuestLoot.getState();
 
     el.innerHTML = `
       <div class="card">
@@ -23,37 +22,50 @@
           <div class="pill"><b>Lv:</b> ${lvl.lvl}</div>
           <div class="pill"><b>Streak:</b> ${summary.streak}</div>
           <div class="pill"><b>Woche:</b> W${summary.week}</div>
-          <div class="pill"><b>Chests:</b> ${loot.chests}</div>
+          <div class="pill"><b>Chests:</b> ${loot.chests||0}</div>
         </div>
       </div>
 
       <div class="card">
-        <h2>Daily Quest</h2>
-        <div class="hint">${dailyDef?.title||"—"} – ${dailyDef?.desc||""}</div>
-        <div class="pill"><b>Reward:</b> +${dailyDef?.reward||0} XP</div>
+        <h2>Story</h2>
+        <div class="hint"><b>${story.cur?.title||"—"}</b></div>
+        <div class="hint">${story.cur?.desc||""}</div>
+        <div class="pill"><b>Reward:</b> +${story.cur?.reward||0} XP + 1 Chest</div>
         <div class="btnRow">
-          <button class="primary" id="qd" ${state.daily.claimed?"disabled":""}>Claim Daily</button>
-          <span class="badge ${state.daily.claimed?"ok":"gold"}">${state.daily.claimed?"CLAIMED":"OPEN"}</span>
+          <button class="primary" id="qs" ${(!story.done || story.claimed)?"disabled":""}>Claim Story</button>
+          <span class="badge ${story.claimed?"ok":(story.done?"gold":"lock")}">${story.claimed?"CLAIMED":(story.done?"READY":"LOCKED")}</span>
+        </div>
+      </div>
+
+      <div class="row2">
+        <div class="card">
+          <h2>Daily</h2>
+          <div class="hint">${dailyDef?.title||"—"} – ${dailyDef?.desc||""}</div>
+          <div class="pill"><b>Reward:</b> +${dailyDef?.reward||0} XP + 1 Chest</div>
+          <div class="btnRow">
+            <button class="secondary" id="qd" ${state.daily.claimed?"disabled":""}>Claim Daily</button>
+            <span class="badge ${state.daily.claimed?"ok":"gold"}">${state.daily.claimed?"CLAIMED":"OPEN"}</span>
+          </div>
+        </div>
+
+        <div class="card">
+          <h2>Weekly</h2>
+          <div class="hint">${weeklyDef?.title||"—"} – ${weeklyDef?.desc||""}</div>
+          <div class="pill"><b>Reward:</b> +${weeklyDef?.reward||0} XP + 2 Chests</div>
+          <div class="btnRow">
+            <button class="secondary" id="qw" ${state.weekly.claimed?"disabled":""}>Claim Weekly</button>
+            <span class="badge ${state.weekly.claimed?"ok":"gold"}">${state.weekly.claimed?"CLAIMED":"OPEN"}</span>
+          </div>
         </div>
       </div>
 
       <div class="card">
-        <h2>Weekly Quest</h2>
-        <div class="hint">${weeklyDef?.title||"—"} – ${weeklyDef?.desc||""}</div>
-        <div class="pill"><b>Reward:</b> +${weeklyDef?.reward||0} XP ${weeklyDef?.chest?`• +${weeklyDef.chest} Chest`:""}</div>
+        <h2>Inventory</h2>
         <div class="btnRow">
-          <button class="primary" id="qw" ${state.weekly.claimed?"disabled":""}>Claim Weekly</button>
-          <span class="badge ${state.weekly.claimed?"ok":"gold"}">${state.weekly.claimed?"CLAIMED":"OPEN"}</span>
+          <button class="primary" id="openChest" ${((loot.chests||0)>0)?"":"disabled"}>Chest öffnen</button>
         </div>
-      </div>
-
-      <div class="card">
-        <h2>Loot</h2>
-        <div class="btnRow">
-          <button class="secondary" id="openChest">Open Chest</button>
-        </div>
-        <div class="hint">Last drop: ${loot.lastDrop || "—"}</div>
-        <div class="hint">Inventory: ${loot.inv.length} items</div>
+        <div class="hint">${loot.lastDrop?`Letzter Drop: ${loot.lastDrop}`:""}</div>
+        <ul class="list" id="invList"></ul>
       </div>
 
       <div class="card">
@@ -65,37 +77,69 @@
     el.querySelector("#qd").onclick = async ()=>{
       const ok = await window.IronQuestRPG.claimDaily();
       if(!ok) window.Toast?.toast("Daily", "Noch nicht erfüllt oder bereits geclaimed.");
-      await window.IronQuestLevelUp.checkLevelUp();
       await renderChallenges(el);
     };
     el.querySelector("#qw").onclick = async ()=>{
       const ok = await window.IronQuestRPG.claimWeekly();
       if(!ok) window.Toast?.toast("Weekly", "Noch nicht erfüllt oder bereits geclaimed.");
-      await window.IronQuestLevelUp.checkLevelUp();
       await renderChallenges(el);
     };
+    el.querySelector("#qs").onclick = async ()=>{
+      const ok = await window.IronQuestRPG.claimStory();
+      if(!ok) window.Toast?.toast("Story", "Noch nicht bereit oder bereits geclaimed.");
+      await renderChallenges(el);
+    };
+
     el.querySelector("#openChest").onclick = ()=>{
-      const r = window.IronQuestLoot.rollDrop();
-      if(!r.ok) return window.Toast?.toast("Chest", "Keine Chests verfügbar.");
-      window.UIEffects?.systemMessage([`Chest opened`, `${r.drop||"XP shard"}`]);
-      window.Toast?.toast("Chest opened", r.drop||"XP shard");
+      const res = window.IronQuestLoot.rollDrop();
+      if (!res.ok) return window.Toast?.toast("Chest", "Keine Chest verfügbar.");
+      window.Toast?.toast("Chest opened", res.drop || "Nothing (XP shard)");
       renderChallenges(el);
     };
 
-    const ul = el.querySelector("#achList");
-    ul.innerHTML="";
+    const invUl = el.querySelector("#invList");
+    invUl.innerHTML = "";
+    if (!loot.inv?.length) invUl.innerHTML = "<li>—</li>";
+    else{
+      loot.inv.slice().reverse().slice(0,50).forEach(it=>{
+        const li=document.createElement("li");
+        li.innerHTML=`<div class="itemTop"><div><b>${it.name}</b><div class="hint">${it.kind} • ${it.date}</div></div></div>`;
+        invUl.appendChild(li);
+      });
+    }
+
+    const achUl = el.querySelector("#achList");
+    achUl.innerHTML="";
+    const invUl = el.querySelector("#invList");
+    const loot = window.IronQuestLoot?.getState?.();
+    const inv = loot?.inv || [];
+    if (invUl){
+      invUl.innerHTML = inv.length ? inv.slice().reverse().map(it=>`<li><div class="itemTop"><div><b>${it.name}</b><div class="hint">${it.kind.toUpperCase()} • ${it.date||""}</div></div></div></li>`).join("") : "<li>—</li>";
+    }
+
+    const oc = el.querySelector("#openChestQ");
+    if (oc){
+      oc.onclick = ()=>{
+        const res = window.IronQuestLoot.rollDrop();
+        if (!res.ok) return window.Toast?.toast("Chest", "No chests available.");
+        window.IronQuestUI?.systemMessage?.(res.drop ? `Loot acquired: ${res.drop}` : "Loot acquired: XP shard");
+        renderChallenges(el);
+      };
+    }
+
+    const em = el.querySelector("#equipMountQ");
+    if (em && window.IronQuestEquipment?.renderEquipmentPanel) window.IronQuestEquipment.renderEquipmentPanel(em);
+
     window.IronQuestRPG.ACHIEVEMENTS.forEach(a=>{
       const done = !!state.ach?.[a.id]?.done;
       let progText="";
-
       if (!a.type){
         progText = `${Math.min(a.goal, entries.length)} / ${a.goal} Entries`;
       } else if (a.type==="xp"){
-        progText = `${Math.min(a.goal, Math.round(totalXp))} / ${a.goal} XP`;
+        progText = `${Math.min(a.goal, Math.round(summary.totalXp))} / ${a.goal} XP`;
       } else if (a.type==="streak"){
         progText = `${Math.min(a.goal, summary.streak)} / ${a.goal} days`;
       }
-
       const li=document.createElement("li");
       li.innerHTML=`
         <div class="itemTop">
@@ -107,7 +151,7 @@
           <span class="badge ${done?"ok":"lock"}">${done?"DONE":"LOCKED"}</span>
         </div>
       `;
-      ul.appendChild(li);
+      achUl.appendChild(li);
     });
   }
 
