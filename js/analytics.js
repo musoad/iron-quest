@@ -1,74 +1,98 @@
-/* =========================
-   IRON QUEST — Analytics (v5 stable)
-   ✅ Dashboard (Challenge Start + Attribute Panel)
-   ✅ Log (Tag Dropdown + Tag Preview + Live XP + Save)
-   ✅ Analytics (Wochen XP Chart)
-========================= */
-
 (() => {
   "use strict";
 
-  /* ---------- Small Chart Helpers ---------- */
   function drawBars(canvas, labels, values){
     if (!canvas) return;
     const ctx = canvas.getContext("2d");
-    const W = canvas.width, H = canvas.height;
-    ctx.clearRect(0, 0, W, H);
+    const W=canvas.width, H=canvas.height;
+    ctx.clearRect(0,0,W,H);
 
-    const pad = 28;
-    const innerW = W - pad*2;
-    const innerH = H - pad*2;
+    const pad=28;
+    const innerW=W-pad*2;
+    const innerH=H-pad*2;
+    const maxV=Math.max(1,...values);
+    const n=Math.max(1,values.length);
+    const gap=10;
+    const bw=Math.max(8,Math.floor((innerW-gap*(n-1))/n));
 
-    const maxV = Math.max(1, ...values);
-    const n = Math.max(1, values.length);
-    const gap = 10;
-    const bw = Math.max(8, Math.floor((innerW - gap*(n-1)) / n));
+    ctx.globalAlpha=.35;
+    ctx.fillRect(pad,H-pad,innerW,2);
+    ctx.globalAlpha=1;
 
-    // baseline
-    ctx.globalAlpha = 0.35;
-    ctx.fillRect(pad, H - pad, innerW, 2);
-    ctx.globalAlpha = 1;
-
-    for (let i = 0; i < values.length; i++){
-      const v = Number(values[i] || 0);
-      const h = Math.round((v / maxV) * (innerH - 20));
-      const x = pad + i * (bw + gap);
-      const y = pad + (innerH - h);
-
-      ctx.fillRect(x, y, bw, h);
-
-      ctx.globalAlpha = 0.85;
-      ctx.font = "16px system-ui";
-      ctx.fillText(labels[i] || "", x, H - 8);
-      ctx.globalAlpha = 1;
+    for(let i=0;i<values.length;i++){
+      const v=Number(values[i]||0);
+      const h=Math.round((v/maxV)*(innerH-20));
+      const x=pad+i*(bw+gap);
+      const y=pad+(innerH-h);
+      ctx.fillRect(x,y,bw,h);
+      ctx.globalAlpha=.85;
+      ctx.font="16px system-ui";
+      ctx.fillText(labels[i]||"",x,H-8);
+      ctx.globalAlpha=1;
     }
   }
 
   function weekXpMap(entries){
-    const m = {};
-    for (const e of entries){
-      const w = Number(e.week || 0);
-      if (!w) continue;
-      m[w] = (m[w] || 0) + Number(e.xp || 0);
+    const m={};
+    for(const e of entries){
+      const w=Number(e.week||0);
+      if(!w) continue;
+      m[w]=(m[w]||0)+Number(e.xp||0);
     }
     return m;
   }
 
-  /* ---------- Dashboard ---------- */
   async function renderDashboard(el){
-    const start = window.IronQuestProgression?.getStartDate
-      ? window.IronQuestProgression.getStartDate()
-      : (localStorage.getItem("ironquest_startdate_v5") || (window.Utils?.isoDate ? window.Utils.isoDate(new Date()) : new Date().toISOString().slice(0,10)));
+    const entries = await window.IronDB.getAllEntries();
+    const totalXp = entries.reduce((s,e)=>s+Number(e.xp||0),0);
+    const L = window.IronQuestProgression.levelFromTotalXp(totalXp);
+    const rank = window.IronQuestRPG.getRankName(L.lvl);
+
+    const start = window.IronQuestProgression.getStartDate();
+    const week = window.IronQuestProgression.getWeekNumber();
+
+    const s = window.IronQuestRPG.summarize(entries);
+    const deload = window.IronQuestCoach.deloadHint(entries);
+
+    const rpgState = window.IronQuestRPG.getState();
+    const dailyDef = window.IronQuestRPG.DAILY_POOL.find(x=>x.id===rpgState.daily.id);
+    const weeklyDef = window.IronQuestRPG.WEEKLY_POOL.find(x=>x.id===rpgState.weekly.id);
+
+    const story = window.IronQuestRPG.storyStatus(rpgState, s, entries.length);
+    const loot = window.IronQuestLoot.getState();
+    const sess = window.IronQuestSession.getState();
 
     el.innerHTML = `
       <div class="card">
-        <h2>Dashboard</h2>
-        <p class="hint">RPG-Progress, Challenge-Startdatum & Stats.</p>
+        <h2>Hunter HUD</h2>
+        <div class="statRow">
+          <div class="pill"><b>${rank}</b></div>
+          <div class="pill"><b>Lv:</b> ${L.lvl} (${L.title})</div>
+          <div class="pill"><b>Woche:</b> W${week}</div>
+          <div class="pill"><b>Streak:</b> ${s.streak}</div>
+          <div class="pill"><b>Total XP:</b> ${Math.round(totalXp)}</div>
+        </div>
+        <p class="hint">„Arise.“ – Jede Session macht dich stärker.</p>
+        ${deload.heavy ? `<p class="hint">⚠️ Deload Hint: Woche sehr heavy (${Math.round(deload.weekXp)} XP, ${deload.days} Tage). Nächste Woche Volumen -30% empfohlen.</p>` : ""}
+      </div>
+
+      <div class="card">
+        <h2>Session</h2>
+        <p class="hint">Optionaler Workout-Flow (ohne Zwang). Du kannst trotzdem alles normal loggen.</p>
+        <div class="row2">
+          <div class="pill"><b>Status:</b> ${sess.active ? "ACTIVE" : "OFF"}</div>
+          <div class="pill"><b>Chests:</b> ${loot.chests||0}</div>
+        </div>
+        <div class="btnRow">
+          <button class="secondary" id="goLog">Zum Log</button>
+          <button class="primary" id="openChest" ${((loot.chests||0)>0)?"":"disabled"}>Chest öffnen</button>
+        </div>
+        <div class="hint">${loot.lastDrop ? `Letzter Drop: ${loot.lastDrop}` : ""}</div>
       </div>
 
       <div class="card">
         <h2>Challenge Start</h2>
-        <p class="hint">Startdatum bestimmt Woche 1 (auch rückwirkend). Änderung wirkt sofort auf Weekly/Boss/Challenge.</p>
+        <p class="hint">Startdatum bestimmt Woche 1 (auch rückwirkend).</p>
         <label>Startdatum</label>
         <input id="startDateInput" type="date" value="${start}">
         <div class="btnRow">
@@ -78,42 +102,115 @@
       </div>
 
       <div id="attrMount"></div>
+
+      <div class="card">
+        <h2>Quests</h2>
+        <div class="row2">
+          <div class="skillbox">
+            <h3>Daily Quest</h3>
+            <div class="hint">${dailyDef?.title||"—"} – ${dailyDef?.desc||""}</div>
+            <div class="pill"><b>Reward:</b> +${dailyDef?.reward||0} XP</div>
+            <div class="btnRow">
+              <button class="secondary" id="claimDaily" ${rpgState.daily.claimed?"disabled":""}>Claim</button>
+              <span class="badge ${rpgState.daily.claimed?"ok":"gold"}">${rpgState.daily.claimed?"CLAIMED":"OPEN"}</span>
+            </div>
+          </div>
+
+          <div class="skillbox">
+            <h3>Weekly Quest</h3>
+            <div class="hint">${weeklyDef?.title||"—"} – ${weeklyDef?.desc||""}</div>
+            <div class="pill"><b>Reward:</b> +${weeklyDef?.reward||0} XP</div>
+            <div class="btnRow">
+              <button class="secondary" id="claimWeekly" ${rpgState.weekly.claimed?"disabled":""}>Claim</button>
+              <span class="badge ${rpgState.weekly.claimed?"ok":"gold"}">${rpgState.weekly.claimed?"CLAIMED":"OPEN"}</span>
+            </div>
+          </div>
+        </div>
+        <hr>
+        <div class="skillbox">
+          <h3>Story Quest</h3>
+          <div class="hint"><b>${story.cur?.title||"—"}</b></div>
+          <div class="hint">${story.cur?.desc||""}</div>
+          <div class="pill"><b>Reward:</b> +${story.cur?.reward||0} XP + 1 Chest</div>
+          <div class="btnRow">
+            <button class="primary" id="claimStory" ${(!story.done || story.claimed)?"disabled":""}>Claim Story</button>
+            <span class="badge ${story.claimed?"ok":(story.done?"gold":"lock")}">${story.claimed?"CLAIMED":(story.done?"READY":"LOCKED")}</span>
+          </div>
+        </div>
+      </div>
     `;
 
-    // Attributes Panel
     if (window.IronQuestAttributes?.renderAttributes){
       window.IronQuestAttributes.renderAttributes(el.querySelector("#attrMount"));
     }
 
-    el.querySelector("#startSave").onclick = () => {
-      const v = el.querySelector("#startDateInput").value;
-      if (!v) return;
+    el.querySelector("#startSave").onclick=()=>{
+      const v=el.querySelector("#startDateInput").value;
+      if(!v) return;
       localStorage.setItem("ironquest_startdate_v5", v);
-      alert("Startdatum gespeichert ✅");
+      window.Toast?.toast("Startdatum gespeichert", v);
+    };
+    el.querySelector("#startReset").onclick=()=>{
+      const today=window.Utils.isoDate(new Date());
+      localStorage.setItem("ironquest_startdate_v5", today);
+      el.querySelector("#startDateInput").value=today;
+      window.Toast?.toast("Startdatum gesetzt", today);
     };
 
-    el.querySelector("#startReset").onclick = () => {
-      const today = window.Utils?.isoDate ? window.Utils.isoDate(new Date()) : new Date().toISOString().slice(0,10);
-      localStorage.setItem("ironquest_startdate_v5", today);
-      el.querySelector("#startDateInput").value = today;
-      alert("Startdatum auf heute gesetzt ✅");
+    el.querySelector("#claimDaily").onclick = async ()=>{
+      const ok = await window.IronQuestRPG.claimDaily();
+      if(!ok) window.Toast?.toast("Daily Quest", "Noch nicht erfüllt oder bereits geclaimed.");
+    };
+    el.querySelector("#claimWeekly").onclick = async ()=>{
+      const ok = await window.IronQuestRPG.claimWeekly();
+      if(!ok) window.Toast?.toast("Weekly Quest", "Noch nicht erfüllt oder bereits geclaimed.");
+    };
+    el.querySelector("#claimStory").onclick = async ()=>{
+      const ok = await window.IronQuestRPG.claimStory();
+      if(!ok) window.Toast?.toast("Story Quest", "Noch nicht bereit oder bereits geclaimed.");
+    };
+
+    el.querySelector("#openChest").onclick = ()=>{
+      const res = window.IronQuestLoot.rollDrop();
+      if (!res.ok) return window.Toast?.toast("Chest", "Keine Chest verfügbar.");
+      window.Toast?.toast("Chest opened", res.drop || "Nothing (XP shard)");
+      renderDashboard(el);
+    };
+
+    el.querySelector("#goLog").onclick = ()=>{
+      document.querySelector('nav button[data-tab="log"]')?.click();
     };
   }
 
-  /* ---------- Log (Tag Dropdown + Tag Preview) ---------- */
   async function renderLog(el){
-    const plan = window.IronQuestExercises?.TRAINING_PLAN;
-    const allExercises = window.IronQuestExercises?.EXERCISES || [];
+    const plan = window.IronQuestExercises.TRAINING_PLAN;
+    const allExercises = window.IronQuestExercises.EXERCISES;
     const entries = await window.IronDB.getAllEntries();
-    entries.sort((a,b)=> (a.date < b.date ? 1 : -1));
+    entries.sort((a,b)=> (a.date<b.date?1:-1));
 
-    const today = window.Utils?.isoDate ? window.Utils.isoDate(new Date()) : new Date().toISOString().slice(0,10);
+    const today = window.Utils.isoDate(new Date());
     const dayDefault = 1;
+
+    const sess = window.IronQuestSession.getState();
 
     el.innerHTML = `
       <div class="card">
-        <h2>Log</h2>
-        <p class="hint">Trainingstag per Dropdown wählen (1–5). Tag-Preview zeigt alle Übungen. Dann Übung wählen & Sets/Reps eintragen.</p>
+        <h2>Training Log</h2>
+        <p class="hint">Wähle den Trainingstag (1–5). Preview zeigt den Übungs-Pool. Dann Übung wählen & Sets/Reps eintragen.</p>
+
+        <div class="card">
+          <h2>Workout Session Mode</h2>
+          <div class="row2">
+            <div class="pill"><b>Status:</b> ${sess.active ? "ACTIVE" : "OFF"}</div>
+            <div class="pill"><b>Day:</b> ${sess.day || dayDefault}</div>
+          </div>
+          <div class="btnRow">
+            <button class="secondary" id="sessStart" ${sess.active?"disabled":""}>Start Session</button>
+            <button class="danger" id="sessStop" ${sess.active?"":"disabled"}>Stop</button>
+            <button class="primary" id="sessFinish" ${sess.active?"":"disabled"}>Finish (+Chest)</button>
+          </div>
+          <p class="hint small">Session ist optional. Finish gibt 1 Chest. Du kannst trotzdem normal loggen.</p>
+        </div>
 
         <div class="card">
           <h2>Neuer Eintrag</h2>
@@ -129,7 +226,7 @@
             </div>
           </div>
 
-          <div class="card" id="dayPreviewCard">
+          <div class="card">
             <h2 id="dayTitle">Tag-Preview</h2>
             <div class="hint" id="dayHint">—</div>
             <ul class="list" id="dayPreviewList"></ul>
@@ -161,7 +258,10 @@
             <div class="pill" id="lXp"><b>XP:</b> —</div>
           </div>
 
-          <button class="primary" id="lSave">Speichern</button>
+          <div class="btnRow">
+            <button class="primary" id="lSave">Speichern</button>
+            <button class="secondary" id="markDone" ${sess.active?"":"disabled"}>Session: Done</button>
+          </div>
         </div>
 
         <div class="card">
@@ -174,14 +274,12 @@
       </div>
     `;
 
-    // Day dropdown
     const daySel = el.querySelector("#lDay");
-    for (let d=1; d<=5; d++){
-      const name = plan?.days?.[d]?.name ? `Tag ${d}: ${plan.days[d].name}` : `Tag ${d}`;
-      const opt = document.createElement("option");
-      opt.value = String(d);
-      opt.textContent = name;
-      if (d === dayDefault) opt.selected = true;
+    for(let d=1; d<=5; d++){
+      const opt=document.createElement("option");
+      opt.value=String(d);
+      opt.textContent=`Tag ${d}: ${plan.days[d].name}`;
+      if((sess.active?Number(sess.day):dayDefault)===d) opt.selected=true;
       daySel.appendChild(opt);
     }
 
@@ -196,50 +294,44 @@
     const previewHint  = el.querySelector("#dayHint");
     const previewList  = el.querySelector("#dayPreviewList");
 
-    function exercisesForDay(day){
-      return allExercises.filter(x => Number(x.day||0) === Number(day) && x.type !== "Joggen");
+    function listForDay(day){
+      return allExercises.filter(x=>Number(x.day||0)===Number(day) && x.type!=="Joggen");
     }
 
     function rebuildExerciseOptions(){
-      const day = Number(daySel.value || 1);
-      const list = exercisesForDay(day);
-
-      exSel.innerHTML = "";
+      const day=Number(daySel.value||1);
+      const list=listForDay(day);
+      exSel.innerHTML="";
       list.forEach(ex=>{
-        const opt = document.createElement("option");
-        opt.value = ex.name;
-        opt.textContent = ex.name;
-        exSel.appendChild(opt);
+        const o=document.createElement("option");
+        o.value=ex.name; o.textContent=ex.name;
+        exSel.appendChild(o);
       });
-
-      if (!list.length){
-        const opt = document.createElement("option");
-        opt.value = "";
-        opt.textContent = "Keine Übungen für diesen Tag";
-        exSel.appendChild(opt);
+      if(!list.length){
+        const o=document.createElement("option");
+        o.value=""; o.textContent="Keine Übungen";
+        exSel.appendChild(o);
       }
     }
 
     function rebuildPreview(){
-      const day = Number(daySel.value || 1);
-      const list = exercisesForDay(day);
+      const day=Number(daySel.value||1);
+      const list=listForDay(day);
+      previewTitle.textContent=`Tag ${day}: ${plan.days[day].name}`;
+      previewHint.textContent=`Übungs-Pool: ${list.length} Übungen. (Du musst nicht alle machen.)`;
+      previewList.innerHTML="";
+      if(!list.length){ previewList.innerHTML="<li>—</li>"; return; }
 
-      previewTitle.textContent = plan?.days?.[day]?.name ? `Tag ${day}: ${plan.days[day].name}` : `Tag ${day}`;
-      previewHint.textContent = `Übungs-Pool: ${list.length} Übungen. (Du musst nicht alle machen – wähle effizient.)`;
-
-      previewList.innerHTML = "";
-      if (!list.length){
-        previewList.innerHTML = `<li>—</li>`;
-        return;
-      }
+      const sessionState = window.IronQuestSession.getState();
 
       list.forEach(ex=>{
-        const li = document.createElement("li");
-        li.innerHTML = `
+        const done = sessionState.active && sessionState.done.includes(ex.name);
+        const li=document.createElement("li");
+        li.innerHTML=`
           <div class="itemTop">
             <div style="min-width:0;">
-              <b>${ex.name}</b>
-              <div class="hint">${ex.description || "—"}</div>
+              <b>${done ? "✅ " : ""}${ex.name}</b>
+              <div class="hint">${ex.description||"—"}</div>
               <div class="hint">Empfohlen: ${ex.recSets}×${ex.recReps} • Typ: ${ex.type}</div>
             </div>
             <button class="secondary" data-pick="${ex.name}">Wählen</button>
@@ -249,114 +341,117 @@
       });
 
       previewList.querySelectorAll("[data-pick]").forEach(btn=>{
-        btn.addEventListener("click", ()=>{
-          const name = btn.getAttribute("data-pick");
-          exSel.value = name;
+        btn.onclick=()=>{
+          exSel.value=btn.dataset.pick;
           recalc();
           el.querySelector("#lSets").focus();
-        });
+        };
       });
     }
 
     function getSelected(){
-      const name = exSel.value;
-      return allExercises.find(x => x.name === name);
+      const name=exSel.value;
+      return allExercises.find(x=>x.name===name);
     }
 
     function recalc(){
-      const ex = getSelected();
-      const sets = Number(el.querySelector("#lSets").value || 0);
-      const reps = Number(el.querySelector("#lReps").value || 0);
+      const ex=getSelected();
+      const sets=Number(el.querySelector("#lSets").value||0);
+      const reps=Number(el.querySelector("#lReps").value||0);
 
-      if (!ex){
-        recEl.innerHTML = `<b>Empfohlen:</b> —`;
-        typeEl.innerHTML = `<b>Typ:</b> —`;
-        descEl.innerHTML = `<b>Ausführung:</b> —`;
-        volEl.innerHTML = `<b>Volumen:</b> —`;
-        xpEl.innerHTML = `<b>XP:</b> —`;
-        return { ex:null, sets, reps, xp:0 };
+      if(!ex){
+        recEl.innerHTML="<b>Empfohlen:</b> —";
+        typeEl.innerHTML="<b>Typ:</b> —";
+        descEl.innerHTML="<b>Ausführung:</b> —";
+        volEl.innerHTML="<b>Volumen:</b> —";
+        xpEl.innerHTML="<b>XP:</b> —";
+        return {ex:null,sets,reps,xp:0};
       }
 
-      recEl.innerHTML = `<b>Empfohlen:</b> ${ex.recSets}×${ex.recReps}`;
-      typeEl.innerHTML = `<b>Typ:</b> ${ex.type}`;
-      descEl.innerHTML = `<b>Ausführung:</b> ${ex.description || "—"}`;
+      recEl.innerHTML=`<b>Empfohlen:</b> ${ex.recSets}×${ex.recReps}`;
+      typeEl.innerHTML=`<b>Typ:</b> ${ex.type}`;
+      descEl.innerHTML=`<b>Ausführung:</b> ${ex.description||"—"}`;
+      volEl.innerHTML=`<b>Volumen:</b> ${Math.max(0,sets*reps)}`;
 
-      const vol = Math.max(0, sets * reps);
-      volEl.innerHTML = `<b>Volumen:</b> ${vol}`;
-
-      const xp = window.IronQuestXP?.calcExerciseXP
-        ? window.IronQuestXP.calcExerciseXP({
-            type: ex.type,
-            recSets: ex.recSets,
-            recReps: ex.recReps,
-            sets,
-            reps,
-            entries
-          })
-        : 0;
-
-      xpEl.innerHTML = `<b>XP:</b> ${xp || "—"}`;
-      return { ex, sets, reps, xp };
+      const xp = window.IronQuestXP.calcExerciseXP({
+        type:ex.type, recSets:ex.recSets, recReps:ex.recReps,
+        sets, reps, entries
+      });
+      xpEl.innerHTML=`<b>XP:</b> ${xp||"—"}`;
+      return {ex,sets,reps,xp};
     }
 
-    // Events
-    daySel.addEventListener("change", ()=>{
-      rebuildExerciseOptions();
-      rebuildPreview();
-      recalc();
-    });
+    daySel.onchange=()=>{ rebuildExerciseOptions(); rebuildPreview(); recalc(); };
+    exSel.onchange=recalc;
+    el.querySelector("#lSets").oninput=recalc;
+    el.querySelector("#lReps").oninput=recalc;
 
-    exSel.addEventListener("change", recalc);
-    el.querySelector("#lSets").addEventListener("input", recalc);
-    el.querySelector("#lReps").addEventListener("input", recalc);
-
-    // Initial
     rebuildExerciseOptions();
     rebuildPreview();
     recalc();
 
-    // Save
-    el.querySelector("#lSave").addEventListener("click", async ()=>{
-      const { ex, sets, reps, xp } = recalc();
+    el.querySelector("#sessStart").onclick = ()=>{
+      const day = Number(daySel.value||1);
+      window.IronQuestSession.start(day);
+      window.Toast?.toast("Session started", `Day ${day}`);
+      renderLog(el);
+    };
+    el.querySelector("#sessStop").onclick = ()=>{
+      window.IronQuestSession.stop();
+      window.Toast?.toast("Session stopped");
+      renderLog(el);
+    };
+    el.querySelector("#sessFinish").onclick = ()=>{
+      const res = window.IronQuestSession.finishAndReward();
+      if (!res.ok) return;
+      window.Toast?.toast("Session finished", "+1 Chest");
+      renderLog(el);
+    };
+
+    el.querySelector("#markDone").onclick = ()=>{
+      const ex=getSelected();
       if (!ex) return;
-      if (!sets || !reps) return;
+      window.IronQuestSession.toggleDone(ex.name);
+      rebuildPreview();
+      window.Toast?.toast("Session", `Done: ${ex.name}`);
+    };
+
+    el.querySelector("#lSave").onclick = async ()=>{
+      const {ex,sets,reps,xp} = recalc();
+      if(!ex || !sets || !reps) return;
 
       const date = el.querySelector("#lDate").value || today;
-      const week = window.IronQuestProgression?.getWeekNumberFor
-        ? window.IronQuestProgression.getWeekNumberFor(date)
-        : (window.IronQuestProgression?.getWeekNumber ? window.IronQuestProgression.getWeekNumber() : 1);
+      const week = window.IronQuestProgression.getWeekNumberFor(date);
 
       const entry = {
-        date,
-        week,
+        date, week,
         type: ex.type,
         exercise: ex.name,
-        detail: `Rec ${ex.recSets}×${ex.recReps} • Did ${sets}×${reps} • Day ${daySel.value}`,
+        detail: `Rec ${ex.recSets}×${ex.recReps} • Did ${sets}x${reps} • Day ${daySel.value}`,
         xp
       };
 
       await window.IronDB.addEntry(entry);
 
-      if (window.IronQuestAttributes?.addXPForEntry){
-        window.IronQuestAttributes.addXPForEntry(entry);
-      }
+      // Coach PR
+      const pr = window.IronQuestCoach.updatePR(entry);
+      if (pr?.isNew) window.Toast?.toast("NEW PR!", `${ex.name} volume ${pr.best.bestVolume}`);
 
+      window.Toast?.toast("Entry saved", `${ex.name} (+${xp} XP)`);
       await renderLog(el);
-    });
+    };
 
-    // List render
-    const ul = el.querySelector("#logList");
-    if (!entries.length){
-      ul.innerHTML = `<li>—</li>`;
-    } else {
-      ul.innerHTML = "";
-      entries.slice(0, 250).forEach(e=>{
-        const li = document.createElement("li");
-        li.innerHTML = `
+    const ul=el.querySelector("#logList");
+    if(!entries.length) ul.innerHTML="<li>—</li>";
+    else{
+      ul.innerHTML="";
+      entries.slice(0,250).forEach(e=>{
+        const li=document.createElement("li");
+        li.innerHTML=`
           <div class="itemTop">
             <div>
-              <b>${e.date}</b> • W${e.week||"?"} • ${e.exercise || e.type || "Entry"}
-              <div class="hint">${e.detail || ""}</div>
+              <b>${e.date}</b> • W${e.week||"?"} • ${e.exercise||e.type||"Entry"}
+              <div class="hint">${e.detail||""}</div>
             </div>
             <span class="badge">${Math.round(e.xp||0)} XP</span>
           </div>
@@ -365,43 +460,33 @@
       });
     }
 
-    // Clear
-    el.querySelector("#logClear").addEventListener("click", async ()=>{
+    el.querySelector("#logClear").onclick = async ()=>{
       await window.IronDB.clearAllEntries();
-      alert("Log gelöscht ✅");
+      window.Toast?.toast("Log", "Alle Einträge gelöscht");
       await renderLog(el);
-    });
+    };
   }
 
-  /* ---------- Analytics ---------- */
   async function renderAnalytics(el){
     const entries = await window.IronDB.getAllEntries();
-    const today = window.Utils?.isoDate ? window.Utils.isoDate(new Date()) : new Date().toISOString().slice(0,10);
-    const curWeek = window.IronQuestProgression?.getWeekNumberFor
-      ? window.IronQuestProgression.getWeekNumberFor(today)
-      : (window.IronQuestProgression?.getWeekNumber ? window.IronQuestProgression.getWeekNumber() : 1);
-
+    const today = window.Utils.isoDate(new Date());
+    const curWeek = window.IronQuestProgression.getWeekNumberFor(today);
     const map = weekXpMap(entries);
 
-    const weeks = [];
-    for (let w = Math.max(1, curWeek - 7); w <= curWeek; w++) weeks.push(w);
-    const vals = weeks.map(w => map[w] || 0);
-    const labels = weeks.map(w => `W${w}`);
+    const weeks=[];
+    for(let w=Math.max(1,curWeek-7); w<=curWeek; w++) weeks.push(w);
+    const vals = weeks.map(w=>map[w]||0);
+    const labels = weeks.map(w=>`W${w}`);
 
-    el.innerHTML = `
+    el.innerHTML=`
       <div class="card">
-        <h2>Analytics</h2>
-        <p class="hint">Wochen-XP (letzte 8 Wochen)</p>
+        <h2>Stats</h2>
+        <p class="hint">Wochen-XP der letzten 8 Wochen.</p>
         <canvas id="anChart" width="900" height="260"></canvas>
       </div>
     `;
-
     drawBars(el.querySelector("#anChart"), labels, vals);
   }
 
-  window.IronQuestAnalytics = {
-    renderDashboard,
-    renderLog,
-    renderAnalytics
-  };
+  window.IronQuestAnalytics = { renderDashboard, renderLog, renderAnalytics };
 })();
