@@ -235,7 +235,10 @@
           <label>Übung</label>
           <select id="lExercise"></select>
 
-          <div class="pill" id="lDesc"><b>Ausführung:</b> —</div>
+          <div class="descBox" id="lDescBox">
+            <div class="descTitle">Ausführung</div>
+            <div class="descText" id="lDesc">—</div>
+          </div>
 
           <div class="row2">
             <div class="pill" id="lRec"><b>Empfohlen:</b> —</div>
@@ -294,6 +297,24 @@
     const previewHint  = el.querySelector("#dayHint");
     const previewList  = el.querySelector("#dayPreviewList");
 
+
+    function escapeHTML(str){
+      return String(str)
+        .replaceAll("&","&amp;")
+        .replaceAll("<","&lt;")
+        .replaceAll(">","&gt;");
+    }
+
+    function formatDesc(text){
+      const t = String(text || "").trim();
+      if (!t) return "—";
+      if (t.includes("\n")) return t;
+      return t
+        .replaceAll(". ", ".\n")
+        .replaceAll("! ", "!\n")
+        .replaceAll("? ", "?\n");
+    }
+
     function listForDay(day){
       return allExercises.filter(x=>Number(x.day||0)===Number(day) && x.type!=="Joggen");
     }
@@ -329,10 +350,18 @@
         const li=document.createElement("li");
         li.innerHTML=`
           <div class="itemTop">
-            <div style="min-width:0;">
+            <div style="min-width:0; width:100%;">
               <b>${done ? "✅ " : ""}${ex.name}</b>
-              <div class="hint">${ex.description||"—"}</div>
-              <div class="hint">Empfohlen: ${ex.recSets}×${ex.recReps} • Typ: ${ex.type}</div>
+
+              <div class="descBox" style="margin-top:10px;">
+                <div class="descTitle">Ausführung</div>
+                <div class="descText">${escapeHTML(formatDesc(ex.description || "—"))}</div>
+              </div>
+
+              <div class="previewMeta">
+                <div class="hint">Empfohlen: ${ex.recSets}×${ex.recReps}</div>
+                <div class="hint">Typ: ${ex.type}</div>
+              </div>
             </div>
             <button class="secondary" data-pick="${ex.name}">Wählen</button>
           </div>
@@ -362,7 +391,7 @@
       if(!ex){
         recEl.innerHTML="<b>Empfohlen:</b> —";
         typeEl.innerHTML="<b>Typ:</b> —";
-        descEl.innerHTML="<b>Ausführung:</b> —";
+        descEl.textContent = "—";
         volEl.innerHTML="<b>Volumen:</b> —";
         xpEl.innerHTML="<b>XP:</b> —";
         return {ex:null,sets,reps,xp:0};
@@ -370,7 +399,7 @@
 
       recEl.innerHTML=`<b>Empfohlen:</b> ${ex.recSets}×${ex.recReps}`;
       typeEl.innerHTML=`<b>Typ:</b> ${ex.type}`;
-      descEl.innerHTML=`<b>Ausführung:</b> ${ex.description||"—"}`;
+      descEl.textContent = formatDesc(ex.description || "—");
       volEl.innerHTML=`<b>Volumen:</b> ${Math.max(0,sets*reps)}`;
 
       const xp = window.IronQuestXP.calcExerciseXP({
