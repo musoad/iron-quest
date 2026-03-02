@@ -170,10 +170,17 @@
           <label>Übung</label>
           <select id="lExercise"></select>
 
-          <div class="descBox" id="lDescBox">
-            <div class="descTitle">Ausführung</div>
-            <div class="descText" id="lDesc">—</div>
-          </div>
+          li.innerHTML = `
+  <div class="itemTop">
+    <div style="min-width:0;">
+      <b>${ex.name}</b>
+      <div class="hint">Empfohlen: ${ex.recSets}×${ex.recReps}</div>
+      <div class="hint">Typ: ${ex.type}</div>
+    </div>
+
+    <button class="secondary" data-pick="${ex.name}">Wählen</button>
+  </div>
+`;
 
           <div class="row2">
             <div class="pill" id="lRec"><b>Empfohlen:</b> —</div>
