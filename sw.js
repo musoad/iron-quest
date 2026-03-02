@@ -1,4 +1,4 @@
-const SW_VERSION="v9.0.4-unified";
+const SW_VERSION="v9.0.4-unifiedfix";
 const CACHE_NAME=`ironquest-${SW_VERSION}`;
 const ASSETS=[
   "./",
@@ -13,6 +13,7 @@ const ASSETS=[
   "./js/bossArena.js",
   "./js/challenges.js",
   "./js/classes.js",
+  "./js/periodization.js",
   "./js/coach_engine.js",
   "./js/db.js",
   "./js/equipment.js",
