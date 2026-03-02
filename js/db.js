@@ -1,8 +1,8 @@
 (() => {
   "use strict";
 
-  const DB_NAME = "ironquest-v6";
-  const DB_VERSION = 8;
+  const DB_NAME = "ironquest-solo-v5";
+  const DB_VERSION = 7;
 
   const STORES = {
     entries: { keyPath:"id", autoIncrement:true },
