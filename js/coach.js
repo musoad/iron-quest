@@ -1,11 +1,11 @@
 (() => {
   "use strict";
 
-  const KEY = "ironquest_coach_v5";
+  const KEY = "ironquest_coach_v6";
 
   function load(){
-    try { return JSON.parse(localStorage.getItem(KEY)) || { prs:{}, fatigue:{} }; }
-    catch { return { prs:{}, fatigue:{} }; }
+    try { return JSON.parse(localStorage.getItem(KEY)) || { prs:{} }; }
+    catch { return { prs:{} }; }
   }
   function save(st){ localStorage.setItem(KEY, JSON.stringify(st)); }
 
@@ -18,37 +18,17 @@
 
     let sets = 0, reps = 0;
     const m = String(entry.detail || "").match(/Did\s+(\d+)[x×](\d+)/i);
-    if (m){
-      sets = Number(m[1]||0);
-      reps = Number(m[2]||0);
-    }
+    if (m){ sets = Number(m[1]||0); reps = Number(m[2]||0); }
     const volume = Math.max(0, sets * reps);
     const cur = st.prs[key] || { bestVolume:0, bestDate:"" };
 
     if (volume > cur.bestVolume){
       st.prs[key] = { bestVolume: volume, bestDate: entry.date || "" };
       save(st);
-      return { isNew:true, best: st.prs[key] };
+      return { isNew:true, best: st.prs[key], volume };
     }
     save(st);
-    return { isNew:false, best: cur };
-  }
-
-  function nextTarget(exercise, lastSets, lastReps){
-    const recSets = Number(exercise?.recSets||0);
-    const recReps = Number(exercise?.recReps||0);
-    const sets = Number(lastSets||0);
-    const reps = Number(lastReps||0);
-
-    if (!recSets || !recReps) return { sets: sets||3, reps: reps||8 };
-
-    let targetSets = recSets;
-    let targetReps = recReps;
-
-    if (sets >= recSets && reps >= recReps){
-      targetReps = Math.min(recReps + 4, reps + 1);
-    }
-    return { sets: targetSets, reps: targetReps };
+    return { isNew:false, best: cur, volume };
   }
 
   function deloadHint(entries){
@@ -70,5 +50,5 @@
     return { heavy, weekXp, days: days.size, complexCount };
   }
 
-  window.IronQuestCoach = { updatePR, nextTarget, deloadHint };
+  window.IronQuestCoach = { updatePR, deloadHint };
 })();
