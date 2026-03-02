@@ -1,43 +1,112 @@
-(function(){
+(() => {
+  "use strict";
 
-  const XP = {};
-
-  XP.calculateXP = function(entry){
-    const base = entry.sets * entry.reps * 5;
-    return base;
+  const BASE_XP = {
+    Mehrgelenkig: 180,
+    Unilateral: 200,
+    Core: 140,
+    Conditioning: 240,
+    Komplexe: 260,
+    NEAT: 80
   };
 
-  XP.getLevelFromXP = function(totalXP){
-    return Math.floor(totalXP / 1000) + 1;
-  };
+  function clamp(n, a, b) { return Math.max(a, Math.min(b, n)); }
 
-  // ✅ NEU – Streak Berechnung für Challenges
-  XP.streakFromEntries = function(entries){
-    if(!entries || !entries.length) return 0;
-
-    const days = new Set(
-      entries.map(e => new Date(e.date).toDateString())
-    );
-
-    const sorted = Array.from(days)
-      .map(d => new Date(d))
-      .sort((a,b)=>b-a);
-
-    let streak = 0;
-    let current = new Date();
-
-    for(let i=0;i<sorted.length;i++){
-      const diff = Math.floor((current - sorted[i])/(1000*60*60*24));
-      if(diff === streak){
-        streak++;
-      } else {
-        break;
-      }
+  function dayXpMap(entries){
+    const m = {};
+    for(const e of (entries || [])){
+      const d = e?.date;
+      if(!d) continue;
+      m[d] = (m[d] || 0) + Number(e.xp || 0);
     }
+    return m;
+  }
 
-    return streak;
+  // ✅ Standard-Streak (nutzt ISO-Dates wie "2026-02-16")
+  function streak(entries){
+    const map = dayXpMap(entries);
+    let s = 0;
+
+    // Utils optional: falls nicht vorhanden, nehmen wir ISO per Date
+    const iso = (d) => (window.Utils?.isoDate ? window.Utils.isoDate(d) : new Date(d).toISOString().slice(0,10));
+    const addDays = (d, delta) => (window.Utils?.addDays ? window.Utils.addDays(d, delta) : new Date(d.getTime() + delta*86400000));
+
+    let d = new Date(iso(new Date()));
+    while(true){
+      const key = iso(d);
+      if((map[key] || 0) > 0){
+        s++;
+        d = addDays(d, -1);
+      } else break;
+      if(s > 365) break;
+    }
+    return s;
+  }
+
+  // ✅ Backward-Compat für Module, die das erwarten
+  function streakFromEntries(entries){
+    return streak(entries);
+  }
+
+  function streakMult(s){
+    return 1 + Math.min(0.20, Number(s || 0) * 0.02);
+  }
+
+  function volumeMult(sets, reps, recSets, recReps){
+    const a = Math.max(1, Number(sets || 0) * Number(reps || 0));
+    const r = Math.max(1, Number(recSets || 1) * Number(recReps || 1));
+    const ratio = a / r;
+
+    if(ratio >= 1.25) return 1.10;
+    if(ratio >= 1.00) return 1.00;
+    if(ratio >= 0.80) return 0.90;
+    return 0.80;
+  }
+
+  // ✅ DIE Funktion, die dein Log braucht
+  function calcExerciseXP({ type, recSets, recReps, sets, reps, entries, buffs }){
+    const base = BASE_XP[type] || 0;
+
+    let xp = base * Math.max(1, Number(sets || 0));
+
+    const repFactor = clamp(
+      (Number(reps || 0) / Math.max(1, Number(recReps || 1))),
+      0.5,
+      1.4
+    );
+    xp *= repFactor;
+    xp *= volumeMult(sets, reps, recSets, recReps);
+
+    const s = streak(entries || []);
+    xp *= streakMult(s);
+
+    // Skilltree passive
+    xp *= window.IronQuestSkilltreeV2?.passiveMultiplier?.(type) || 1;
+
+    // Class bonus
+    xp *= window.IronQuestClasses?.multiplierForType?.(type) || 1;
+
+    // Periodization bias
+    xp *= window.IronQuestPeriodization?.multiplierForType?.(type) || 1;
+
+    // Active buffs (session scoped)
+    if(buffs?.globalXp) xp *= buffs.globalXp;
+    if(type === "Core" && buffs?.coreXp) xp *= buffs.coreXp;
+
+    return Math.round(xp);
+  }
+
+  // (Optional) ältere Module könnten das noch nutzen:
+  function calculateXP(entry){
+    return Number(entry?.xp || 0);
+  }
+
+  window.IronQuestXP = {
+    BASE_XP,
+    streak,
+    streakFromEntries,
+    streakMult,
+    calcExerciseXP,
+    calculateXP
   };
-
-  window.IronQuestXP = XP;
-
 })();
