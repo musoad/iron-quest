@@ -92,7 +92,9 @@
           await addSystem(`Milestone reward: +1 chest (Level ${lvlAfter})`);
           window.Toast?.toast("Milestone", "+1 Chest");
         }
-      // Rank promotion ceremony
+      }
+
+      // Rank promotion ceremony (independent of level-up; can also happen via XP thresholds)
       if(rankAfter !== rankBefore){
         const order=["E","D","C","B","A","S"];
         if(order.indexOf(rankAfter) > order.indexOf(rankBefore)){
