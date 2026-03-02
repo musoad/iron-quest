@@ -66,6 +66,7 @@
       const before = await window.IronDB.getAllEntries();
       const totalBefore = before.reduce((s,e)=>s+Number(e.xp||0),0);
       const lvlBefore = window.IronQuestProgression.levelFromTotalXp(totalBefore).lvl;
+      const rankBefore = window.IronQuestHunterRank.compute(lvlBefore, totalBefore);
 
       const id = await orig(entry);
 
@@ -80,6 +81,7 @@
       const after = await window.IronDB.getAllEntries();
       const totalAfter = after.reduce((s,e)=>s+Number(e.xp||0),0);
       const lvlAfter = window.IronQuestProgression.levelFromTotalXp(totalAfter).lvl;
+      const rankAfter = window.IronQuestHunterRank.compute(lvlAfter, totalAfter);
 
       if(lvlAfter>lvlBefore){
         await addSystem(`Level up: ${lvlBefore} → ${lvlAfter}`);
@@ -89,6 +91,14 @@
           window.IronQuestLoot.addChests(1);
           await addSystem(`Milestone reward: +1 chest (Level ${lvlAfter})`);
           window.Toast?.toast("Milestone", "+1 Chest");
+        }
+      // Rank promotion ceremony
+      if(rankAfter !== rankBefore){
+        const order=["E","D","C","B","A","S"];
+        if(order.indexOf(rankAfter) > order.indexOf(rankBefore)){
+          await addSystem(`Rank promotion: ${rankBefore} → ${rankAfter}`);
+          window.IronQuestUIFX.showPromotion(`Congratulations, Hunter.\n\nRank promoted: ${rankBefore} → ${rankAfter}\n\nNew gates await.`);
+          window.Toast?.toast("RANK UP!", `${rankBefore} → ${rankAfter}`);
         }
       }
 
