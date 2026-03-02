@@ -1,16 +1,18 @@
 (() => {
   "use strict";
 
-  const KEY = "ironquest_loot_v6";
+  const KEY = "ironquest_loot_v5";
 
-  // Includes equipment-relevant kinds
   const DROP_TABLE = [
-    { id:"t_shadow",  name:"Title: Shadow Trainee", kind:"title", chance:0.16 },
-    { id:"t_gate",    name:"Title: Gate Breaker",   kind:"title", chance:0.10 },
-    { id:"b_emerald", name:"Badge: Emerald Rune",   kind:"badge", chance:0.12 },
-    { id:"b_gold",    name:"Badge: Golden Crest",   kind:"badge", chance:0.06 },
-    { id:"r_relic",   name:"Relic: XP Sigil",       kind:"relic", chance:0.08 },
-    { id:"a_abyss",   name:"Aura: Abyss Glow",      kind:"aura",  chance:0.06 },
+    { id:"t_shadow",  name:"Title: Shadow Trainee",  kind:"title",  chance:0.18 },
+    { id:"t_gate",    name:"Title: Gate Breaker",    kind:"title",  chance:0.12 },
+    { id:"b_green",   name:"Badge: Emerald Rune",    kind:"badge",  chance:0.16 },
+    { id:"b_gold",    name:"Badge: Golden Crest",    kind:"badge",  chance:0.08 },
+    { id:"skin_dark", name:"Theme: Abyss Night",     kind:"theme",  chance:0.06 },
+    { id:"a_shadow",  name:"Aura: Shadow Mist",      kind:"aura",  chance:0.08 },
+    { id:"r_emerald", name:"Relic: Emerald Core",    kind:"relic", chance:0.06, tags:["core","end"] },
+    { id:"r_crimson", name:"Relic: Crimson Sigil",   kind:"relic", chance:0.05, tags:["multi"] },
+    { id:"r_void",    name:"Relic: Void Circuit",    kind:"relic", chance:0.04, tags:["skill","uni"] },
   ];
 
   function load(){
@@ -30,10 +32,10 @@
     if ((st.chests||0) <= 0) return { ok:false, reason:"no_chest" };
     st.chests -= 1;
 
-    const totalChance = DROP_TABLE.reduce((s,x)=>s+x.chance,0);
-    const r = Math.random() * Math.max(1e-6, totalChance);
+    const r = Math.random();
     let acc = 0;
     let drop = null;
+
     for (const item of DROP_TABLE){
       acc += item.chance;
       if (r <= acc){ drop = item; break; }
@@ -46,17 +48,18 @@
     }
 
     if (!st.inv.find(x=>x.id===drop.id)){
-      st.inv.push({ id: drop.id, name: drop.name, kind: drop.kind, date: window.Utils.isoDate(new Date()) });
+      st.inv.push({ id: drop.id, name: drop.name, kind: drop.kind, tags: drop.tags||[], date: window.Utils.isoDate(new Date()) });
       st.lastDrop = drop.name;
-    } else {
-      st.lastDrop = "Duplicate → XP shard";
+      save(st);
+      return { ok:true, drop: drop.name };
     }
 
+    st.lastDrop = "Duplicate → XP shard";
     save(st);
-    return { ok:true, drop: st.lastDrop };
+    return { ok:true, drop:"Duplicate → XP shard" };
   }
 
   function getState(){ return load(); }
 
-  window.IronQuestLoot = { DROP_TABLE, getState, addChest, rollDrop };
+  window.IronQuestLoot = { getState, addChest, rollDrop };
 })();
