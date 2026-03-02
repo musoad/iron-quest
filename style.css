@@ -293,3 +293,59 @@ nav.bottom-nav button.active span{ color: rgba(255,255,255,.92); }
   opacity: .9;
 }
 .small{ font-size:12px; color: rgba(255,255,255,.70); }
+
+/* ===== Premium Depth Upgrade ===== */
+
+.card{
+  background:
+    linear-gradient(180deg, rgba(255,255,255,.05), rgba(255,255,255,.02));
+  backdrop-filter: blur(6px);
+}
+
+.card h2{
+  font-size: 20px;
+  letter-spacing: .5px;
+}
+
+.descBox{
+  margin-top: 14px;
+  padding: 16px;
+  border-radius: 20px;
+  border: 1px solid rgba(76,255,155,.25);
+  background:
+    linear-gradient(180deg, rgba(76,255,155,.05), rgba(76,255,155,.02));
+}
+
+.descTitle{
+  font-size: 14px;
+  text-transform: uppercase;
+  letter-spacing: 1px;
+  opacity: .8;
+}
+
+.descText{
+  font-size: 15px;
+  line-height: 1.6;
+  margin-top: 6px;
+}
+
+/* Subtle Neon Border on Active Cards */
+.card:hover{
+  border-color: rgba(76,255,155,.35);
+  transition: .2s ease;
+}
+
+/* XP Glow */
+.badge.ok{
+  box-shadow: 0 0 8px rgba(76,255,155,.4);
+}
+
+/* System Panel Look */
+.systemBox{
+  font-family: monospace;
+  border: 1px solid rgba(76,255,155,.35);
+  background: rgba(0,0,0,.4);
+  padding: 12px;
+  border-radius: 16px;
+  margin-top: 12px;
+}
