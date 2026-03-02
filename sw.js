@@ -1,4 +1,4 @@
-const SW_VERSION = "v5.2.1-solo";
+const SW_VERSION = "v6.0.0";
 const CACHE_NAME = `ironquest-${SW_VERSION}`;
 
 const ASSETS = [
@@ -10,6 +10,7 @@ const ASSETS = [
 
   "./js/utils.js",
   "./js/toast.js",
+  "./js/uiEffects.js",
   "./js/urls.js",
   "./js/db.js",
 
@@ -17,11 +18,14 @@ const ASSETS = [
   "./js/xpSystem.js",
   "./js/progression.js",
   "./js/skilltree.js",
+  "./js/classes.js",
+  "./js/equipment.js",
   "./js/attributes.js",
-  "./js/rpg.js",
   "./js/coach.js",
   "./js/loot.js",
-  "./js/session.js",
+  "./js/rpg.js",
+  "./js/levelup.js",
+  "./js/gates.js",
 
   "./js/jogging.js",
   "./js/analytics.js",
