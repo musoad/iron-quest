@@ -8,70 +8,87 @@
     document.body.appendChild(d);
   }
 
-  function ensureOverlays(){
-    if(document.getElementById("systemOverlay")) return;
-
-    const system=document.createElement("div");
-    system.id="systemOverlay";
-    system.className="overlay";
-    system.innerHTML = `
+  function _mkOverlay(id, title){
+    const o=document.createElement("div");
+    o.id=id;
+    o.className="overlay";
+    o.innerHTML = `
       <div class="overlayDim"></div>
       <div class="overlayCard">
         <div class="systemBox">
-          <div class="sysTitle">[ SYSTEM ]</div>
-          <div class="sysBody" id="sysBody">—</div>
+          <div class="sysHdr">[ SYSTEM ]</div>
+          <div class="sysTitle">${title}</div>
+          <div class="sysBody" id="${id}_body"></div>
         </div>
         <div class="btnRow" style="margin-top:12px;">
-          <button class="primary" id="sysOk">OK</button>
+          <button class="primary" id="${id}_ok">OK</button>
         </div>
       </div>
     `;
-    document.body.appendChild(system);
-
-    const level=document.createElement("div");
-    level.id="levelOverlay";
-    level.className="overlay";
-    level.innerHTML = `
-      <div class="overlayDim"></div>
-      <div class="overlayCard" style="border-color: rgba(255,212,106,.30);">
-        <div class="systemBox" style="border-color: rgba(255,212,106,.35);">
-          <div class="sysTitle" style="color: rgba(255,212,106,.92);">LEVEL UP</div>
-          <div class="sysBody" id="lvlBody">—</div>
-        </div>
-        <div class="btnRow" style="margin-top:12px;">
-          <button class="primary" id="lvlOk">CONTINUE</button>
-        </div>
-      </div>
-    `;
-    document.body.appendChild(level);
-
-    system.querySelector("#sysOk").onclick=()=>hideSystem();
-    system.querySelector(".overlayDim").onclick=()=>hideSystem();
-    level.querySelector("#lvlOk").onclick=()=>hideLevelUp();
-    level.querySelector(".overlayDim").onclick=()=>hideLevelUp();
+    document.body.appendChild(o);
+    o.querySelector(".overlayDim").onclick=()=>hide(id);
+    o.querySelector(`#${id}_ok`).onclick=()=>hide(id);
+    return o;
   }
 
-  function showSystem(message){
+  function ensureOverlays(){
+    ensureParticles();
+    if(!document.getElementById("systemOverlay")){
+      const o=_mkOverlay("systemOverlay","Message");
+      o.querySelector(".sysTitle").textContent="System";
+    }
+    if(!document.getElementById("levelOverlay")){
+      const o=_mkOverlay("levelOverlay","LEVEL UP");
+      o.querySelector(".sysTitle").textContent="LEVEL UP";
+    }
+    if(!document.getElementById("promoOverlay")){
+      const o=_mkOverlay("promoOverlay","RANK PROMOTION");
+      o.querySelector(".sysTitle").textContent="RANK PROMOTION";
+    }
+    if(!document.getElementById("finishOverlay")){
+      const o=_mkOverlay("finishOverlay","FINISH");
+      o.querySelector(".sysTitle").textContent="FINISH";
+    }
+  }
+
+  function show(id, message){
     ensureOverlays();
-    const o=document.getElementById("systemOverlay");
-    o.querySelector("#sysBody").textContent = message;
+    const o=document.getElementById(id);
+    if(!o) return;
+    const body=o.querySelector(`#${id}_body`);
+    if(body) body.textContent = message;
     o.classList.add("show");
   }
-  function hideSystem(){
-    const o=document.getElementById("systemOverlay");
+  function hide(id){
+    const o=document.getElementById(id);
     if(o) o.classList.remove("show");
   }
 
-  function showLevelUp(message){
-    ensureOverlays();
-    const o=document.getElementById("levelOverlay");
-    o.querySelector("#lvlBody").textContent = message;
-    o.classList.add("show");
-  }
-  function hideLevelUp(){
-    const o=document.getElementById("levelOverlay");
-    if(o) o.classList.remove("show");
+  function showSystem(message){ show("systemOverlay", message); }
+  function showLevelUp(message){ show("levelOverlay", message); }
+  function showPromotion(message){ show("promoOverlay", message); }
+  function showFinish(message){ show("finishOverlay", message); }
+
+  // lightweight count-up helper for small numbers
+  function countUp(el, from, to, ms=650){
+    if(!el) return;
+    const start=performance.now();
+    const f=Number(from||0), t=Number(to||0);
+    function step(now){
+      const p=Math.min(1,(now-start)/ms);
+      const v=Math.round(f+(t-f)*p);
+      el.textContent=String(v);
+      if(p<1) requestAnimationFrame(step);
+    }
+    requestAnimationFrame(step);
   }
 
-  window.IronQuestUIFX = { ensureParticles, showSystem, showLevelUp };
+  window.IronQuestUIFX = {
+    ensureParticles,
+    showSystem,
+    showLevelUp,
+    showPromotion,
+    showFinish,
+    countUp
+  };
 })();
