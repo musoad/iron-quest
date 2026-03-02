@@ -63,9 +63,8 @@
     const imbalance = [];
     if(core < push*0.18) imbalance.push("Core wirkt niedrig. 1–2 Core-Einheiten ergänzen.");
     if(end < push*0.12) imbalance.push("Ausdauer/Conditioning niedrig. 1 kurze End-Session einbauen.");
-    if(days.size>=5 and weekXp>12000):
-        pass
-    heavy = (weekXp>=12000) || (days.size>=6);
+    // Rough fatigue heuristic: very high weekly XP or too many training days.
+    const heavy = (weekXp>=12000) || (days.size>=6);
     const fatigue = heavy ? "Fatigue hoch. Nächste Woche 20–30% weniger Volumen (Deload)." : "Recovery ok.";
 
     return { week, weekXp, days: days.size, threeStar, types, imbalance, fatigue };
