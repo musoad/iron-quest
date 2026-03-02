@@ -3,7 +3,7 @@
 <head>
   <meta charset="UTF-8" />
   <meta name="viewport" content="width=device-width,initial-scale=1,viewport-fit=cover" />
-  <title>IRON QUEST — Solo Levelling Mode</title>
+  <title>IRON QUEST v6 — Solo Ascension</title>
 
   <link rel="stylesheet" href="style.css" />
   <link rel="manifest" href="manifest.json" />
@@ -20,6 +20,7 @@
   <main>
     <section id="dashboard" class="tab active"></section>
     <section id="log" class="tab"></section>
+    <section id="gates" class="tab"></section>
     <section id="jogging" class="tab"></section>
     <section id="skills" class="tab"></section>
     <section id="analytics" class="tab"></section>
@@ -32,11 +33,12 @@
   <nav class="bottom-nav">
     <button data-tab="dashboard" aria-label="Dashboard">🏠<span>Home</span></button>
     <button data-tab="log" aria-label="Log">📒<span>Log</span></button>
+    <button data-tab="gates" aria-label="Gates">🌀<span>Gates</span></button>
     <button data-tab="jogging" aria-label="Joggen">🏃<span>Run</span></button>
     <button data-tab="skills" aria-label="Skills">🧬<span>Skills</span></button>
     <button data-tab="analytics" aria-label="Stats">📊<span>Stats</span></button>
     <button data-tab="health" aria-label="Health">❤️<span>Health</span></button>
-    <button data-tab="boss" aria-label="Dungeon">👑<span>Boss</span></button>
+    <button data-tab="boss" aria-label="Boss">👑<span>Boss</span></button>
     <button data-tab="challenge" aria-label="Quests">🗺️<span>Quests</span></button>
     <button data-tab="backup" aria-label="Backup">💾<span>Backup</span></button>
   </nav>
@@ -44,6 +46,7 @@
   <!-- Order matters -->
   <script src="js/utils.js"></script>
   <script src="js/toast.js"></script>
+  <script src="js/uiEffects.js"></script>
   <script src="js/urls.js"></script>
   <script src="js/db.js"></script>
 
@@ -51,11 +54,14 @@
   <script src="js/xpSystem.js"></script>
   <script src="js/progression.js"></script>
   <script src="js/skilltree.js"></script>
+  <script src="js/classes.js"></script>
+  <script src="js/equipment.js"></script>
   <script src="js/attributes.js"></script>
-  <script src="js/rpg.js"></script>
   <script src="js/coach.js"></script>
   <script src="js/loot.js"></script>
-  <script src="js/session.js"></script>
+  <script src="js/rpg.js"></script>
+  <script src="js/levelup.js"></script>
+  <script src="js/gates.js"></script>
 
   <script src="js/jogging.js"></script>
   <script src="js/analytics.js"></script>
