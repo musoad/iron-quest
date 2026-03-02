@@ -1,45 +1,21 @@
 (() => {
   "use strict";
-
-  const KEY = "ironquest_class_v6";
-
-  const CLASSES = [
-    { id:"none", name:"Unassigned", desc:"No specialization bonus." },
-    { id:"berserker", name:"Berserker", desc:"+6% MULTI (Mehrgelenkig) XP.", bonus:{ Mehrgelenkig: 1.06 } },
-    { id:"assassin", name:"Assassin", desc:"+8% UNI (Unilateral) XP.", bonus:{ Unilateral: 1.08 } },
-    { id:"guardian", name:"Guardian", desc:"+6% CORE XP and +2% END XP.", bonus:{ Core: 1.06, Conditioning:1.02, NEAT:1.02, Joggen:1.02 } },
-    { id:"ranger", name:"Ranger", desc:"+8% Jogging XP and +3% END XP.", bonus:{ Joggen:1.08, Conditioning:1.03, NEAT:1.03 } },
-    { id:"artificer", name:"Artificer", desc:"+6% SKILL (Komplexe) XP.", bonus:{ Komplexe:1.06 } },
+  const KEY="ironquest_class_v8";
+  const CLASSES=[
+    { id:"none", name:"Unassigned", desc:"Wähle ab Level 10 eine Klasse." , bonus:{} },
+    { id:"berserker", name:"Berserker", desc:"+6% Mehrgelenkig XP", bonus:{ Mehrgelenkig:1.06 } },
+    { id:"assassin", name:"Assassin", desc:"+8% Unilateral XP", bonus:{ Unilateral:1.08 } },
+    { id:"guardian", name:"Guardian", desc:"+8% Core XP", bonus:{ Core:1.08 } },
+    { id:"ranger", name:"Ranger", desc:"+8% Conditioning/NEAT XP", bonus:{ Conditioning:1.08, NEAT:1.08 } },
+    { id:"monarch", name:"Monarch", desc:"+4% global XP", bonus:{ "*":1.04 } },
   ];
-
-  function load(){
-    try { return JSON.parse(localStorage.getItem(KEY)) || { id:"none" }; }
-    catch { return { id:"none" }; }
-  }
-  function save(st){ localStorage.setItem(KEY, JSON.stringify(st)); }
-
-  function get(){
-    const st = load();
-    const c = CLASSES.find(x=>x.id===st.id) || CLASSES[0];
-    return c;
-  }
-
-  function set(id){
-    const c = CLASSES.find(x=>x.id===id);
-    if (!c) return false;
-    save({ id:c.id });
-    return true;
-  }
-
+  function get(){ return localStorage.getItem(KEY) || "none"; }
+  function set(id){ localStorage.setItem(KEY, id); }
+  function meta(id){ return CLASSES.find(c=>c.id===id) || CLASSES[0]; }
   function multiplierForType(type){
-    const c = get();
-    const b = c.bonus || {};
-    return Number(b[type] || 1);
+    const c=meta(get());
+    const b=c.bonus||{};
+    return (b[type]||b["*"]||1);
   }
-
-  function isUnlocked(level){
-    return Number(level||0) >= 10;
-  }
-
-  window.IronQuestClass = { CLASSES, get, set, multiplierForType, isUnlocked };
+  window.IronQuestClasses={ CLASSES, get, set, meta, multiplierForType };
 })();
