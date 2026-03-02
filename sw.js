@@ -1,4 +1,4 @@
-const SW_VERSION="v9.0.6-unifiedfix";
+const SW_VERSION="v9.0.7-unifiedfix";
 const CACHE_NAME=`ironquest-${SW_VERSION}`;
 const ASSETS=[
   "./",
