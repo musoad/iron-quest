@@ -1,14 +1,14 @@
 (() => {
   "use strict";
-  const KEY="ironquest_boss_state_v5";
+  const KEY="ironquest_boss_state_v6";
 
   const BOSSES = [
-    { week:2,  name:"Foundation Beast", xp:650,  rule:"Leg discipline", reward:"Chest + Title chance" },
-    { week:4,  name:"Asymmetry Lord",   xp:800,  rule:"Unilateral control", reward:"Chest + Title chance" },
-    { week:6,  name:"Core Guardian",    xp:900,  rule:"Core endurance", reward:"Chest + Title chance" },
-    { week:8,  name:"Abyss Reaper",     xp:1100, rule:"Conditioning week", reward:"Chest + Title chance" },
-    { week:10, name:"Iron Champion",    xp:1400, rule:"Full Body mastery", reward:"Chest + Title chance" },
-    { week:12, name:"MONARCH",          xp:2400, rule:"Final trial", reward:"Chest + Title chance" },
+    { week:2,  name:"Foundation Beast", xp:650,  rule:"Leg discipline", reward:"Chest +1" },
+    { week:4,  name:"Asymmetry Lord",   xp:800,  rule:"Unilateral mastery", reward:"Chest +1" },
+    { week:6,  name:"Core Guardian",    xp:900,  rule:"Core week", reward:"Chest +1" },
+    { week:8,  name:"Abyss Reaper",     xp:1100, rule:"Endurance week", reward:"Chest +1" },
+    { week:10, name:"Iron Champion",    xp:1400, rule:"Full Body", reward:"Chest +1" },
+    { week:12, name:"MONARCH",          xp:2400, rule:"Final trial", reward:"Chest +2" },
   ];
 
   function load(){ try{ return JSON.parse(localStorage.getItem(KEY))||{}; }catch{ return {}; } }
@@ -24,6 +24,8 @@
       detail:`${b.rule} • Reward: ${b.reward}`,
       xp:b.xp
     });
+    const chest = b.reward.includes("+2") ? 2 : 1;
+    window.IronQuestLoot?.addChest?.(chest);
   }
 
   async function renderBoss(el){
@@ -32,8 +34,8 @@
 
     el.innerHTML=`
       <div class="card">
-        <h2>Dungeon Boss</h2>
-        <p class="hint">Boss ist nur in seiner Woche clearbar. Clear gibt XP + 2 Chests.</p>
+        <h2>Boss</h2>
+        <p class="hint">Boss ist nur in seiner Woche clearbar. Clear gibt XP + Chest.</p>
         <div class="pill"><b>Aktuelle Woche:</b> W${curWeek}</div>
       </div>
 
@@ -56,7 +58,7 @@
         <div style="min-width:0;">
           <div class="bossTitle">W${b.week} — ${b.name}</div>
           <div class="hint">${b.rule}</div>
-          <div class="hint">Reward: 2 Chests • <b>+${b.xp} XP</b></div>
+          <div class="hint">Reward: ${b.reward} • <b>+${b.xp} XP</b></div>
           ${cleared?`<div class="hint">✅ Cleared: ${state[b.week].date}</div>`:""}
           ${!unlocked?`<div class="hint">🔒 Locked — nur in Woche ${b.week}</div>`:`<div class="hint">✅ Diese Woche aktiv</div>`}
         </div>
@@ -76,11 +78,12 @@
         const cur=window.IronQuestProgression.getWeekNumber();
         if(cur!==w) return window.Toast?.toast("Locked", `Boss nur in W${w}`);
         await awardBossXP(b);
-        window.IronQuestLoot?.addChest?.(2);
         const st=load();
         st[w]={cleared:true, date: window.Utils.isoDate(new Date())};
         save(st);
-        window.Toast?.toast("Boss cleared!", `${b.name} (+${b.xp} XP, +2 Chests)`);
+        window.UIEffects?.systemMessage([`Boss cleared: ${b.name}`, `+${b.xp} XP`]);
+        window.Toast?.toast("Boss cleared!", `${b.name} (+${b.xp} XP)`);
+        await window.IronQuestLevelUp.checkLevelUp();
         await renderBoss(el);
       };
     });
