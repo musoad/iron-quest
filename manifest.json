@@ -1,9 +1,9 @@
 {
-"name":"Iron Quest v4 PRO",
-"short_name":"IronQuest",
-"start_url":"./",
-"display":"standalone",
-"background_color":"#0f0f0f",
-"theme_color":"#0f0f0f",
-"icons":[]
+  "name": "IRON QUEST",
+  "short_name": "IRON QUEST",
+  "start_url": "./",
+  "display": "standalone",
+  "background_color": "#0b0b0c",
+  "theme_color": "#0b0b0c",
+  "icons": []
 }
