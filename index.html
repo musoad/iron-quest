@@ -1,35 +1,21 @@
 <!DOCTYPE html>
 <html lang="de">
 <head>
-  <meta charset="UTF-8">
-  <meta name="viewport" content="width=device-width, initial-scale=1.0">
-  <title>IRON QUEST v5 PRO (Stable)</title>
+  <meta charset="UTF-8" />
+  <meta name="viewport" content="width=device-width,initial-scale=1,viewport-fit=cover" />
+  <title>IRON QUEST — Solo Levelling Mode</title>
 
-  <link rel="manifest" href="manifest.json">
-  <link rel="stylesheet" href="style.css">
-
-  <meta name="theme-color" content="#0f0f0f">
-  <meta name="apple-mobile-web-app-capable" content="yes">
-  <meta name="apple-mobile-web-app-status-bar-style" content="black-translucent">
+  <link rel="stylesheet" href="style.css" />
+  <link rel="manifest" href="manifest.json" />
+  <meta name="theme-color" content="#0b0b0c" />
+  <meta name="apple-mobile-web-app-capable" content="yes" />
+  <meta name="apple-mobile-web-app-status-bar-style" content="black-translucent" />
 </head>
-
 <body>
   <header>
-    <h1>⚔ IRON QUEST v5 PRO</h1>
-    <div id="playerInfo"></div>
+    <h1>⚔ IRON QUEST</h1>
+    <div class="statusLine" id="statusLine">Booting…</div>
   </header>
-
-<nav class="bottom-nav">
-  <button data-tab="dashboard" aria-label="Dashboard">🏠<span>Home</span></button>
-  <button data-tab="log" aria-label="Log">📒<span>Log</span></button>
-  <button data-tab="jogging" aria-label="Joggen">🏃<span>Run</span></button>
-  <button data-tab="skills" aria-label="Skilltree">🧬<span>Skills</span></button>
-  <button data-tab="analytics" aria-label="Analytics">📊<span>Stats</span></button>
-  <button data-tab="health" aria-label="Health">❤️<span>Health</span></button>
-  <button data-tab="boss" aria-label="Boss">👑<span>Boss</span></button>
-  <button data-tab="challenge" aria-label="Challenge">🔥<span>Chal</span></button>
-  <button data-tab="backup" aria-label="Backup">💾<span>Backup</span></button>
-</nav>
 
   <main>
     <section id="dashboard" class="tab active"></section>
@@ -43,16 +29,33 @@
     <section id="backup" class="tab"></section>
   </main>
 
-  <!-- Reihenfolge ist wichtig -->
+  <nav class="bottom-nav">
+    <button data-tab="dashboard" aria-label="Dashboard">🏠<span>Home</span></button>
+    <button data-tab="log" aria-label="Log">📒<span>Log</span></button>
+    <button data-tab="jogging" aria-label="Joggen">🏃<span>Run</span></button>
+    <button data-tab="skills" aria-label="Skills">🧬<span>Skills</span></button>
+    <button data-tab="analytics" aria-label="Stats">📊<span>Stats</span></button>
+    <button data-tab="health" aria-label="Health">❤️<span>Health</span></button>
+    <button data-tab="boss" aria-label="Dungeon">👑<span>Boss</span></button>
+    <button data-tab="challenge" aria-label="Quests">🗺️<span>Quests</span></button>
+    <button data-tab="backup" aria-label="Backup">💾<span>Backup</span></button>
+  </nav>
+
+  <!-- Order matters -->
   <script src="js/utils.js"></script>
+  <script src="js/toast.js"></script>
   <script src="js/urls.js"></script>
   <script src="js/db.js"></script>
 
   <script src="js/exercises.js"></script>
   <script src="js/xpSystem.js"></script>
   <script src="js/progression.js"></script>
-  <script src="js/attributes.js"></script>
   <script src="js/skilltree.js"></script>
+  <script src="js/attributes.js"></script>
+  <script src="js/rpg.js"></script>
+  <script src="js/coach.js"></script>
+  <script src="js/loot.js"></script>
+  <script src="js/session.js"></script>
 
   <script src="js/jogging.js"></script>
   <script src="js/analytics.js"></script>
@@ -61,7 +64,6 @@
   <script src="js/challenges.js"></script>
   <script src="js/backup.js"></script>
 
-  <!-- NUR EINMAL -->
   <script src="js/app.js"></script>
 </body>
 </html>
