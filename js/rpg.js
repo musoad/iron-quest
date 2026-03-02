@@ -1,7 +1,7 @@
 (() => {
   "use strict";
 
-  const KEY="ironquest_rpg_v6";
+  const KEY="ironquest_rpg_v5";
 
   const RANKS = [
     { min:1,  name:"E-Rank Hunter" },
@@ -12,14 +12,6 @@
     { min:60, name:"S-Rank Hunter" },
   ];
 
-  const STORY = [
-    { id:"s1", unlock:{ level:1 },  title:"The System", text:"[SYSTEM]\nA strange window appears…\n\nYou feel a pull towards training.\nYour path begins." },
-    { id:"s2", unlock:{ level:8 },  title:"First Gate", text:"A low-rank Gate opens.\n\nYou realize: consistency is power." },
-    { id:"s3", unlock:{ level:15 }, title:"Shadow Steps", text:"Your body adapts.\n\nThe shadows move when you move." },
-    { id:"s4", unlock:{ level:25 }, title:"Hunter’s Instinct", text:"You sense weakness.\n\nYou correct form without thinking." },
-    { id:"s5", unlock:{ level:40 }, title:"Awakening", text:"Your stats climb slower now…\n\nBut your will is stronger than numbers." },
-  ];
-
   const ACHIEVEMENTS = [
     { id:"a1", title:"Gate Opener",      desc:"10 Trainings-Einträge", goal:10 },
     { id:"a2", title:"Shadow Grinder",   desc:"50 Trainings-Einträge", goal:50 },
@@ -28,16 +20,24 @@
     { id:"a5", title:"30-Day Streak",    desc:"Streak 30 Tage", goal:30, type:"streak" },
   ];
 
+  // Simple story questline (Chapter progression)
+  const STORY = [
+    { id:"s1", title:"Chapter 1 — The Weakest",  desc:"Log 5 Trainingseinträge.", check:(s,c)=>c>=5, reward:300 },
+    { id:"s2", title:"Chapter 2 — First Gate",   desc:"Erreiche 5.000 Total XP.",  check:(s,c)=>s.totalXp>=5000, reward:600 },
+    { id:"s3", title:"Chapter 3 — Shadow Form",  desc:"Streak 10 Tage.",          check:(s,c)=>s.streak>=10, reward:800 },
+    { id:"s4", title:"Chapter 4 — Monarch Path", desc:"Erreiche Level 20.",       check:(s,c)=>s.level>=20, reward:1200 },
+  ];
+
   const DAILY_POOL = [
-    { id:"d1", title:"Warm-Up Ritual",   desc:"1 Core-Übung loggen", check:(s)=>s.todayCore>=1, reward:140 },
-    { id:"d2", title:"Iron Push",        desc:"1 Mehrgelenkig loggen", check:(s)=>s.todayMulti>=1, reward:160 },
-    { id:"d3", title:"Shadow Pull",      desc:"1 Pull-Entry loggen", check:(s)=>s.todayAny>=1, reward:120 },
-    { id:"d4", title:"Endurance Spark",  desc:"Conditioning/NEAT/Run loggen", check:(s)=>s.todayEnd>=1, reward:160 },
+    { id:"d1", title:"Warm-Up Ritual",   desc:"1 Core-Übung loggen", check:(s)=>s.todayCore>=1, reward:120 },
+    { id:"d2", title:"Iron Push",        desc:"1 Mehrgelenkig loggen", check:(s)=>s.todayMulti>=1, reward:150 },
+    { id:"d3", title:"Shadow Pull",      desc:"Irgendein Eintrag heute", check:(s)=>s.todayAny>=1, reward:100 },
+    { id:"d4", title:"Endurance Spark",  desc:"Conditioning/NEAT/Joggen loggen", check:(s)=>s.todayEnd>=1, reward:140 },
   ];
 
   const WEEKLY_POOL = [
-    { id:"w1", title:"Dungeon Week", desc:"In dieser Woche 5 Trainingstage", check:(s)=>s.weekDays>=5, reward:700, chest:1 },
-    { id:"w2", title:"Triple Star",  desc:"2 Tage ⭐⭐⭐ diese Woche", check:(s)=>s.weekThreeStar>=2, reward:900, chest:1 },
+    { id:"w1", title:"Dungeon Week", desc:"Diese Woche 5 Trainingstage", check:(s)=>s.weekDays>=5, reward:600 },
+    { id:"w2", title:"Triple Star",  desc:"2 Tage ⭐⭐⭐ diese Woche", check:(s)=>s.weekThreeStar>=2, reward:800 },
   ];
 
   function load(){ try{ return JSON.parse(localStorage.getItem(KEY))||{}; }catch{ return {}; } }
@@ -62,7 +62,7 @@
       const pick = WEEKLY_POOL[Math.floor(Math.random()*WEEKLY_POOL.length)];
       state.weekly = { week, id: pick.id, claimed:false };
     }
-    if (!state.story) state.story = { unlocked:{} };
+    if (!state.story) state.story = { idx:0, claimed:{} };
     if (!state.ach) state.ach = {};
     return state;
   }
@@ -96,9 +96,11 @@
     }
 
     const streak = window.IronQuestXP.streakFromEntries(entries);
+    const level = window.IronQuestProgression.levelFromTotalXp(totalXp).lvl;
 
     return {
       totalXp,
+      level,
       streak,
       week,
       weekDays: weekDaySet.size,
@@ -110,13 +112,13 @@
     };
   }
 
-  async function awardXP(title, xp, type="Quest"){
+  async function awardQuestXP(title, xp){
     const date = window.Utils.isoDate(new Date());
     const week = window.IronQuestProgression.getWeekNumberFor(date);
     await window.IronDB.addEntry({
       date, week,
-      type,
-      exercise:`${type}: ${title}`,
+      type:"Quest",
+      exercise:`Quest: ${title}`,
       detail:`Reward claimed`,
       xp: Math.round(xp||0)
     });
@@ -135,32 +137,34 @@
       if (ok){
         state.ach[a.id] = { done:true, date: window.Utils.isoDate(new Date()) };
         window.Toast?.toast("Achievement unlocked!", a.title);
-        window.UIEffects?.systemMessage([`Achievement unlocked:`, a.title]);
-        // bonus chest on big milestones
-        if (a.id==="a3") window.IronQuestLoot?.addChest?.(1);
       }
     }
   }
 
-  function unlockStory(state, level){
-    for (const s of STORY){
-      const need = s.unlock?.level || 1;
-      if (Number(level||1) >= need){
-        if (!state.story.unlocked[s.id]){
-          state.story.unlocked[s.id] = window.Utils.isoDate(new Date());
-          window.UIEffects?.systemMessage([`Story unlocked:`, s.title]);
-        }
-      }
-    }
+  function storyStatus(state, summary, entriesCount){
+    const idx = Math.max(0, Math.min(STORY.length-1, Number(state.story?.idx||0)));
+    const cur = STORY[idx];
+    const done = cur ? !!cur.check(summary, entriesCount) : true;
+    const claimed = !!state.story?.claimed?.[cur?.id||""];
+    return { idx, cur, done, claimed, isLast: idx>=STORY.length-1 };
   }
 
-  async function onProgressChanged(level){
+  async function claimStory(){
     const state = ensureState(load());
     const entries = await window.IronDB.getAllEntries();
     const summary = summarize(entries);
-    updateAchievements(state, summary, entries.length);
-    unlockStory(state, level);
+    const ss = storyStatus(state, summary, entries.length);
+    if (!ss.cur) return false;
+    if (!ss.done || ss.claimed) return false;
+
+    state.story.claimed[ss.cur.id] = true;
+    await awardQuestXP(ss.cur.title, ss.cur.reward);
+    window.IronQuestLoot?.addChest?.(1);
+    window.Toast?.toast("Story cleared!", `${ss.cur.title} (+${ss.cur.reward} XP, +1 Chest)`);
+
+    if (!ss.isLast) state.story.idx = ss.idx + 1;
     save(state);
+    return true;
   }
 
   async function claimDaily(){
@@ -169,9 +173,11 @@
     const s = summarize(entries);
     const def = DAILY_POOL.find(x=>x.id===state.daily.id);
     if (!def || state.daily.claimed || !def.check(s)) return false;
-    state.daily.claimed = true; save(state);
-    await awardXP(def.title, def.reward, "Quest");
-    window.Toast?.toast("Daily Quest claimed", `+${def.reward} XP`);
+    state.daily.claimed = true;
+    save(state);
+    await awardQuestXP(def.title, def.reward);
+    window.IronQuestLoot?.addChest?.(1);
+    window.Toast?.toast("Daily claimed", `+${def.reward} XP, +1 Chest`);
     return true;
   }
 
@@ -181,27 +187,28 @@
     const s = summarize(entries);
     const def = WEEKLY_POOL.find(x=>x.id===state.weekly.id);
     if (!def || state.weekly.claimed || !def.check(s)) return false;
-    state.weekly.claimed = true; save(state);
-    await awardXP(def.title, def.reward, "Quest");
-    if (def.chest) window.IronQuestLoot?.addChest?.(def.chest);
-    window.Toast?.toast("Weekly Quest claimed", `+${def.reward} XP`);
+    state.weekly.claimed = true;
+    save(state);
+    await awardQuestXP(def.title, def.reward);
+    window.IronQuestLoot?.addChest?.(2);
+    window.Toast?.toast("Weekly claimed", `+${def.reward} XP, +2 Chests`);
     return true;
   }
 
-  function getState(){
-    return ensureState(load());
+  async function onNewEntry(){
+    const state = ensureState(load());
+    const entries = await window.IronDB.getAllEntries();
+    const summary = summarize(entries);
+    updateAchievements(state, summary, entries.length);
+    save(state);
   }
 
-  function getStoryUnlocked(){
-    const st = ensureState(load());
-    return STORY.filter(s=>st.story?.unlocked?.[s.id]);
-  }
+  function getState(){ return ensureState(load()); }
 
   window.IronQuestRPG = {
-    RANKS, STORY, ACHIEVEMENTS, DAILY_POOL, WEEKLY_POOL,
-    getRankName, getState, summarize,
-    claimDaily, claimWeekly,
-    onProgressChanged,
-    getStoryUnlocked
+    RANKS, ACHIEVEMENTS, STORY, DAILY_POOL, WEEKLY_POOL,
+    getRankName, getState, summarize, storyStatus,
+    claimDaily, claimWeekly, claimStory,
+    onNewEntry
   };
 })();
