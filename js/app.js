@@ -1,7 +1,10 @@
 (() => {
   "use strict";
 
+  let currentTab = "home";
+
   function setActiveTab(id){
+    currentTab = id;
     document.querySelectorAll(".bottom-nav button").forEach(b=>b.classList.toggle("active", b.dataset.tab===id));
     document.querySelectorAll("main .tab").forEach(s=>s.classList.toggle("active", s.id===id));
   }
@@ -155,6 +158,6 @@
     setStatus("OK • Hunter Ascended");
   }
 
-  window.IronQuestApp={ navigate };
+  window.IronQuestApp={ navigate, renderActive: ()=>renderRoute(currentTab) };
   init();
 })();
