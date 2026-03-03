@@ -1,4 +1,4 @@
-const SW_VERSION="v9.4.11-hotfix-xp";
+const SW_VERSION="v9.4.11-visualpack";
 const CACHE_NAME=`ironquest-${SW_VERSION}`;
 const ASSETS=[
   "./",
@@ -39,7 +39,9 @@ const ASSETS=[
   "./js/urls.js",
   "./js/utils.js",
   "./js/xpSystem.js"
-];
+
+  "js/profile.js",
+  "js/diagnostics.js",];
 
 self.addEventListener("install",(e)=>{
   self.skipWaiting();
