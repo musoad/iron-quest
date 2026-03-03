@@ -1,10 +1,10 @@
 (() => {
   "use strict";
 
-  let currentTab = "home";
+  let activeTabId = "home";
 
   function setActiveTab(id){
-    currentTab = id;
+    activeTabId = id;
     document.querySelectorAll(".bottom-nav button").forEach(b=>b.classList.toggle("active", b.dataset.tab===id));
     document.querySelectorAll("main .tab").forEach(s=>s.classList.toggle("active", s.id===id));
   }
@@ -56,11 +56,17 @@
     };
 
     try{
-      await renders[route](el);
+      const fn = renders[route];
+      if(typeof fn !== "function") throw new Error(`Renderer missing for tab: ${route}`);
+      await fn(el);
     }catch(e){
       console.error("Render error", route, e);
       el.innerHTML = `<div class="card"><h2>Error</h2><p class="hint">${String(e)}</p></div>`;
     }
+  }
+
+  async function renderActive(){
+    await renderRoute(activeTabId);
   }
 
   function hookEntryPipeline(){
@@ -111,7 +117,7 @@
     };
   }
 
-  function wireNav(){
+  async function wireNav(){
     document.querySelectorAll(".bottom-nav button").forEach(btn=>{
       btn.onclick=async()=>{
         const tab=btn.dataset.tab;
@@ -124,7 +130,7 @@
     const initial=(location.hash||"#home").replace("#","");
     const start = document.getElementById(initial) ? initial : "home";
     setActiveTab(start);
-    renderRoute(start);
+    await renderRoute(start);
   }
 
   function wireSystemLogButton(){
@@ -154,10 +160,21 @@
     // ensure default class stored
     if(!localStorage.getItem("ironquest_class_v8")) localStorage.setItem("ironquest_class_v8","none");
 
-    wireNav();
+    await wireNav();
     setStatus("OK • Hunter Ascended");
   }
 
-  window.IronQuestApp={ navigate, renderActive: ()=>renderRoute(currentTab) };
+  window.IronQuestApp={ navigate, renderActive };
+
+  // Global error surface (helps when iOS hides console)
+  window.addEventListener("error", (ev) => {
+    try{
+      setStatus(`Error: ${ev.message}`);
+      const el = document.getElementById(activeTabId) || document.getElementById("home");
+      if(el && !el.innerHTML.trim()){
+        el.innerHTML = `<div class="card"><h2>Error</h2><p class="hint">${String(ev.message||ev.error||"Unknown error")}</p></div>`;
+      }
+    }catch{}
+  });
   init();
 })();
