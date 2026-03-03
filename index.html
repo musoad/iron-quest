@@ -1,85 +1,98 @@
-<!DOCTYPE html>
-
+<!doctype html>
 <html lang="de">
 <head>
-<meta charset="utf-8"/>
-<meta content="width=device-width,initial-scale=1,viewport-fit=cover" name="viewport"/>
-<title>IRON QUEST — Hunter Ascended</title>
-<link href="style.css" rel="stylesheet"/>
-<link href="manifest.json" rel="manifest"/>
-<meta content="#0b0b0c" name="theme-color"/>
-<meta content="yes" name="apple-mobile-web-app-capable"/>
-<meta content="black-translucent" name="apple-mobile-web-app-status-bar-style"/>
+  <meta charset="utf-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover" />
+  <meta name="theme-color" content="#0b0b0c" />
+  <link rel="manifest" href="manifest.json" />
+  <link rel="stylesheet" href="style.css" />
+  <link rel="apple-touch-icon" href="icons/icon-192.png" />
+  <title>IRON QUEST — Hunter Ascended</title>
 </head>
+
 <body>
-<header class="topbar">
-<div class="brand">
-<div class="logo">⚔</div>
-<div>
-<div class="title">IRON QUEST</div>
-<div class="subtitle" id="statusLine">Booting…</div>
-</div>
-</div>
-<div class="topActions">
-<button class="iconBtn" id="btnSystemLog" title="System Log">⌁</button>
-</div>
-</header>
-<main>
-<section class="tab active" id="home"></section>
-<section class="tab" id="log"></section>
-<section class="tab" id="run"></section>
-<section class="tab" id="stats"></section>
-<section class="tab" id="quests"></section>
-<section class="tab" id="gates"></section>
-<section class="tab" id="boss"></section>
-<section class="tab" id="skills"></section>
-<section class="tab" id="review"></section>
-<section class="tab" id="health"></section>
-<section class="tab" id="backup"></section>
-</main>
-<nav class="bottom-nav">
-<button aria-label="Home" data-tab="home">🏠<span>Home</span></button>
-<button aria-label="Log" data-tab="log">📒<span>Log</span></button>
-<button aria-label="Run" data-tab="run">🏃<span>Run</span></button>
-<button aria-label="Stats" data-tab="stats">📊<span>Stats</span></button>
-<button aria-label="Quests" data-tab="quests">🗺️<span>Quests</span></button>
-<button aria-label="Gates" data-tab="gates">🌀<span>Gates</span></button>
-<button aria-label="Boss" data-tab="boss">👑<span>Boss</span></button>
-<button aria-label="Skills" data-tab="skills">🧬<span>Skills</span></button>
-<button aria-label="Review" data-tab="review">📊<span>Review</span></button>
-<button aria-label="Health" data-tab="health">❤️<span>Health</span></button>
-<button aria-label="Backup" data-tab="backup">💾<span>Backup</span></button>
-</nav>
-<!-- Core -->
+  <header class="topbar">
+    <div class="brand">
+      <div class="app-icon">⚔</div>
+      <div class="brand-text">
+        <div class="brand-title">IRON QUEST</div>
+        <div class="brand-sub" id="statusLine">Booting…</div>
+      </div>
+    </div>
 
+    <button class="icon-btn" id="btnSystemLog" title="System Log">⌁</button>
+  </header>
 
+  <main class="app">
+    <!-- Tabs -->
+    <section class="tab" id="home"></section>
+    <section class="tab" id="log"></section>
+    <section class="tab" id="run"></section>
+    <section class="tab" id="stats"></section>
+    <section class="tab" id="quests"></section>
+    <section class="tab" id="gates"></section>
+    <section class="tab" id="boss"></section>
+    <section class="tab" id="skills"></section>
+    <section class="tab" id="review"></section>
+    <section class="tab" id="health"></section>
+    <section class="tab" id="backup"></section>
+  </main>
 
+  <nav class="bottom-nav">
+    <button data-tab="home" class="active"><span class="i">🏠</span><span>Home</span></button>
+    <button data-tab="log"><span class="i">📒</span><span>Log</span></button>
+    <button data-tab="run"><span class="i">🏃</span><span>Run</span></button>
+    <button data-tab="stats"><span class="i">📊</span><span>Stats</span></button>
+    <button data-tab="quests"><span class="i">🗺️</span><span>Quests</span></button>
+    <button data-tab="gates"><span class="i">🌀</span><span>Gates</span></button>
+    <button data-tab="boss"><span class="i">👑</span><span>Boss</span></button>
+    <button data-tab="skills"><span class="i">🧬</span><span>Skills</span></button>
+    <button data-tab="review"><span class="i">📈</span><span>Review</span></button>
+    <button data-tab="health"><span class="i">❤️</span><span>Health</span></button>
+    <button data-tab="backup"><span class="i">💾</span><span>Backup</span></button>
+  </nav>
 
-<!-- Data + Systems -->
+  <!-- Core scripts (defer keeps order) -->
+  <script defer src="js/utils.js"></script>
+  <script defer src="js/uiEffects.js"></script>
+  <script defer src="js/diagnostics.js"></script>
+  <script defer src="js/toast.js"></script>
+  <script defer src="js/urls.js"></script>
 
+  <script defer src="js/db.js"></script>
+  <script defer src="js/exercises.js"></script>
+  <script defer src="js/plans.js"></script>
 
+  <script defer src="js/progression.js"></script>
+  <script defer src="js/profile.js"></script>
+  <script defer src="js/hunterRank.js"></script>
+  <script defer src="js/classes.js"></script>
+  <script defer src="js/periodization.js"></script>
+  <script defer src="js/skilltree_v2.js"></script>
+  <script defer src="js/xpSystem.js"></script>
 
+  <script defer src="js/loot.js"></script>
+  <script defer src="js/equipment.js"></script>
+  <script defer src="js/share.js"></script>
+  <script defer src="js/collections.js"></script>
 
+  <script defer src="js/attributes.js"></script>
+  <script defer src="js/coach_engine.js"></script>
+  <script defer src="js/session.js"></script>
+  <script defer src="js/rpg.js"></script>
 
+  <script defer src="js/home.js"></script>
+  <script defer src="js/skills.js"></script>
+  <script defer src="js/logFeature.js"></script>
+  <script defer src="js/jogging.js"></script>
+  <script defer src="js/analytics.js"></script>
+  <script defer src="js/challenges.js"></script>
+  <script defer src="js/gates.js"></script>
+  <script defer src="js/bossArena.js"></script>
+  <script defer src="js/review.js"></script>
+  <script defer src="js/health.js"></script>
+  <script defer src="js/backup.js"></script>
 
-
-
-
-
-<!-- Features -->
-
-
-
-
-
-
-
-
-<!-- App -->
-
-<script src="js/utils.js"></script><script src="js/uiEffects.js"></script>
-  <script src="js/diagnostics.js"></script><script src="js/toast.js"></script><script src="js/urls.js"></script><script src="js/db.js"></script><script src="js/exercises.js"></script>
-  <script src="js/plans.js"></script><script src="js/progression.js"></script>
-  <script src="js/profile.js"></script><script src="js/hunterRank.js"></script><script src="js/classes.js"></script>
-  <script src="js/periodization.js"></script><script src="js/skilltree_v2.js"></script><script src="js/xpSystem.js"></script><script src="js/loot.js"></script><script src="js/equipment.js"></script><script src="js/share.js"></script><script src="js/collections.js"></script><script src="js/attributes.js"></script><script src="js/coach_engine.js"></script><script src="js/session.js"></script><script src="js/rpg.js"></script><script src="js/home.js"></script><script src="js/skills.js"></script><script src="js/logFeature.js"></script><script src="js/jogging.js"></script><script src="js/analytics.js"></script><script src="js/challenges.js"></script><script src="js/gates.js"></script><script src="js/bossArena.js"></script><script src="js/review.js"></script><script src="js/health.js"></script><script src="js/backup.js"></script><script src="js/app.js"></script></body>
+  <script defer src="js/app.js"></script>
+</body>
 </html>
