@@ -30,6 +30,10 @@
     }
     return s;
   }
+  // Backward-compat: einige Module (z.B. Quests/Challenges) erwarten diesen Namen
+  function streakFromEntries(entries){
+    return streak(entries || []);
+  }
   function streakMult(s){ return 1 + Math.min(0.20, Number(s||0)*0.02); }
 
   function clamp(n,a,b){ return Math.max(a, Math.min(b,n)); }
@@ -70,5 +74,11 @@
     return Math.round(xp);
   }
 
-  window.IronQuestXP={ BASE_XP, streak, calcExerciseXP };
+  window.IronQuestXP={
+    BASE_XP,
+    streak,
+    streakFromEntries,
+    streakMult,
+    calcExerciseXP
+  };
 })();
