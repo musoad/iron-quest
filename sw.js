@@ -1,11 +1,9 @@
-const SW_VERSION="v9.4.11-visualpack";
+const SW_VERSION="v10.0.0-clean-master";
 const CACHE_NAME=`ironquest-${SW_VERSION}`;
 const ASSETS=[
   "./",
+  "./ChatGPT Image 3. Feb. 2026, 09_04_02.png",
   "./index.html",
-  "./style.css",
-  "./manifest.json",
-  "./sw.js",
   "./js/analytics.js",
   "./js/app.js",
   "./js/attributes.js",
@@ -13,11 +11,10 @@ const ASSETS=[
   "./js/bossArena.js",
   "./js/challenges.js",
   "./js/classes.js",
-  "./js/periodization.js",
   "./js/coach_engine.js",
-  "./js/db.js",
-  "./js/share.js",
   "./js/collections.js",
+  "./js/db.js",
+  "./js/diagnostics.js",
   "./js/equipment.js",
   "./js/exercises.js",
   "./js/gates.js",
@@ -28,60 +25,61 @@ const ASSETS=[
   "./js/levelup.js",
   "./js/logFeature.js",
   "./js/loot.js",
+  "./js/periodization.js",
+  "./js/plans.js",
+  "./js/profile.js",
   "./js/progression.js",
   "./js/review.js",
   "./js/rpg.js",
   "./js/session.js",
+  "./js/share.js",
   "./js/skills.js",
   "./js/skilltree_v2.js",
   "./js/toast.js",
   "./js/uiEffects.js",
   "./js/urls.js",
   "./js/utils.js",
-  "./js/xpSystem.js"
+  "./js/xpSystem.js",
+  "./manifest.json",
+  "./style.css",
+  "./sw.js"
+];
 
-  "js/profile.js",
-  "js/diagnostics.js",];
-
-self.addEventListener("install",(e)=>{
+self.addEventListener("install", (event) => {
+  event.waitUntil(
+    caches.open(CACHE_NAME).then((cache) => cache.addAll(ASSETS))
+  );
   self.skipWaiting();
-  e.waitUntil(caches.open(CACHE_NAME).then(c=>c.addAll(ASSETS)));
 });
-self.addEventListener("activate",(e)=>{
-  e.waitUntil((async()=>{
-    const keys=await caches.keys();
-    await Promise.all(keys.map(k=>k!==CACHE_NAME?caches.delete(k):null));
-    await self.clients.claim();
-  })());
-});
-self.addEventListener("message",(e)=>{
-  if(e.data && e.data.type==="SKIP_WAITING") self.skipWaiting();
-});
-self.addEventListener("fetch",(e)=>{
-  const req=e.request;
-  const url=new URL(req.url);
-  if(url.origin!==self.location.origin) return;
 
-  if(req.mode==="navigate"){
-    e.respondWith((async()=>{
-      try{
-        const fresh=await fetch(req);
-        const cache=await caches.open(CACHE_NAME);
-        cache.put("./index.html", fresh.clone());
-        return fresh;
-      }catch{
-        return (await caches.match("./index.html")) || new Response("Offline",{status:503});
-      }
-    })());
-    return;
-  }
+self.addEventListener("activate", (event) => {
+  event.waitUntil(
+    caches.keys().then(keys =>
+      Promise.all(keys.filter(k => k.startsWith("ironquest-") && k !== CACHE_NAME).map(k => caches.delete(k)))
+    )
+  );
+  self.clients.claim();
+});
 
-  e.respondWith((async()=>{
-    const cached=await caches.match(req);
-    if(cached) return cached;
-    const fresh=await fetch(req);
-    const cache=await caches.open(CACHE_NAME);
-    cache.put(req, fresh.clone());
-    return fresh;
-  })());
+self.addEventListener("fetch", (event) => {
+  const req = event.request;
+  // Only handle GET
+  if (req.method !== "GET") return;
+
+  event.respondWith(
+    caches.match(req).then((cached) => {
+      if (cached) return cached;
+      return fetch(req).then((res) => {
+        // Cache same-origin only
+        try{
+          const url = new URL(req.url);
+          if (url.origin === self.location.origin){
+            const copy = res.clone();
+            caches.open(CACHE_NAME).then(cache => cache.put(req, copy));
+          }
+        }catch{}
+        return res;
+      }).catch(() => cached);
+    })
+  );
 });
