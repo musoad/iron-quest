@@ -1,4 +1,4 @@
-const SW_VERSION="v9.4.10-hotfix-xp";
+const SW_VERSION="v9.4.11-hotfix-xp";
 const CACHE_NAME=`ironquest-${SW_VERSION}`;
 const ASSETS=[
   "./",
