@@ -1,85 +1,126 @@
-const SW_VERSION="v10.0.0-clean-master";
-const CACHE_NAME=`ironquest-${SW_VERSION}`;
-const ASSETS=[
-  "./",
-  "./ChatGPT Image 3. Feb. 2026, 09_04_02.png",
-  "./index.html",
-  "./js/analytics.js",
-  "./js/app.js",
-  "./js/attributes.js",
-  "./js/backup.js",
-  "./js/bossArena.js",
-  "./js/challenges.js",
-  "./js/classes.js",
-  "./js/coach_engine.js",
-  "./js/collections.js",
-  "./js/db.js",
-  "./js/diagnostics.js",
-  "./js/equipment.js",
-  "./js/exercises.js",
-  "./js/gates.js",
-  "./js/health.js",
-  "./js/home.js",
-  "./js/hunterRank.js",
-  "./js/jogging.js",
-  "./js/levelup.js",
-  "./js/logFeature.js",
-  "./js/loot.js",
-  "./js/periodization.js",
-  "./js/plans.js",
-  "./js/profile.js",
-  "./js/progression.js",
-  "./js/review.js",
-  "./js/rpg.js",
-  "./js/session.js",
-  "./js/share.js",
-  "./js/skills.js",
-  "./js/skilltree_v2.js",
-  "./js/toast.js",
-  "./js/uiEffects.js",
-  "./js/urls.js",
-  "./js/utils.js",
-  "./js/xpSystem.js",
-  "./manifest.json",
-  "./style.css",
-  "./sw.js"
-];
+(() => {
+  "use strict";
 
-self.addEventListener("install", (event) => {
-  event.waitUntil(
-    caches.open(CACHE_NAME).then((cache) => cache.addAll(ASSETS))
-  );
-  self.skipWaiting();
-});
+  function esc(s){
+    return String(s).replaceAll("&","&amp;").replaceAll("<","&lt;").replaceAll(">","&gt;");
+  }
 
-self.addEventListener("activate", (event) => {
-  event.waitUntil(
-    caches.keys().then(keys =>
-      Promise.all(keys.filter(k => k.startsWith("ironquest-") && k !== CACHE_NAME).map(k => caches.delete(k)))
-    )
-  );
-  self.clients.claim();
-});
+  function card(title, body){
+    return `<div class="card"><h2>${esc(title)}</h2>${body||""}</div>`;
+  }
 
-self.addEventListener("fetch", (event) => {
-  const req = event.request;
-  // Only handle GET
-  if (req.method !== "GET") return;
+  function fmtDate(d){
+    if(!d) return "";
+    // already yyyy-mm-dd
+    return d;
+  }
 
-  event.respondWith(
-    caches.match(req).then((cached) => {
-      if (cached) return cached;
-      return fetch(req).then((res) => {
-        // Cache same-origin only
-        try{
-          const url = new URL(req.url);
-          if (url.origin === self.location.origin){
-            const copy = res.clone();
-            caches.open(CACHE_NAME).then(cache => cache.put(req, copy));
-          }
-        }catch{}
-        return res;
-      }).catch(() => cached);
-    })
-  );
-});
+  async function totalXp(){
+    const entries = await window.IronDB.getAllEntries();
+    return entries.reduce((s,e)=>s + Number(e.xp||0), 0);
+  }
+
+  function renderSetProgress(){
+    if(!window.IronQuestEquipment?.setProgress) return "";
+    const sp = window.IronQuestEquipment.setProgress();
+    if(!sp.length) return `<p class="hint">No active set bonuses yet. Equip 2/4 items from the same set.</p>`;
+    return `
+      <div class="set-progress">
+        ${sp.map(x=>{
+          const pct = Math.min(100, (x.count/4)*100);
+          return `
+            <div class="set-row">
+              <div class="set-head">
+                <div class="set-name">${esc(x.name)}</div>
+                <div class="set-count">${x.count}/4</div>
+              </div>
+              <div class="bar"><div class="bar-fill" style="width:${pct}%"></div></div>
+              <div class="set-bonuses">
+                <div class="badge ${x.count>=2?"on":""}">2pc</div>
+                <div class="badge ${x.count>=4?"on":""}">4pc</div>
+              </div>
+            </div>
+          `;
+        }).join("")}
+      </div>
+    `;
+  }
+
+  async function render(el){
+    const name = window.IronQuestProfile?.getName?.() || "Hunter";
+    const start = window.IronQuestProgression?.getStartDate?.() || window.Utils.isoDate(new Date());
+    const xp = await totalXp();
+    const levelInfo = window.IronQuestProgression?.levelFromTotalXp?.(xp) || { lvl:1, title:"Rookie", nextXp:0, curXp:xp };
+    const rank = window.IronQuestHunterRank?.compute?.(levelInfo.lvl, xp) || "E";
+
+    const profileCard = card("Profile", `
+      <div class="grid2">
+        <label class="field">
+          <span class="label">Character Name</span>
+          <input id="iq_name" type="text" value="${esc(name)}" placeholder="Your Hunter name"/>
+        </label>
+        <label class="field">
+          <span class="label">Challenge Start Date</span>
+          <input id="iq_start" type="date" value="${fmtDate(start)}"/>
+        </label>
+      </div>
+      <div class="row gap">
+        <button class="btn" id="iq_save_profile">Save</button>
+        <span class="hint">Start date can be set retroactively.</span>
+      </div>
+    `);
+
+    const progressCard = card("Progress", `
+      <div class="kpi-grid">
+        <div class="kpi"><div class="k">Level</div><div class="v">${levelInfo.lvl}</div><div class="s">${esc(levelInfo.title||"")}</div></div>
+        <div class="kpi"><div class="k">Rank</div><div class="v">${esc(rank)}</div><div class="s">Hunter Class</div></div>
+        <div class="kpi"><div class="k">Total XP</div><div class="v">${Math.floor(xp)}</div><div class="s">All-time</div></div>
+        <div class="kpi"><div class="k">Week</div><div class="v">W${window.IronQuestProgression?.getWeekNumber?.() ?? 1}</div><div class="s">12-week cycle</div></div>
+      </div>
+    `);
+
+    const attrsCard = card("Attributes", `
+      <div id="attrMount"></div>
+      <p class="hint">Attributes level up through XP from matching exercise types.</p>
+    `);
+
+    const equipCard = card("Equipment", `
+      <div id="equipMount"></div>
+      <h3 style="margin-top:14px">Set Progress</h3>
+      ${renderSetProgress()}
+    `);
+
+    el.innerHTML = `
+      ${profileCard}
+      ${progressCard}
+      ${attrsCard}
+      ${equipCard}
+    `;
+
+    // wire save
+    const btn = el.querySelector("#iq_save_profile");
+    if(btn){
+      btn.onclick = async () => {
+        const newName = el.querySelector("#iq_name")?.value?.trim() || "Hunter";
+        const newStart = el.querySelector("#iq_start")?.value || window.Utils.isoDate(new Date());
+        window.IronQuestProfile?.setName?.(newName);
+        window.IronQuestProgression?.setStartDate?.(newStart);
+        window.Toast?.toast?.("Saved.");
+        window.IronQuestApp?.navigate?.("home");
+      };
+    }
+
+    // mount attributes + equipment
+    try{
+      const a = el.querySelector("#attrMount");
+      if(a && window.IronQuestAttributes?.render) window.IronQuestAttributes.render(a);
+    }catch(e){ console.warn(e); }
+
+    try{
+      const m = el.querySelector("#equipMount");
+      if(m && window.IronQuestEquipment?.renderGrid) window.IronQuestEquipment.renderGrid(m);
+    }catch(e){ console.warn(e); }
+  }
+
+  window.IronQuestHome = { render };
+})();
