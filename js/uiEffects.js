@@ -89,9 +89,9 @@
   }
 
   function showSystem(message){ show("systemOverlay", message); }
-  function showLevelUp(message){ show("levelOverlay", message); }
-  function showPromotion(message){ show("promoOverlay", message); }
-  function showFinish(message){ show("finishOverlay", message); }
+  function showLevelUp(message){ ensureOverlays(); show("levelOverlay", message); _burst("gold"); _shakeSoft(); }
+  function showPromotion(message){ ensureOverlays(); show("promoOverlay", message); _burst("purple"); _shakeSoft(); }
+  function showFinish(message){ ensureOverlays(); show("finishOverlay", message); _burst("red"); _shakeHard(); }
 
   // Count-up helper
   function countUp(el, from, to, ms=650){
@@ -124,6 +124,7 @@
     // Build card HTML
     const name = item?.name || "XP Dust";
     const rarity = item?.rarity || "Common";
+    const burstKind = (/monarch|sss|ss|epic/i.test(rarity)) ? "purple" : (/legend/i.test(rarity)) ? "gold" : (/rare/i.test(rarity)) ? "green" : "green";
     const setName = item?.setName || (item?.setId ? (window.IronQuestEquipment?.SET_BONUSES?.[item.setId]?.name || item.setId) : "—");
     const bonus = item?.bonus ? JSON.stringify(item.bonus) : "";
 
@@ -146,6 +147,7 @@
       chest.classList.add("open");
       setTimeout(()=>{
         card.style.display = "block";
+      _burst(burstKind);
         card.classList.add("reveal");
       }, 320);
     }, 120);
