@@ -43,7 +43,7 @@
         <div class="card">
           <h2>Error</h2>
           <p class="hint">Boot failed. Open System Log (⌁) for details.</p>
-          <pre class="hint" style="white-space:pre-wrap;opacity:.9">${String(err?.stack || err)}</pre>
+          <pre class="hint" style="white-space:pre-wrap;opacity:.9">${String((err && err.stack) || err)}</pre>
           <button class="btn" id="btnRepair">Repair Cache</button>
         </div>`;
       const btn = home.querySelector("#btnRepair");
@@ -93,17 +93,17 @@
     if(!el) return;
 
     const renders={
-      home: window.IronQuestHome?.render,
-      log: window.IronQuestLog?.render,
-      run: window.IronQuestRunning?.renderRunning,
-      stats: window.IronQuestAnalytics?.renderAnalytics,
-      quests: window.IronQuestChallenges?.renderChallenges,
-      gates: window.IronQuestGates?.render,
-      boss: window.IronQuestBossArena?.render,
-      skills: window.IronQuestSkillsScreen?.render,
-      review: window.IronQuestReview?.render,
-      health: window.IronQuestHealth?.render,
-      backup: window.IronQuestBackup?.render
+      home: (window.IronQuestHome && window.IronQuestHome.render),
+      log: (window.IronQuestLog && window.IronQuestLog.render),
+      run: (window.IronQuestRunning && window.IronQuestRunning.renderRunning),
+      stats: (window.IronQuestAnalytics && window.IronQuestAnalytics.renderAnalytics),
+      quests: (window.IronQuestChallenges && window.IronQuestChallenges.renderChallenges),
+      gates: (window.IronQuestGates && window.IronQuestGates.render),
+      boss: (window.IronQuestBossArena && window.IronQuestBossArena.render),
+      skills: (window.IronQuestSkillsScreen && window.IronQuestSkillsScreen.render),
+      review: (window.IronQuestReview && window.IronQuestReview.render),
+      health: (window.IronQuestHealth && window.IronQuestHealth.render),
+      backup: (window.IronQuestBackup && window.IronQuestBackup.render)
     };
 
     const fn = renders[route];
@@ -116,7 +116,7 @@
       await fn(el);
     }catch(e){
       console.error("Render error", route, e);
-      el.innerHTML = `<div class="card"><h2>Error</h2><p class="hint">${String(e?.message||e)}</p><pre class="hint" style="white-space:pre-wrap">${String(e?.stack||"")}</pre></div>`;
+      el.innerHTML = `<div class="card"><h2>Error</h2><p class="hint">${String((e && e.message)||e)}</p><pre class="hint" style="white-space:pre-wrap">${String((e && e.stack)||"")}</pre></div>`;
     }
   }
 
@@ -129,7 +129,7 @@
         const msg = list.length ? list.map(x=>`${x.date}: ${x.msg}`).join("\n") : "No system messages yet.";
         window.IronQuestUIFX.showSystem(msg);
       }catch(e){
-        window.IronQuestUIFX.showSystem(String(e?.stack||e));
+        window.IronQuestUIFX.showSystem(String((e && e.stack)||e));
       }
     };
   }
@@ -164,25 +164,25 @@
         window.IronDB.addEntry = async(entry)=>{
           const before = await window.IronDB.getAllEntries();
           const totalBefore = before.reduce((s,e)=>s+Number(e.xp||0),0);
-          const lvlBefore = window.IronQuestProgression?.levelFromTotalXp?.(totalBefore)?.lvl ?? 0;
-          const rankBefore = window.IronQuestHunterRank?.compute?.(lvlBefore, totalBefore) ?? "E";
+          const lvlBefore = (window.IronQuestProgression && (window.IronQuestProgression.levelFromTotalXp) && window.IronQuestProgression.levelFromTotalXp)((totalBefore) && totalBefore).lvl) ?? 0;
+          const rankBefore = (window.IronQuestHunterRank && (window.IronQuestHunterRank.compute) && window.IronQuestHunterRank.compute)(lvlBefore, totalBefore) ?? "E";
 
           const id = await orig(entry);
 
-          if(entry?.type && window.IronQuestAttributes?.addXP) window.IronQuestAttributes.addXP(entry.type, entry.xp||0);
+          if((entry && entry.type) && (window.IronQuestAttributes && window.IronQuestAttributes.addXP)) window.IronQuestAttributes.addXP(entry.type, entry.xp||0);
 
           const after = await window.IronDB.getAllEntries();
           const totalAfter = after.reduce((s,e)=>s+Number(e.xp||0),0);
-          const lvlAfter = window.IronQuestProgression?.levelFromTotalXp?.(totalAfter)?.lvl ?? lvlBefore;
-          const rankAfter = window.IronQuestHunterRank?.compute?.(lvlAfter, totalAfter) ?? rankBefore;
+          const lvlAfter = (window.IronQuestProgression && (window.IronQuestProgression.levelFromTotalXp) && window.IronQuestProgression.levelFromTotalXp)((totalAfter) && totalAfter).lvl) ?? lvlBefore;
+          const rankAfter = (window.IronQuestHunterRank && (window.IronQuestHunterRank.compute) && window.IronQuestHunterRank.compute)(lvlAfter, totalAfter) ?? rankBefore;
 
           if(lvlAfter>lvlBefore){
             await addSystem(`Level up: ${lvlBefore} → ${lvlAfter}`);
-            window.IronQuestUIFX.showLevelUp?.(`You reached Level ${lvlAfter}.\n\nKeep going, Hunter.`);
+            (window.IronQuestUIFX.showLevelUp && window.IronQuestUIFX.showLevelUp(`You reached Level ${lvlAfter}.\n\nKeep going, Hunter.`);
           }
           if(rankAfter !== rankBefore){
             await addSystem(`Rank promotion: ${rankBefore} → ${rankAfter}`);
-            window.IronQuestUIFX.showPromotion?.(`Rank promoted: ${rankBefore} → ${rankAfter}`);
+            (window.IronQuestUIFX.showPromotion && window.IronQuestUIFX.showPromotion(`Rank promoted: ${rankBefore} → ${rankAfter}`);
           }
           return id;
         };
