@@ -1,4 +1,4 @@
-const SW_VERSION="v10.0.1-clean-master";
+const SW_VERSION="v10.0.1-clean-master-hotfix";
 const CACHE_NAME=`ironquest-${SW_VERSION}`;
 const ASSETS=[
   "./",
