@@ -21,87 +21,142 @@
     const pct = Math.max(0, Math.min(100, (L.remainder / Math.max(1, L.nextNeed)) * 100));
 
     container.innerHTML = `
-      <div class="card">
-        <div class="itemTop">
+  <section class="hunterScreen">
+    <div class="hunterHero card">
+      <div class="heroTop">
+        <div class="heroLeft">
+          <div class="heroTitle">Hunter Card</div>
+          <div class="heroNameRow">
+            <div class="heroName">${escapeHtml(hunterName)}</div>
+            <button class="miniBtn" id="btnEditName" title="Name ändern">✎</button>
+          </div>
+          <div class="heroMeta">
+            <span class="pill">${rankMeta.name}</span>
+            <span class="pill">Woche ${week}</span>
+            <span class="pill">Klasse: <b>${cls.name}</b></span>
+          </div>
+        </div>
+
+        <div class="heroRight">
+          <div class="rankEmblemWrap ${rankMeta.color}">
+            ${window.IronQuestHunterRank.getEmblemSVG(rankKey)}
+            <div class="rankKey">${rankKey}</div>
+          </div>
+        </div>
+      </div>
+
+      <div class="heroBars">
+        <div class="barLine">
+          <div class="barLabel">Level <b id="homeLvl">${L.lvl}</b></div>
+          <div class="barOuter"><div class="barInner" style="width:${pct.toFixed(1)}%"></div></div>
+          <div class="barSub"><span>${L.remainder} / ${L.nextNeed} XP</span><span>Total: ${totalXp}</span></div>
+        </div>
+      </div>
+
+      <div class="heroActions">
+        <button class="secondary" id="btnShareHunter">Share</button>
+        <button class="secondary" id="btnOpenSystem">System Log</button>
+        <button class="secondary" id="btnOpenDiag">Diagnose</button>
+      </div>
+
+      <div class="heroSettings">
+        <div class="row2">
           <div>
-            <h2 style="margin:0;">Hunter Card</h2>
-            <div class="hint">Name: <b>${escapeHtml(hunterName)}</b></div>
+            <label>Challenge/Week Startdatum</label>
+            <input type="date" id="startDateInput" value="${startDate}">
+            <div class="small">Rückwirkend möglich. Beeinflusst Wochenberechnung & Challenge.</div>
           </div>
-          <div class="rankEmblem ${rankMeta.color}">${window.IronQuestHunterRank.getEmblemSVG(rankKey)}</div>
-        </div>
-
-        <div class="row2" style="margin-top:10px;">
-          <div class="pill"><b>Rank:</b> <span class="badge ${rankMeta.color}">${rankKey}</span> ${rankMeta.name}</div>
-          <div class="pill"><b>Class:</b> ${escapeHtml(cls.name)}</div>
-        </div>
-
-        <div style="margin-top:12px;">
-          <div class="itemTop">
-            <div>
-              <b>Level ${L.lvl}</b>
-              <div class="hint">${escapeHtml(L.title)} • Total XP ${window.Utils.fmt(totalXp)}</div>
-            </div>
-            <span class="badge gold">W${week}</span>
+          <div>
+            <label>Klasse</label>
+            <select id="classSelect">
+              ${window.IronQuestClasses.options().map(o => `<option value="${o.key}" ${o.key===cls.key?'selected':''}>${o.name}</option>`).join("")}
+            </select>
           </div>
-          <div class="bar" style="margin-top:10px;"><div class="barFill" style="width:${pct}%;"></div></div>
-          <div class="hint">${window.Utils.fmt(L.remainder)} / ${window.Utils.fmt(L.nextNeed)} XP</div>
-        </div>
-
-        <div class="descBox" style="margin-top:12px;">
-          <div class="descTitle">Profile</div>
-          <div class="row2" style="margin-top:10px;">
-            <input id="nameInput" class="input" placeholder="Character name" value="${escapeAttr(hunterName)}" />
-            <input id="startInput" class="input" type="date" value="${escapeAttr(startDate)}" />
-          </div>
-          <div class="btnRow" style="margin-top:10px;">
-            <button class="secondary" id="saveProfile">Save</button>
-            <button class="secondary" id="todayStart">Start Today</button>
-            <button class="secondary" id="shareCard">Share Card</button>
-          </div>
-          <div class="hint">Startdatum kann rückwirkend gesetzt werden. Woche & Challenge passen sich automatisch an.</div>
-        </div>
-
-        <div class="descBox" style="margin-top:12px; border-color: rgba(255,212,106,.25);">
-          <div class="descTitle">Equipment</div>
-          <div id="equipMount" style="margin-top:10px;"></div>
-        </div>
-
-        <div class="row2" style="margin-top:12px;">
-          <div class="pill"><b>XP Bonus:</b> ×${eqBonus.globalXp.toFixed(2)}</div>
-          <div class="pill"><b>Gate/Boss:</b> DMG×${eqBonus.gateDmg.toFixed(2)}</div>
-        </div>
-
-        <div class="row2" style="margin-top:12px;">
-          <div class="pill"><b>Loot Luck:</b> ×${(eqBonus.lootLuck||1).toFixed(2)}</div>
-          <div class="pill"><b>Week 1:</b> ${escapeHtml(startDate)}</div>
-        </div>
-
-        <div class="row2" style="margin-top:12px;">
-          <div class="pill"><b>Gates cleared:</b> ${stRank.gatesCleared||0}</div>
-          <div class="pill"><b>Boss clears:</b> ${stRank.bossClears||0}</div>
-        </div>
-
-        <div class="btnRow" style="margin-top:12px;">
-          <button class="secondary" id="openChest">Open Chest</button>
-          <button class="primary" id="quickSystem">SYSTEM</button>
         </div>
       </div>
+    </div>
 
-      <div id="attrMount"></div>
+    <div class="card">
+      <h2 style="margin:0 0 8px;">Attribute</h2>
+      <div id="attrGridHome"></div>
+    </div>
 
-      <div class="card soft">
-        <h2>Quick Links</h2>
-        <p class="hint">Gates & Boss sind deine Wochenziele. Review zeigt Coach-Auswertung.</p>
-        <div class="btnRow">
-          <button class="secondary" data-go="gates">Go to Gates</button>
-          <button class="secondary" data-go="boss">Go to Boss</button>
-          <button class="secondary" data-go="review">Go to Review</button>
-          <button class="secondary" data-go="skills">Go to Skills</button>
-        </div>
+    <div class="card">
+      <h2 style="margin:0 0 8px;">Equipment</h2>
+      <div id="equipmentGridHome"></div>
+      <div id="setBonusesHome" style="margin-top:10px;"></div>
+    </div>
+
+    <div class="row2">
+      <div class="card">
+        <h2 style="margin:0 0 8px;">Active Gate</h2>
+        <div id="homeGate"></div>
       </div>
-    `;
+      <div class="card">
+        <h2 style="margin:0 0 8px;">Quests</h2>
+        <div id="homeQuests"></div>
+      </div>
+    </div>
+  </section>
+`;
 
-    // Attributes
+// Wire: start date
+const sd = container.querySelector("#startDateInput");
+if(sd){
+  sd.addEventListener("change", () => {
+    const v = sd.value;
+    if(!v) return;
+    window.IronQuestProgression.setStartDate(v);
+    window.Toast?.show?.("System", "Startdatum gesetzt.");
+    window.IronQuestApp?.renderActive?.();
+  });
+}
+
+// Wire: class
+const cs = container.querySelector("#classSelect");
+if(cs){
+  cs.addEventListener("change", () => {
+    window.IronQuestClasses.set(cs.value);
+    window.Toast?.show?.("System","Klasse aktualisiert.");
+    window.IronQuestApp?.renderActive?.();
+  });
+}
+
+// Wire: edit name (simple prompt)
+const bn = container.querySelector("#btnEditName");
+if(bn){
+  bn.addEventListener("click", () => {
+    const cur = window.IronQuestProfile?.getName?.() || "Hunter";
+    const n = prompt("Charaktername (max 22 Zeichen):", cur);
+    if(n===null) return;
+    const saved = window.IronQuestProfile?.setName?.(n) || n;
+    window.Toast?.show?.("System", `Name gesetzt: ${saved}`);
+    window.IronQuestApp?.renderActive?.();
+  });
+}
+
+// Share / system log / diag
+container.querySelector("#btnShareHunter")?.addEventListener("click", () => window.IronQuestShare?.shareHunterCard?.());
+container.querySelector("#btnOpenSystem")?.addEventListener("click", () => window.UIEffects?.showSystem?.("System Log geöffnet."));
+container.querySelector("#btnOpenDiag")?.addEventListener("click", () => window.IronQuestDiagnostics?.open?.());
+
+// Render attributes (reuse module)
+container.querySelector("#attrGridHome").innerHTML = window.IronQuestAttributes?.renderMini?.(entries) || `<div class="hint">Attribute Modul nicht gefunden.</div>`;
+
+// Render equipment grid + set bonuses
+const eqWrap = container.querySelector("#equipmentGridHome");
+if(eqWrap){
+  eqWrap.innerHTML = window.IronQuestEquipment?.renderGrid?.() || `<div class="hint">Equipment Modul nicht gefunden.</div>`;
+  const sb = container.querySelector("#setBonusesHome");
+  if(sb) sb.innerHTML = window.IronQuestEquipment?.renderSetBonuses?.() || "";
+  eqWrap.querySelectorAll("[data-equip-open]").forEach(btn=>{
+    btn.addEventListener("click", ()=> window.IronQuestEquipment.openManage());
+  });
+}
+
+// Gate + quests summary
+container.querySelector("#homeGate").innerHTML = window.IronQuestGates?.renderMini?.() || `<div class="hint">Gates Modul nicht gefunden.</div>`;
+container.querySelector("#homeQuests").innerHTML = window.IronQuestChallenges?.renderMini?.() || `<div class="hint">Quests Modul nicht gefunden.</div>`;// Attributes
     window.IronQuestAttributes.render(container.querySelector("#attrMount"));
 
     // Equipment grid + set progress
