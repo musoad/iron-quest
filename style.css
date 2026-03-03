@@ -434,38 +434,74 @@ button.secondary{
 .equipRowName{ font-weight: 950; }
 .equipRowMeta{ font-size: 12px; color: rgba(255,255,255,.70); margin-top:4px; }
 
-/* ---- Anti-banding background (iOS fix) ---- */
-html, body { background: #0b0b0c; }
 
-body{
-  position: relative;
-  isolation: isolate; /* ensures overlays blend correctly */
+
+/* ===== v9.5 Character Screen ===== */
+.hunterScreen{ display:grid; gap:14px; }
+.hunterHero{ padding:16px; }
+.heroTop{ display:flex; align-items:flex-start; justify-content:space-between; gap:12px; }
+.heroTitle{ font-weight:950; font-size:14px; letter-spacing:1px; text-transform:uppercase; opacity:.85; }
+.heroNameRow{ display:flex; align-items:center; gap:10px; margin-top:6px; }
+.heroName{ font-size:28px; font-weight:950; line-height:1.05; }
+.heroMeta{ display:flex; gap:8px; flex-wrap:wrap; margin-top:10px; }
+.miniBtn{ padding:10px 12px; border-radius:14px; }
+.rankEmblemWrap{ display:grid; place-items:center; gap:6px; min-width:88px; padding:12px; border-radius:22px;
+  border:1px solid rgba(255,255,255,.10); background: rgba(0,0,0,.22);
 }
+.rankKey{ font-weight:950; letter-spacing:1px; opacity:.9; }
+.heroBars{ margin-top:12px; }
+.barLine{ display:grid; gap:8px; }
+.barLabel{ display:flex; justify-content:space-between; align-items:center; font-weight:900; }
+.barOuter{ height:12px; border-radius:999px; background: rgba(255,255,255,.08); overflow:hidden; }
+.barInner{ height:100%; background: rgba(76,255,155,.55); }
+.barSub{ display:flex; justify-content:space-between; color: rgba(255,255,255,.72); font-size:12px; }
+.heroActions{ display:flex; gap:10px; flex-wrap:wrap; margin-top:12px; }
+.heroSettings{ margin-top:14px; }
 
-/* Put gradients on a fixed pseudo-layer (prevents scroll seams) */
-body::before{
-  content:"";
-  position: fixed;
-  inset: 0;
-  z-index: -2;
-  background:
-    radial-gradient(1100px 700px at 20% 0%, rgba(76,255,155,.08), transparent 60%),
-    radial-gradient(900px 700px at 85% 25%, rgba(255,212,106,.06), transparent 58%),
-    #0b0b0c;
-  background-repeat: no-repeat;
-  transform: translateZ(0); /* iOS compositing */
+/* Rank colors (for SVG currentColor) */
+.rankE{ color: rgba(200,200,200,.9); }
+.rankD{ color: rgba(120,190,255,.9); }
+.rankC{ color: rgba(130,220,255,.9); }
+.rankB{ color: rgba(150,255,190,.9); }
+.rankA{ color: rgba(255,210,120,.95); }
+.rankS{ color: rgba(255,215,0,.98); }
+.rankSS{ color: rgba(210,170,255,.98); }
+.rankSSS{ color: rgba(255,120,240,.98); }
+.rankMONARCH{ color: rgba(210,120,255,.98); }
+
+/* ===== Emotional FX: burst + shake ===== */
+@keyframes iqBurst {
+  0%{ transform: translate(-50%,-50%) scale(.65); opacity:0; }
+  12%{ opacity:1; }
+  100%{ transform: translate(-50%,-50%) scale(1.35); opacity:0; }
 }
-
-/* Noise overlay (kills banding) */
-body::after{
-  content:"";
+.iqBurst{
   position: fixed;
-  inset: 0;
-  z-index: -1;
+  left: 50%;
+  top: 38%;
+  width: 260px;
+  height: 260px;
+  border-radius: 999px;
+  z-index: 9999;
   pointer-events: none;
-  opacity: .08; /* tweak 0.05–0.12 */
-  mix-blend-mode: overlay;
-  background-image: url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' width='160' height='160'%3E%3Cfilter id='n'%3E%3CfeTurbulence type='fractalNoise' baseFrequency='.8' numOctaves='3' stitchTiles='stitch'/%3E%3C/filter%3E%3Crect width='160' height='160' filter='url(%23n)' opacity='.35'/%3E%3C/svg%3E");
-  background-repeat: repeat;
+  transform: translate(-50%,-50%);
+  filter: blur(0px);
+  animation: iqBurst 650ms ease-out forwards;
+  background: radial-gradient(circle at 30% 30%, rgba(255,255,255,.35), transparent 42%),
+              radial-gradient(circle at 60% 55%, rgba(255,255,255,.22), transparent 50%);
+  border: 1px solid rgba(255,255,255,.10);
 }
+.iqBurst.green{ box-shadow: 0 0 40px rgba(76,255,155,.35); }
+.iqBurst.gold{ box-shadow: 0 0 46px rgba(255,215,0,.30); }
+.iqBurst.purple{ box-shadow: 0 0 52px rgba(210,120,255,.34); }
+.iqBurst.red{ box-shadow: 0 0 46px rgba(255,80,80,.28); }
 
+@keyframes iqShake {
+  0%{ transform: translate3d(0,0,0); }
+  20%{ transform: translate3d(-2px,1px,0); }
+  40%{ transform: translate3d(2px,-1px,0); }
+  60%{ transform: translate3d(-2px,0,0); }
+  80%{ transform: translate3d(1px,1px,0); }
+  100%{ transform: translate3d(0,0,0); }
+}
+.shake{ animation: iqShake 420ms ease-out; }
