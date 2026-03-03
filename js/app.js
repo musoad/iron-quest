@@ -1,180 +1,193 @@
 (() => {
   "use strict";
 
-  let activeTabId = "home";
+  async function render(container){
+    const entries = await window.IronDB.getAllEntries();
+    const totalXp = (entries||[]).reduce((s,e)=> s + Number(e.xp||0), 0);
 
-  function setActiveTab(id){
-    activeTabId = id;
-    document.querySelectorAll(".bottom-nav button").forEach(b=>b.classList.toggle("active", b.dataset.tab===id));
-    document.querySelectorAll("main .tab").forEach(s=>s.classList.toggle("active", s.id===id));
-  }
-  function setStatus(t){
-    const el=document.getElementById("statusLine");
-    if(el) el.textContent=t;
-  }
+    const L = window.IronQuestProgression.levelFromTotalXp(totalXp);
+    const rankKey = window.IronQuestHunterRank.compute(L.lvl, totalXp);
+    const rankMeta = window.IronQuestHunterRank.getMeta(rankKey);
 
-  async function initSW(){
-    // simple inline SW registration (offline)
-    // Note: sw.js in root is fetched via navigator.serviceWorker; script tag above is harmless fallback
-    try{
-      if(!("serviceWorker" in navigator)) return;
-      const reg=await navigator.serviceWorker.register("./sw.js");
-      try{ await reg.update(); }catch{}
-      if(reg.waiting) reg.waiting.postMessage({type:"SKIP_WAITING"});
-      reg.addEventListener("updatefound", ()=>{
-        const sw=reg.installing;
-        if(!sw) return;
-        sw.addEventListener("statechange", ()=>{
-          if(sw.state==="installed" && reg.waiting) reg.waiting.postMessage({type:"SKIP_WAITING"});
-        });
-      });
-      navigator.serviceWorker.addEventListener("controllerchange", ()=>location.reload());
-    }catch(e){ console.warn("SW error", e); }
-  }
+    const hunterName = window.IronQuestProfile?.getName?.() || "Hunter";
+    const startDate  = window.IronQuestProgression.getStartDate();
 
-  async function addSystem(msg){
-    const date=window.Utils.isoDate(new Date());
-    await window.IronDB.addSystem({ date, msg });
-  }
+    const cls = window.IronQuestClasses.meta(window.IronQuestClasses.get());
+    const week = window.IronQuestProgression.getWeekNumber();
+    const stRank = window.IronQuestHunterRank.getStats();
 
-  async function renderRoute(route){
-    const el=document.getElementById(route);
-    if(!el) return;
+    const eqBonus = window.IronQuestEquipment.bonuses();
 
-    const renders={
-      home: window.IronQuestHome.render,
-      log: window.IronQuestLog.render,
-      run: window.IronQuestRunning.renderRunning,
-      stats: window.IronQuestAnalytics.renderAnalytics,
-      quests: window.IronQuestChallenges.renderChallenges,
-      gates: window.IronQuestGates.render,
-      boss: window.IronQuestBossArena.render,
-      skills: window.IronQuestSkillsScreen.render,
-      review: window.IronQuestReview.render,
-      health: window.IronQuestHealth.render,
-      backup: window.IronQuestBackup.render
-    };
+    const pct = Math.max(0, Math.min(100, (L.remainder / Math.max(1, L.nextNeed)) * 100));
 
-    try{
-      const fn = renders[route];
-      if(typeof fn !== "function") throw new Error(`Renderer missing for tab: ${route}`);
-      await fn(el);
-    }catch(e){
-      console.error("Render error", route, e);
-      el.innerHTML = `<div class="card"><h2>Error</h2><p class="hint">${String(e)}</p></div>`;
-    }
-  }
+    container.innerHTML = `
+  <section class="hunterScreen">
+    <div class="hunterHero card">
+      <div class="heroTop">
+        <div class="heroLeft">
+          <div class="heroTitle">Hunter Card</div>
+          <div class="heroNameRow">
+            <div class="heroName">${escapeHtml(hunterName)}</div>
+            <button class="miniBtn" id="btnEditName" title="Name ändern">✎</button>
+          </div>
+          <div class="heroMeta">
+            <span class="pill">${rankMeta.name}</span>
+            <span class="pill">Woche ${week}</span>
+            <span class="pill">Klasse: <b>${cls.name}</b></span>
+          </div>
+        </div>
 
-  async function renderActive(){
-    await renderRoute(activeTabId);
-  }
+        <div class="heroRight">
+          <div class="rankEmblemWrap ${rankMeta.color}">
+            ${window.IronQuestHunterRank.getEmblemSVG(rankKey)}
+            <div class="rankKey">${rankKey}</div>
+          </div>
+        </div>
+      </div>
 
-  function hookEntryPipeline(){
-    const orig=window.IronDB.addEntry;
-    window.IronDB.addEntry = async(entry)=>{
-      const before = await window.IronDB.getAllEntries();
-      const totalBefore = before.reduce((s,e)=>s+Number(e.xp||0),0);
-      const lvlBefore = window.IronQuestProgression.levelFromTotalXp(totalBefore).lvl;
-      const rankBefore = window.IronQuestHunterRank.compute(lvlBefore, totalBefore);
+      <div class="heroBars">
+        <div class="barLine">
+          <div class="barLabel">Level <b id="homeLvl">${L.lvl}</b></div>
+          <div class="barOuter"><div class="barInner" style="width:${pct.toFixed(1)}%"></div></div>
+          <div class="barSub"><span>${L.remainder} / ${L.nextNeed} XP</span><span>Total: ${totalXp}</span></div>
+        </div>
+      </div>
 
-      const id = await orig(entry);
+      <div class="heroActions">
+        <button class="secondary" id="btnShareHunter">Share</button>
+        <button class="secondary" id="btnOpenSystem">System Log</button>
+        <button class="secondary" id="btnOpenDiag">Diagnose</button>
+      </div>
 
-      // Attributes gain
-      if(entry?.type) window.IronQuestAttributes.addXP(entry.type, entry.xp||0);
+      <div class="heroSettings">
+        <div class="row2">
+          <div>
+            <label>Challenge/Week Startdatum</label>
+            <input type="date" id="startDateInput" value="${startDate}">
+            <div class="small">Rückwirkend möglich. Beeinflusst Wochenberechnung & Challenge.</div>
+          </div>
+          <div>
+            <label>Klasse</label>
+            <select id="classSelect">
+              ${window.IronQuestClasses.options().map(o => `<option value="${o.key}" ${o.key===cls.key?'selected':''}>${o.name}</option>`).join("")}
+            </select>
+          </div>
+        </div>
+      </div>
+    </div>
 
-      // Coach PR
-      const pr=window.IronQuestCoach.updatePR(entry);
-      if(pr.isNew) window.Toast?.toast("New PR!", `${entry.exercise} • Volume ${pr.best.bestVolume}`);
+    <div class="card">
+      <h2 style="margin:0 0 8px;">Attribute</h2>
+      <div id="attrGridHome"></div>
+    </div>
 
-      // Level up detection
-      const after = await window.IronDB.getAllEntries();
-      const totalAfter = after.reduce((s,e)=>s+Number(e.xp||0),0);
-      const lvlAfter = window.IronQuestProgression.levelFromTotalXp(totalAfter).lvl;
-      const rankAfter = window.IronQuestHunterRank.compute(lvlAfter, totalAfter);
+    <div class="card">
+      <h2 style="margin:0 0 8px;">Equipment</h2>
+      <div id="equipmentGridHome"></div>
+      <div id="setBonusesHome" style="margin-top:10px;"></div>
+    </div>
 
-      if(lvlAfter>lvlBefore){
-        await addSystem(`Level up: ${lvlBefore} → ${lvlAfter}`);
-        window.IronQuestUIFX.showLevelUp(`You reached Level ${lvlAfter}.\n\nKeep going, Hunter.`);
-        // Chest every 3 levels
-        if(lvlAfter % 3 === 0){
-          window.IronQuestLoot.addChests(1);
-          await addSystem(`Milestone reward: +1 chest (Level ${lvlAfter})`);
-          window.Toast?.toast("Milestone", "+1 Chest");
-        }
-      }
+    <div class="row2">
+      <div class="card">
+        <h2 style="margin:0 0 8px;">Active Gate</h2>
+        <div id="homeGate"></div>
+      </div>
+      <div class="card">
+        <h2 style="margin:0 0 8px;">Quests</h2>
+        <div id="homeQuests"></div>
+      </div>
+    </div>
+  </section>
+`;
 
-      // Rank promotion ceremony (independent of level-up; can also happen via XP thresholds)
-      if(rankAfter !== rankBefore){
-        const order=["E","D","C","B","A","S"];
-        if(order.indexOf(rankAfter) > order.indexOf(rankBefore)){
-          await addSystem(`Rank promotion: ${rankBefore} → ${rankAfter}`);
-          window.IronQuestUIFX.showPromotion(`Congratulations, Hunter.\n\nRank promoted: ${rankBefore} → ${rankAfter}\n\nNew gates await.`);
-          window.Toast?.toast("RANK UP!", `${rankBefore} → ${rankAfter}`);
-        }
-      }
-
-      return id;
-    };
-  }
-
-  async function wireNav(){
-    document.querySelectorAll(".bottom-nav button").forEach(btn=>{
-      btn.onclick=async()=>{
-        const tab=btn.dataset.tab;
-        setActiveTab(tab);
-        try{ location.hash=tab; }catch{}
-        await renderRoute(tab);
-      };
-    });
-
-    const initial=(location.hash||"#home").replace("#","");
-    const start = document.getElementById(initial) ? initial : "home";
-    setActiveTab(start);
-    await renderRoute(start);
-  }
-
-  function wireSystemLogButton(){
-    const btn=document.getElementById("btnSystemLog");
-    btn.onclick=async()=>{
-      const list = (await window.IronDB.getAllSystem()).sort((a,b)=> (a.date<b.date?1:-1)).slice(0,20);
-      const msg = list.length ? list.map(x=>`${x.date}: ${x.msg}`).join("\n") : "No system messages yet.";
-      window.IronQuestUIFX.showSystem(msg);
-    };
-  }
-
-  function navigate(tab){
-    setActiveTab(tab);
-    try{ location.hash=tab; }catch{}
-    renderRoute(tab);
-  }
-
-  async function init(){
-    window.IronQuestUIFX.ensureParticles();
-    setStatus("Initializing…");
-    await window.IronDB.init();
-    await initSW();
-
-    hookEntryPipeline();
-    wireSystemLogButton();
-
-    // ensure default class stored
-    if(!localStorage.getItem("ironquest_class_v8")) localStorage.setItem("ironquest_class_v8","none");
-
-    await wireNav();
-    setStatus("OK • Hunter Ascended");
-  }
-
-  window.IronQuestApp={ navigate, renderActive };
-
-  // Global error surface (helps when iOS hides console)
-  window.addEventListener("error", (ev) => {
-    try{
-      setStatus(`Error: ${ev.message}`);
-      const el = document.getElementById(activeTabId) || document.getElementById("home");
-      if(el && !el.innerHTML.trim()){
-        el.innerHTML = `<div class="card"><h2>Error</h2><p class="hint">${String(ev.message||ev.error||"Unknown error")}</p></div>`;
-      }
-    }catch{}
+// Wire: start date
+const sd = container.querySelector("#startDateInput");
+if(sd){
+  sd.addEventListener("change", () => {
+    const v = sd.value;
+    if(!v) return;
+    window.IronQuestProgression.setStartDate(v);
+    window.Toast?.show?.("System", "Startdatum gesetzt.");
+    window.IronQuestApp?.renderActive?.();
   });
-  init();
+}
+
+// Wire: class
+const cs = container.querySelector("#classSelect");
+if(cs){
+  cs.addEventListener("change", () => {
+    window.IronQuestClasses.set(cs.value);
+    window.Toast?.show?.("System","Klasse aktualisiert.");
+    window.IronQuestApp?.renderActive?.();
+  });
+}
+
+// Wire: edit name (simple prompt)
+const bn = container.querySelector("#btnEditName");
+if(bn){
+  bn.addEventListener("click", () => {
+    const cur = window.IronQuestProfile?.getName?.() || "Hunter";
+    const n = prompt("Charaktername (max 22 Zeichen):", cur);
+    if(n===null) return;
+    const saved = window.IronQuestProfile?.setName?.(n) || n;
+    window.Toast?.show?.("System", `Name gesetzt: ${saved}`);
+    window.IronQuestApp?.renderActive?.();
+  });
+}
+
+// Share / system log / diag
+container.querySelector("#btnShareHunter")?.addEventListener("click", () => window.IronQuestShare?.shareHunterCard?.());
+container.querySelector("#btnOpenSystem")?.addEventListener("click", async () => {
+  try{
+    const list = (await window.IronDB.getAllSystem()).sort((a,b)=> (a.date<b.date?1:-1)).slice(0,40);
+    const msg = list.length ? list.map(x=>`${x.date}: ${x.msg}`).join("\n") : "No system messages yet.";
+    window.IronQuestUIFX?.showSystem?.(msg);
+  }catch(e){
+    window.IronQuestUIFX?.showSystem?.("System log unavailable.");
+  }
+});
+container.querySelector("#btnOpenDiag")?.addEventListener("click", () => window.IronQuestDiagnostics?.open?.());
+
+// Render attributes (reuse module)
+container.querySelector("#attrGridHome").innerHTML = window.IronQuestAttributes?.renderMini?.(entries) || `<div class="hint">Attribute Modul nicht gefunden.</div>`;
+
+// Render equipment grid + set bonuses
+const eqWrap = container.querySelector("#equipmentGridHome");
+if(eqWrap){
+  eqWrap.innerHTML = window.IronQuestEquipment?.renderGrid?.() || `<div class="hint">Equipment Modul nicht gefunden.</div>`;
+  const sb = container.querySelector("#setBonusesHome");
+  if(sb) sb.innerHTML = window.IronQuestEquipment?.renderSetBonuses?.() || "";
+  eqWrap.querySelectorAll("[data-equip-open]").forEach(btn=>{
+    btn.addEventListener("click", ()=> window.IronQuestEquipment.openManage());
+  });
+}
+
+// Gate + quests summary
+container.querySelector("#homeGate").innerHTML = window.IronQuestGates?.renderMini?.() || `<div class="hint">Gates Modul nicht gefunden.</div>`;
+container.querySelector("#homeQuests").innerHTML = window.IronQuestChallenges?.renderMini?.() || `<div class="hint">Quests Modul nicht gefunden.</div>`;
+
+// Backup reminder (every 7 days)
+try {
+  const last = localStorage.getItem("ironquest_last_backup");
+  if(last){
+    const d = new Date(last);
+    const days = Math.floor((Date.now()-d.getTime())/86400000);
+    if(days >= 7) window.Toast?.toast("Backup Reminder", `Dein letzter Export ist ${days} Tage her. (Backup Tab)`);
+  } else if((entries||[]).length >= 10){
+    window.Toast?.toast("Backup Reminder", "Bitte exportiere ein Backup (Backup Tab)." );
+  }
+} catch {}
+  }
+
+  function escapeHtml(s){
+    return String(s||"")
+      .replaceAll("&","&amp;")
+      .replaceAll("<","&lt;")
+      .replaceAll(">","&gt;");
+  }
+  function escapeAttr(s){
+    return escapeHtml(s).replaceAll('"','&quot;');
+  }
+
+  window.IronQuestHome = { render };
 })();
