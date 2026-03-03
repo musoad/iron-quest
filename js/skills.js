@@ -62,6 +62,12 @@
         <p class="hint">Aktive Skills haben 24h Cooldown.</p>
         <ul class="list" id="activeList"></ul>
       </div>
+
+      <div class="card">
+        <h2>Set Collection</h2>
+        <p class="hint">Sammle Set-Teile, aktiviere 2/4 und 4/4 Boni durch Ausrüsten./</p>
+        <div id="setCollectionMount"></div>
+      </div>
     `;
 
     // start date
@@ -170,6 +176,14 @@
         render(container);
       };
     });
+
+    // set collection
+    try{
+      if(window.IronQuestCollections && typeof window.IronQuestCollections.render === 'function'){
+        window.IronQuestCollections.render(container.querySelector('#setCollectionMount'));
+      }
+    }catch(e){}
+
   }
 
   window.IronQuestSkillsScreen={ render };
