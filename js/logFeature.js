@@ -482,5 +482,6 @@
     }
   }
 
-  window.IronQuestLogFeature = { render };
+  window.IronQuestLog = { render };
+  window.IronQuestLogFeature = window.IronQuestLog; // alias
 })();
