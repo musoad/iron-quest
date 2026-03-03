@@ -7,25 +7,49 @@
       .replaceAll("<","&lt;")
       .replaceAll(">","&gt;");
   }
+
   function formatDesc(text){
-    const t=String(text||"").trim();
-    if(!t) return "—";
-    return t; // already contains \n\n in exercises
+    const t = String(text||"").trim();
+    return t || "—"; // already contains \n\n
   }
 
-  function groupList(exs){
-    const map={};
-    for(const e of exs){
-      const k=e.type;
-      map[k]=map[k]||[];
-      map[k].push(e);
+  function stars(n){
+    const d = Math.max(1, Math.min(5, Number(n||1)));
+    return "★".repeat(d) + "☆".repeat(5-d);
+  }
+
+  function renderPlanList(listEl, plan, onAction){
+    listEl.innerHTML = "";
+    if(!plan || !plan.items?.length){
+      const li=document.createElement("li");
+      li.className="hint";
+      li.textContent="Noch keine Übungen im Plan. Wähle eine Übung und klicke „Zum Plan hinzufügen“.";
+      listEl.appendChild(li);
+      return;
     }
-    return map;
+    for(const name of plan.items){
+      const li=document.createElement("li");
+      li.innerHTML = `
+        <div class="itemTop">
+          <div style="min-width:0;">
+            <b>${escapeHTML(name)}</b>
+            <div class="small">Im aktiven Plan</div>
+          </div>
+          <div class="bossActions">
+            <button class="secondary" data-a="up" data-n="${escapeHTML(name)}">↑</button>
+            <button class="secondary" data-a="down" data-n="${escapeHTML(name)}">↓</button>
+            <button class="danger" data-a="remove" data-n="${escapeHTML(name)}">✕</button>
+          </div>
+        </div>
+      `;
+      li.querySelectorAll("button").forEach(btn=>{
+        btn.addEventListener("click", ()=> onAction(btn.dataset.a, btn.dataset.n));
+      });
+      listEl.appendChild(li);
+    }
   }
 
   async function render(container){
-    const exs = window.IronQuestExercises.EXERCISES;
-    const types = window.IronQuestExercises.TYPES;
     const entries = await window.IronDB.getAllEntries();
     entries.sort((a,b)=> (a.date<b.date?1:-1));
 
@@ -35,11 +59,41 @@
     container.innerHTML = `
       <div class="card">
         <h2>Training Log</h2>
-        <p class="hint">Übungen nach <b>Übungsart</b> wählen. Tag ist frei (Meta). Ausführung wird nur unten angezeigt.</p>
+        <p class="hint">Wähle erst <b>Muskelgruppe</b> → dann <b>Übung</b>. Oben bleibt es clean: keine langen Texte. Die Ausführung steht nur unten.</p>
+      </div>
+
+      <div class="card">
+        <h2>Trainingsplan (frei)</h2>
+        <p class="hint">Erstelle einen Plan (z.B. „Plan A“) und füge Übungen hinzu. Im Log kannst du auf „Nur Plan“ umschalten.</p>
+
+        <div class="row2">
+          <div>
+            <label>Aktiver Plan</label>
+            <select id="pActive"></select>
+          </div>
+          <div>
+            <label>Nur Plan</label>
+            <select id="pOnly">
+              <option value="0">Alle Übungen</option>
+              <option value="1">Nur Übungen aus aktivem Plan</option>
+            </select>
+          </div>
+        </div>
+
+        <div class="btnRow">
+          <button class="secondary" id="pNew">Neuen Plan</button>
+          <button class="danger" id="pDel">Plan löschen</button>
+        </div>
+
+        <div class="card soft">
+          <h2>Plan-Inhalt</h2>
+          <ul class="list" id="pList"></ul>
+        </div>
       </div>
 
       <div class="card">
         <h2>Neuer Eintrag</h2>
+
         <div class="row2">
           <div>
             <label>Datum</label>
@@ -56,19 +110,13 @@
 
         <div class="row2">
           <div>
-            <label>Übungsart</label>
-            <select id="lType"></select>
+            <label>Muskelgruppe</label>
+            <select id="lMG"></select>
           </div>
           <div>
-            <label>Suche</label>
-            <input id="lSearch" type="text" placeholder="z.B. Squat, Row, Plank">
+            <label>Untergruppe</label>
+            <select id="lSG"></select>
           </div>
-        </div>
-
-        <div class="card soft">
-          <h2 id="previewTitle">Preview</h2>
-          <p class="hint" id="previewHint">Wähle eine Übung aus der Liste.</p>
-          <ul class="list" id="previewList"></ul>
         </div>
 
         <label>Übung</label>
@@ -76,11 +124,17 @@
 
         <div class="row2">
           <div class="pill" id="lRec"><b>Empfohlen:</b> —</div>
-          <div class="pill" id="lNext"><b>Nächstes Ziel:</b> —</div>
+          <div class="pill" id="lDiff"><b>Schwierigkeit:</b> —</div>
         </div>
+
         <div class="row2">
+          <div class="pill" id="lNext"><b>Nächstes Ziel:</b> —</div>
           <div class="pill" id="lMeta"><b>Bonus:</b> XP×${eqBonus.globalXp.toFixed(2)} • Gate×${eqBonus.gateDmg.toFixed(2)}</div>
+        </div>
+
+        <div class="row2">
           <div class="pill" id="lCoach"><b>Coach:</b> —</div>
+          <div class="pill" id="lXp"><b>XP:</b> —</div>
         </div>
 
         <div class="row2">
@@ -94,11 +148,6 @@
           </div>
         </div>
 
-        <div class="row2">
-          <div class="pill" id="lVol"><b>Volumen:</b> —</div>
-          <div class="pill" id="lXp"><b>XP:</b> —</div>
-        </div>
-
         <div class="descBox">
           <div class="descTitle">Ausführung</div>
           <div class="descText" id="lDesc">—</div>
@@ -106,9 +155,10 @@
 
         <div class="btnRow">
           <button class="primary" id="lSave">Speichern</button>
+          <button class="secondary" id="lAddToPlan">Zum Plan hinzufügen</button>
           <button class="secondary" id="lUseSkill">Use Active Skill</button>
         </div>
-        <p class="hint">Tipp: Active Skill wirkt für die nächste Session (Cooldown 24h).</p>
+        <p class="hint">Active Skill wirkt für die nächste Session (Cooldown 24h). „Zum Plan hinzufügen“ speichert die Übung im aktiven Plan.</p>
       </div>
 
       <div class="card">
@@ -120,227 +170,317 @@
       </div>
     `;
 
-    const typeSel=container.querySelector("#lType");
-    types.forEach(t=>{
-      const o=document.createElement("option");
-      o.value=t; o.textContent=t;
-      typeSel.appendChild(o);
+    // ---- Plan UI ----
+    const pActive = container.querySelector("#pActive");
+    const pOnly = container.querySelector("#pOnly");
+    const pNew = container.querySelector("#pNew");
+    const pDel = container.querySelector("#pDel");
+    const pList = container.querySelector("#pList");
+
+    function refreshPlans(){
+      const st = window.IronQuestPlans.getState();
+      pActive.innerHTML = "";
+      if(!st.plans.length){
+        const o=document.createElement("option");
+        o.value=""; o.textContent="(kein Plan)";
+        pActive.appendChild(o);
+      } else {
+        for(const p of st.plans){
+          const o=document.createElement("option");
+          o.value=p.id; o.textContent=p.name;
+          if(p.id===st.activeId) o.selected=true;
+          pActive.appendChild(o);
+        }
+      }
+      const plan = window.IronQuestPlans.getActive();
+      renderPlanList(pList, plan, (action, exName)=>{
+        const active = window.IronQuestPlans.getActive();
+        if(!active) return;
+        if(action==="remove") window.IronQuestPlans.removeExerciseFromPlan(active.id, exName);
+        if(action==="up") window.IronQuestPlans.moveExercise(active.id, exName, "up");
+        if(action==="down") window.IronQuestPlans.moveExercise(active.id, exName, "down");
+        refreshPlans();
+        refreshExercises(); // update "Nur Plan" filter
+      });
+    }
+
+    pActive.addEventListener("change", ()=>{
+      window.IronQuestPlans.setActive(pActive.value);
+      refreshPlans();
+      refreshExercises();
     });
 
-    const exSel=container.querySelector("#lExercise");
-    const searchEl=container.querySelector("#lSearch");
-    const previewList=container.querySelector("#previewList");
-    const previewTitle=container.querySelector("#previewTitle");
-    const previewHint=container.querySelector("#previewHint");
+    pOnly.addEventListener("change", ()=>{
+      refreshExercises();
+    });
 
-    const recEl=container.querySelector("#lRec");
-    const nextEl=container.querySelector("#lNext");
-    const coachEl=container.querySelector("#lCoach");
-    const volEl=container.querySelector("#lVol");
-    const xpEl=container.querySelector("#lXp");
-    const descEl=container.querySelector("#lDesc");
+    pNew.addEventListener("click", ()=>{
+      const name = prompt("Name des Plans (z.B. Plan A):", "Plan A");
+      if(name === null) return;
+      window.IronQuestPlans.addPlan(name);
+      refreshPlans();
+      refreshExercises();
+      window.Toast?.show?.("Plan erstellt", name);
+    });
 
-    // Session scoped buffs (stored in memory)
-    let buffs = { globalXp: window.__IQ_ACTIVE_BUFFS?.globalXp || 1, gateDmg: window.__IQ_ACTIVE_BUFFS?.gateDmg || 1, coreXp: window.__IQ_ACTIVE_BUFFS?.coreXp || 1 };
-    function updateBonusPill(){
-      const eq=window.IronQuestEquipment.bonuses();
-      const g = (eq.globalXp*(buffs.globalXp||1));
-      const gd = (eq.gateDmg*(buffs.gateDmg||1));
-      container.querySelector("#lMeta").innerHTML = `<b>Bonus:</b> XP×${g.toFixed(2)} • Gate×${gd.toFixed(2)}`;
-    }
-    updateBonusPill();
+    pDel.addEventListener("click", ()=>{
+      const active = window.IronQuestPlans.getActive();
+      if(!active) return;
+      if(!confirm(`Plan „${active.name}“ wirklich löschen?`)) return;
+      window.IronQuestPlans.removePlan(active.id);
+      refreshPlans();
+      refreshExercises();
+      window.Toast?.show?.("Plan gelöscht", active.name);
+    });
 
-    function filteredExercises(){
-      const t=typeSel.value;
-      const q=String(searchEl.value||"").trim().toLowerCase();
-      return exs.filter(e=>{
-        if(e.type!==t) return false;
-        if(!q) return true;
-        return e.name.toLowerCase().includes(q) || String(e.group||"").toLowerCase().includes(q);
-      });
-    }
+    refreshPlans();
 
-    function rebuildExerciseSelect(){
-      const list=filteredExercises();
-      exSel.innerHTML="";
-      list.forEach(e=>{
+    // ---- Exercise dropdowns ----
+    const mgSel = container.querySelector("#lMG");
+    const sgSel = container.querySelector("#lSG");
+    const exSel = container.querySelector("#lExercise");
+
+    const recPill = container.querySelector("#lRec");
+    const diffPill = container.querySelector("#lDiff");
+    const nextPill = container.querySelector("#lNext");
+    const coachPill = container.querySelector("#lCoach");
+    const xpPill = container.querySelector("#lXp");
+    const descEl = container.querySelector("#lDesc");
+
+    const dateEl = container.querySelector("#lDate");
+    const dayEl  = container.querySelector("#lDay");
+    const setsEl = container.querySelector("#lSets");
+    const repsEl = container.querySelector("#lReps");
+
+    // Fill muscle groups
+    window.IronQuestExercises.MUSCLE_GROUPS.forEach(g=>{
+      const o=document.createElement("option");
+      o.value=g; o.textContent=g;
+      mgSel.appendChild(o);
+    });
+
+    function fillSubGroups(){
+      const mg = mgSel.value;
+      sgSel.innerHTML="";
+      const pairs = window.IronQuestExercises.SUB_GROUPS
+        .filter(k=>k.startsWith(mg+"|||"))
+        .map(k=>k.split("|||")[1]);
+      for(const sg of pairs){
         const o=document.createElement("option");
-        o.value=e.name; o.textContent=e.name;
-        exSel.appendChild(o);
-      });
-      if(!list.length){
-        const o=document.createElement("option"); o.value=""; o.textContent="Keine Treffer"; exSel.appendChild(o);
+        o.value=sg; o.textContent=sg;
+        sgSel.appendChild(o);
       }
     }
 
-    function rebuildPreview(){
-      const list=filteredExercises();
-      previewTitle.textContent = `Preview: ${typeSel.value}`;
-      previewHint.textContent = `${list.length} Übungen • oben clean, Details unten.`;
-      previewList.innerHTML="";
-      if(!list.length){ previewList.innerHTML="<li>—</li>"; return; }
+    function getFilteredExercises(){
+      const mg = mgSel.value;
+      const sg = sgSel.value;
+      let list = window.IronQuestExercises.EXERCISES.filter(e => e.muscleGroup===mg && e.subGroup===sg);
 
-      list.slice(0,18).forEach(ex=>{
-        const li=document.createElement("li");
-        li.innerHTML=`
-          <div class="itemTop">
-            <div style="min-width:0;">
-              <b>${escapeHTML(ex.name)}</b>
-              <div class="hint">Empfohlen: ${ex.recSets}×${ex.recReps}</div>
-              <div class="hint">Typ: ${escapeHTML(ex.type)} • Fokus: ${escapeHTML(ex.group||"—")}</div>
-            </div>
-            <button class="secondary" data-pick="${escapeHTML(ex.name)}">Wählen</button>
-          </div>
-        `;
-        previewList.appendChild(li);
-      });
-
-      previewList.querySelectorAll("[data-pick]").forEach(btn=>{
-        btn.onclick=()=>{
-          exSel.value=btn.getAttribute("data-pick");
-          recalc();
-          container.querySelector("#lSets").focus();
-        };
-      });
+      if(pOnly.value === "1"){
+        const active = window.IronQuestPlans.getActive();
+        const set = new Set(active?.items || []);
+        list = list.filter(e => set.has(e.name));
+      }
+      list.sort((a,b)=>a.name.localeCompare(b.name));
+      return list;
     }
 
-    function getSelected(){
-      const name=exSel.value;
-      return exs.find(e=>e.name===name);
+    function refreshExercises(){
+      fillSubGroups();
+      const list = getFilteredExercises();
+
+      exSel.innerHTML = "";
+      if(!list.length){
+        const o=document.createElement("option");
+        o.value=""; o.textContent="(keine Übung in dieser Gruppe)";
+        exSel.appendChild(o);
+      } else {
+        for(const e of list){
+          const o=document.createElement("option");
+          o.value=e.name;
+          o.textContent = e.name;
+          exSel.appendChild(o);
+        }
+      }
+      onPick();
+    }
+
+    mgSel.addEventListener("change", refreshExercises);
+    sgSel.addEventListener("change", refreshExercises);
+    exSel.addEventListener("change", onPick);
+
+    // init subgroups + exercises
+    fillSubGroups();
+    refreshExercises();
+
+    function coachText(ex, sets, reps){
+      const fatigue = window.IronQuestCoachPlus?.fatigueScore?.(entries) || 0;
+      if(fatigue >= 75) return "Müde → Deload empfohlen (−1 Satz oder −2 Wdh).";
+      if(fatigue >= 55) return "Achte auf saubere Technik, nicht grinden.";
+      if(Number(sets||0) && Number(reps||0) && (sets>=ex.recSets && reps>=ex.recReps)) return "Stabil! Nächstes Mal +1 Wdh.";
+      return "Ziel: Empfehlung sauber treffen.";
+    }
+
+    function onPick(){
+      const ex = window.IronQuestExercises.findByName(exSel.value);
+      if(!ex){
+        recPill.innerHTML = "<b>Empfohlen:</b> —";
+        diffPill.innerHTML = "<b>Schwierigkeit:</b> —";
+        nextPill.innerHTML = "<b>Nächstes Ziel:</b> —";
+        coachPill.innerHTML = "<b>Coach:</b> —";
+        xpPill.innerHTML = "<b>XP:</b> —";
+        descEl.textContent = "—";
+        return;
+      }
+
+      recPill.innerHTML = `<b>Empfohlen:</b> ${ex.recSets}×${ex.recReps}`;
+      diffPill.innerHTML = `<b>Schwierigkeit:</b> ${stars(ex.difficulty)} (${ex.difficulty}/5)`;
+      descEl.textContent = formatDesc(ex.description);
+
+      // next target based on last entry for that exercise
+      const last = entries.find(e => e.exercise === ex.name);
+      const lastSets = last?.sets || ex.recSets;
+      const lastReps = last?.reps || ex.recReps;
+
+      const fatigue = window.IronQuestCoachPlus?.fatigueScore?.(entries) || 0;
+      let tgtSets = ex.recSets;
+      let tgtReps = ex.recReps;
+
+      if(fatigue >= 75){
+        tgtSets = Math.max(1, ex.recSets - 1);
+        tgtReps = Math.max(1, ex.recReps - 2);
+      } else if(lastSets >= ex.recSets && lastReps >= ex.recReps){
+        tgtReps = Math.min(ex.recReps + 4, Number(lastReps) + 1);
+        tgtSets = ex.recSets;
+      }
+      nextPill.innerHTML = `<b>Nächstes Ziel:</b> ${tgtSets}×${tgtReps}`;
+      coachPill.innerHTML = `<b>Coach:</b> ${coachText(ex, setsEl.value, repsEl.value)}`;
+
+      recalc();
     }
 
     function recalc(){
-      const ex=getSelected();
-      const sets=Number(container.querySelector("#lSets").value||0);
-      const reps=Number(container.querySelector("#lReps").value||0);
+      const ex = window.IronQuestExercises.findByName(exSel.value);
+      if(!ex) return;
 
-      if(!ex){
-        recEl.innerHTML="<b>Empfohlen:</b> —";
-        if(nextEl) nextEl.innerHTML="<b>Nächstes Ziel:</b> —";
-        if(coachEl) coachEl.innerHTML="<b>Coach:</b> —";
-        volEl.innerHTML="<b>Volumen:</b> —";
-        xpEl.innerHTML="<b>XP:</b> —";
-        descEl.textContent="—";
-        return { ex:null, sets, reps, xp:0 };
-      }
-      recEl.innerHTML=`<b>Empfohlen:</b> ${ex.recSets}×${ex.recReps}`;
+      const sets = Number(setsEl.value || 0);
+      const reps = Number(repsEl.value || 0);
 
-      // Adaptive next target based on last logged performance
-      try{
-        const last = entries.find(e=>String(e.exercise)===String(ex.name));
-        let lastSets=0, lastReps=0;
-        if(last){
-          const m=String(last.detail||"").match(/Did\s+(\d+)[x×](\d+)/i);
-          if(m){ lastSets=Number(m[1]||0); lastReps=Number(m[2]||0); }
-        }
-        const nxt = window.IronQuestCoach?.nextTarget?.(ex, lastSets, lastReps) || { sets: ex.recSets, reps: ex.recReps };
-        if(nextEl) nextEl.innerHTML = `<b>Nächstes Ziel:</b> ${nxt.sets}×${nxt.reps}`;
-        if(coachEl){
-          const note = (last && lastSets && lastReps) ? `Letztes: ${lastSets}×${lastReps}` : "Logge 1x, dann bekommst du Ziele.";
-          coachEl.innerHTML = `<b>Coach:</b> ${note}`;
-        }
-      }catch{}
-      const vol=Math.max(0, sets*reps);
-      volEl.innerHTML=`<b>Volumen:</b> ${vol}`;
-      descEl.textContent = formatDesc(ex.description||"—");
+      const buffs = window.IronQuestSkilltreeV2?.getActiveBuff?.() || null;
 
-      // buffs include equipment bonuses (applied inside app hook)
       const xp = window.IronQuestXP.calcExerciseXP({
+        exercise: ex,
         type: ex.type,
         recSets: ex.recSets,
         recReps: ex.recReps,
         sets, reps,
         entries,
-        buffs: { ...buffs, ...window.IronQuestEquipment.bonuses() }
+        buffs
       });
-      xpEl.innerHTML=`<b>XP:</b> ${xp||"—"}`;
-      return { ex, sets, reps, xp };
+
+      xpPill.innerHTML = `<b>XP:</b> ${isFinite(xp)?xp:0}`;
+      coachPill.innerHTML = `<b>Coach:</b> ${coachText(ex, sets, reps)}`;
     }
 
-    typeSel.onchange=()=>{ rebuildExerciseSelect(); rebuildPreview(); recalc(); };
-    searchEl.oninput=()=>{ rebuildExerciseSelect(); rebuildPreview(); recalc(); };
-    exSel.onchange=recalc;
-    container.querySelector("#lSets").oninput=recalc;
-    container.querySelector("#lReps").oninput=recalc;
+    setsEl.addEventListener("input", recalc);
+    repsEl.addEventListener("input", recalc);
 
-    rebuildExerciseSelect();
-    rebuildPreview();
-    recalc();
+    // Save
+    container.querySelector("#lSave").addEventListener("click", async ()=>{
+      const ex = window.IronQuestExercises.findByName(exSel.value);
+      if(!ex){ window.Toast?.show?.("Fehler", "Bitte Übung wählen."); return; }
 
-    container.querySelector("#lSave").onclick = async ()=>{
-      const {ex,sets,reps,xp}=recalc();
-      if(!ex || !sets || !reps) return;
+      const sets = Number(setsEl.value||0);
+      const reps = Number(repsEl.value||0);
+      if(!sets || !reps){
+        window.Toast?.show?.("Fehler", "Bitte Sätze und Wdh eingeben.");
+        return;
+      }
 
-      const date=container.querySelector("#lDate").value || today;
-      const week=window.IronQuestProgression.getWeekNumberFor(date);
-      const dayTag=container.querySelector("#lDay").value;
-
-      const entry={
-        date, week,
+      const buffs = window.IronQuestSkilltreeV2?.consumeActiveBuff?.() || null;
+      const xp = window.IronQuestXP.calcExerciseXP({
+        exercise: ex,
         type: ex.type,
+        recSets: ex.recSets,
+        recReps: ex.recReps,
+        sets, reps,
+        entries,
+        buffs
+      });
+
+      const date = dateEl.value;
+      const week = window.IronQuestProgression.getWeekNumberFor(date);
+
+      const entry = {
+        id: window.Utils.uid(),
+        date,
+        week,
+        dayTag: dayEl.value,
         exercise: ex.name,
-        detail: `Rec ${ex.recSets}×${ex.recReps} • Did ${sets}×${reps} • Tag ${dayTag}`,
-        xp
+        type: ex.type,
+        muscleGroup: ex.muscleGroup,
+        subGroup: ex.subGroup,
+        difficulty: ex.difficulty,
+        recSets: ex.recSets,
+        recReps: ex.recReps,
+        sets,
+        reps,
+        xp,
+        detail: `Did ${sets}x${reps}`
       };
 
       await window.IronDB.addEntry(entry);
-      window.Toast?.toast("Entry saved", `${ex.name} (+${xp} XP)`);
+      window.Toast?.show?.("Gespeichert", `${ex.name} • +${xp} XP`);
+      window.IronQuestUIEffects?.xpBurst?.(xp);
 
-      // consume one-time session buff if configured
-      if(window.__IQ_ACTIVE_BUFFS?.sessions){
-        window.__IQ_ACTIVE_BUFFS.sessions -= 1;
-        if(window.__IQ_ACTIVE_BUFFS.sessions<=0){
-          // reset buffs
-          window.__IQ_ACTIVE_BUFFS=null;
-          buffs={ globalXp:1, gateDmg:1, coreXp:1 };
-        }
-      }
+      // re-render to refresh list and streak/coach
       await render(container);
-    };
+    });
 
-    container.querySelector("#lUseSkill").onclick=()=>{
-      // Choose one active skill quickly (simple UI)
-      const a=window.IronQuestSkilltreeV2.ACTIVE;
-      const pick=a[0]; // default adrenaline
-      const res=window.IronQuestSkilltreeV2.useActive(pick.id);
-      if(!res.ok){
-        window.Toast?.toast("Skill", res.reason==="cooldown" ? "Cooldown aktiv." : "Nicht verfügbar.");
-        return;
-      }
-      // apply buff to next session
-      window.__IQ_ACTIVE_BUFFS = { ...res.skill.effect };
-      buffs = { globalXp: res.skill.effect.globalXp||1, gateDmg: res.skill.effect.gateDmg||1, coreXp: res.skill.effect.coreXp||1, sessions: res.skill.effect.sessions||0 };
-      window.Toast?.toast("Skill activated", res.skill.name);
-      updateBonusPill();
-    };
+    // Add to plan
+    container.querySelector("#lAddToPlan").addEventListener("click", ()=>{
+      const ex = window.IronQuestExercises.findByName(exSel.value);
+      const active = window.IronQuestPlans.getActive();
+      if(!active){ window.Toast?.show?.("Kein Plan", "Erstelle zuerst einen Plan."); return; }
+      if(!ex){ window.Toast?.show?.("Fehler", "Bitte Übung wählen."); return; }
+      window.IronQuestPlans.addExerciseToPlan(active.id, ex.name);
+      refreshPlans();
+      refreshExercises();
+      window.Toast?.show?.("Zum Plan hinzugefügt", `${active.name}: ${ex.name}`);
+    });
 
-    // History list
-    const ul=container.querySelector("#logList");
-    ul.innerHTML="";
-    if(!entries.length){
-      ul.innerHTML="<li>—</li>";
-    }else{
-      entries.slice(0,200).forEach(e=>{
-        const li=document.createElement("li");
-        li.innerHTML=`
-          <div class="itemTop">
-            <div>
-              <b>${e.date}</b> • W${e.week||"?"} • ${escapeHTML(e.exercise||e.type||"Entry")}
-              <div class="hint">${escapeHTML(e.detail||"")}</div>
-            </div>
-            <span class="badge">${Math.round(e.xp||0)} XP</span>
+    // Use skill
+    container.querySelector("#lUseSkill").addEventListener("click", ()=>{
+      const ok = window.IronQuestSkilltreeV2?.openActiveSkillPicker?.();
+      if(!ok) window.Toast?.show?.("Skill", "Keine Skills verfügbar oder Cooldown aktiv.");
+    });
+
+    // Clear log
+    container.querySelector("#logClear").addEventListener("click", async ()=>{
+      if(!confirm("Wirklich alle Einträge löschen?")) return;
+      await window.IronDB.clearEntries();
+      window.Toast?.show?.("Gelöscht", "Alle Entries entfernt.");
+      await render(container);
+    });
+
+    // Render log list
+    const listEl = container.querySelector("#logList");
+    for(const e of entries.slice(0, 80)){
+      const li=document.createElement("li");
+      li.innerHTML = `
+        <div class="itemTop">
+          <div style="min-width:0;">
+            <b>${escapeHTML(e.exercise)}</b>
+            <div class="small">${escapeHTML(e.date)} • W${escapeHTML(e.week)} • ${escapeHTML(e.muscleGroup||"")} / ${escapeHTML(e.subGroup||"")}</div>
+            <div class="small">Empf. ${e.recSets}×${e.recReps} • Du ${e.sets}×${e.reps} • ${e.xp} XP</div>
           </div>
-        `;
-        ul.appendChild(li);
-      });
+          <span class="badge ok">+${e.xp}</span>
+        </div>
+      `;
+      listEl.appendChild(li);
     }
-
-    container.querySelector("#logClear").onclick=async()=>{
-      await window.IronDB.clearAllEntries();
-      window.Toast?.toast("Log", "Alle Einträge gelöscht");
-      await render(container);
-    };
   }
 
-  window.IronQuestLog = { render };
+  window.IronQuestLogFeature = { render };
 })();
