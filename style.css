@@ -297,3 +297,140 @@ button.secondary{
 }
 .toast .tTitle{font-weight:950}
 .toast .tBody{color:rgba(255,255,255,.78); margin-top:4px; font-size:14px}
+
+/* ===== v9.4+ Visual Pack: Rank + Equipment Grid + Loot Reveal ===== */
+
+/* Rank color badges */
+.badge.rankE{ border-color: rgba(170,170,170,.35); background: rgba(255,255,255,.05); }
+.badge.rankD{ border-color: rgba(120,220,180,.40); background: rgba(76,255,155,.10); }
+.badge.rankC{ border-color: rgba(255,215,0,.40); background: rgba(255,215,0,.10); }
+.badge.rankB{ border-color: rgba(255,215,0,.45); background: rgba(255,215,0,.12); }
+.badge.rankA{ border-color: rgba(255,215,0,.55); background: rgba(255,215,0,.14); }
+.badge.rankS{ border-color: rgba(255,215,0,.70); background: rgba(255,215,0,.18); box-shadow: 0 0 12px rgba(255,215,0,.18); }
+.badge.rankSS{ border-color: rgba(150,120,255,.65); background: rgba(150,120,255,.14); box-shadow: 0 0 14px rgba(150,120,255,.14); }
+.badge.rankSSS{ border-color: rgba(170,120,255,.75); background: rgba(170,120,255,.18); box-shadow: 0 0 16px rgba(170,120,255,.16); }
+.badge.rankM{ border-color: rgba(170,80,255,.85); background: rgba(170,80,255,.20); box-shadow: 0 0 18px rgba(170,80,255,.18); }
+
+.rankEmblem{
+  display:inline-grid;
+  place-items:center;
+  width:44px;
+  height:44px;
+  border-radius:16px;
+  border:1px solid rgba(255,255,255,.10);
+  background: rgba(0,0,0,.22);
+}
+.rankEmblem svg{ width:34px; height:34px; }
+.rankEmblem.rankS, .rankEmblem.rankSS, .rankEmblem.rankSSS, .rankEmblem.rankM{ box-shadow: 0 0 0 2px rgba(255,255,255,.05), 0 14px 30px rgba(0,0,0,.35); }
+
+.rankEmblem.rankE{ color: rgba(220,220,220,.75); }
+.rankEmblem.rankD{ color: rgba(76,255,155,.75); }
+.rankEmblem.rankC{ color: rgba(255,215,0,.72); }
+.rankEmblem.rankB{ color: rgba(255,215,0,.78); }
+.rankEmblem.rankA{ color: rgba(255,215,0,.86); }
+.rankEmblem.rankS{ color: rgba(255,215,0,.92); }
+.rankEmblem.rankSS{ color: rgba(150,120,255,.92); }
+.rankEmblem.rankSSS{ color: rgba(180,120,255,.95); }
+.rankEmblem.rankM{ color: rgba(170,80,255,.98); }
+
+/* Equipment grid */
+.eqGrid{
+  display:grid;
+  grid-template-columns: 1fr 1fr;
+  gap:12px;
+}
+@media(max-width:520px){ .eqGrid{ grid-template-columns: 1fr 1fr; } }
+
+.eqSlot{
+  border-radius: 18px;
+  border:1px solid rgba(255,255,255,.10);
+  background: rgba(0,0,0,.18);
+  padding:12px;
+  text-align:left;
+  position:relative;
+  overflow:hidden;
+}
+.eqSlot:active{ transform: scale(.99); }
+.eqTop{ display:flex; align-items:center; gap:10px; margin-bottom:8px; }
+.eqIcon{ width:34px; height:34px; border-radius:14px; display:grid; place-items:center; background: rgba(255,255,255,.06); border:1px solid rgba(255,255,255,.10); }
+.eqLabel{ font-weight:950; opacity:.92; }
+.eqName{ font-weight:950; margin-top:2px; }
+.eqSub{ color: rgba(255,255,255,.72); font-size:13px; margin-top:4px; }
+.eqHint{ color: rgba(255,255,255,.55); font-size:12px; margin-top:8px; }
+
+/* Rarity glows */
+.rarCommon{ box-shadow:none; }
+.rarRare{ border-color: rgba(120,180,255,.35); box-shadow: 0 0 0 2px rgba(120,180,255,.07); }
+.rarEpic{ border-color: rgba(170,120,255,.40); box-shadow: 0 0 0 2px rgba(170,120,255,.08); }
+.rarLegend{ border-color: rgba(255,215,0,.55); box-shadow: 0 0 0 2px rgba(255,215,0,.10); }
+.rarMonarch{ border-color: rgba(170,80,255,.65); box-shadow: 0 0 0 2px rgba(170,80,255,.12), 0 0 18px rgba(170,80,255,.10); }
+
+.setCard{
+  border:1px solid rgba(255,255,255,.10);
+  background: rgba(0,0,0,.18);
+  border-radius: 18px;
+  padding: 12px;
+  margin-top: 10px;
+}
+.setCard.setOn2{ border-color: rgba(76,255,155,.30); background: rgba(76,255,155,.06); }
+.setCard.setOn4{ border-color: rgba(255,215,0,.35); background: rgba(255,215,0,.06); }
+.setLine{ margin-top:8px; color: rgba(255,255,255,.72); }
+.setLine.on{ color: rgba(255,255,255,.90); font-weight: 850; }
+
+/* Loot reveal */
+.lootStage{ position:relative; display:grid; place-items:center; gap:12px; min-height: 240px; }
+.chest{
+  width: 110px; height: 80px;
+  border-radius: 18px;
+  border: 1px solid rgba(255,255,255,.14);
+  background: linear-gradient(180deg, rgba(255,255,255,.08), rgba(255,255,255,.02));
+  box-shadow: 0 20px 60px rgba(0,0,0,.45);
+  position: relative;
+}
+.chest::before{
+  content:"";
+  position:absolute; inset: 10px 12px 18px 12px;
+  border-radius: 14px;
+  border: 1px solid rgba(255,255,255,.10);
+  background: rgba(0,0,0,.18);
+}
+.chest::after{
+  content:"";
+  position:absolute; left:0; right:0; top:0;
+  height: 42px;
+  border-radius: 18px 18px 14px 14px;
+  border-bottom: 1px solid rgba(255,255,255,.10);
+  background: linear-gradient(180deg, rgba(255,255,255,.10), rgba(255,255,255,.04));
+  transform-origin: 50% 100%;
+  transition: transform .28s ease;
+}
+.chest.open::after{ transform: rotateX(62deg); }
+
+.itemCard{
+  width: 100%;
+  border-radius: 18px;
+  border: 1px solid rgba(255,255,255,.12);
+  background: rgba(0,0,0,.20);
+  overflow:hidden;
+}
+.itemCard.reveal{ animation: cardReveal .35s ease-out; }
+@keyframes cardReveal{ from{ transform: translateY(8px) scale(.98); opacity:0; } to{ transform:none; opacity:1; } }
+.icTop{ padding: 12px; border-bottom: 1px solid rgba(255,255,255,.08); }
+.icName{ font-weight: 950; font-size: 16px; }
+.icMeta{ color: rgba(255,255,255,.70); font-size: 12px; margin-top:4px; }
+.icBody{ padding: 12px; }
+
+/* Equip modal rows */
+.equipModalHdr{ margin-top:10px; font-weight:950; }
+.equipList{ display:grid; gap:10px; margin-top:10px; }
+.equipRow{
+  text-align:left;
+  border-radius: 16px;
+  padding: 12px;
+  border: 1px solid rgba(255,255,255,.10);
+  background: rgba(0,0,0,.18);
+}
+.equipRow.active{ border-color: rgba(76,255,155,.35); background: rgba(76,255,155,.08); }
+.equipRowName{ font-weight: 950; }
+.equipRowMeta{ font-size: 12px; color: rgba(255,255,255,.70); margin-top:4px; }
+
