@@ -108,8 +108,8 @@
         <div class="row2">
           <div class="skillbox">
             <h3>Daily Quest</h3>
-            <div class="hint">${dailyDef?.title||"—"} – ${dailyDef?.desc||""}</div>
-            <div class="pill"><b>Reward:</b> +${dailyDef?.reward||0} XP</div>
+            <div class="hint">${(dailyDef && dailyDef.title)||"—"} – ${(dailyDef && dailyDef.desc)||""}</div>
+            <div class="pill"><b>Reward:</b> +${(dailyDef && dailyDef.reward)||0} XP</div>
             <div class="btnRow">
               <button class="secondary" id="claimDaily" ${rpgState.daily.claimed?"disabled":""}>Claim</button>
               <span class="badge ${rpgState.daily.claimed?"ok":"gold"}">${rpgState.daily.claimed?"CLAIMED":"OPEN"}</span>
@@ -118,8 +118,8 @@
 
           <div class="skillbox">
             <h3>Weekly Quest</h3>
-            <div class="hint">${weeklyDef?.title||"—"} – ${weeklyDef?.desc||""}</div>
-            <div class="pill"><b>Reward:</b> +${weeklyDef?.reward||0} XP</div>
+            <div class="hint">${(weeklyDef && weeklyDef.title)||"—"} – ${(weeklyDef && weeklyDef.desc)||""}</div>
+            <div class="pill"><b>Reward:</b> +${(weeklyDef && weeklyDef.reward)||0} XP</div>
             <div class="btnRow">
               <button class="secondary" id="claimWeekly" ${rpgState.weekly.claimed?"disabled":""}>Claim</button>
               <span class="badge ${rpgState.weekly.claimed?"ok":"gold"}">${rpgState.weekly.claimed?"CLAIMED":"OPEN"}</span>
@@ -129,9 +129,9 @@
         <hr>
         <div class="skillbox">
           <h3>Story Quest</h3>
-          <div class="hint"><b>${story.cur?.title||"—"}</b></div>
-          <div class="hint">${story.cur?.desc||""}</div>
-          <div class="pill"><b>Reward:</b> +${story.cur?.reward||0} XP + 1 Chest</div>
+          <div class="hint"><b>${(story.cur && story.cur.title)||"—"}</b></div>
+          <div class="hint">${(story.cur && story.cur.desc)||""}</div>
+          <div class="pill"><b>Reward:</b> +${(story.cur && story.cur.reward)||0} XP + 1 Chest</div>
           <div class="btnRow">
             <button class="primary" id="claimStory" ${(!story.done || story.claimed)?"disabled":""}>Claim Story</button>
             <span class="badge ${story.claimed?"ok":(story.done?"gold":"lock")}">${story.claimed?"CLAIMED":(story.done?"READY":"LOCKED")}</span>
@@ -142,7 +142,7 @@
 
       <div class="card">
         <h2>Chests</h2>
-        <div class="pill"><b>Available:</b> ${window.IronQuestLoot?.getState?.().chests || 0}</div>
+        <div class="pill"><b>Available:</b> ${(window.IronQuestLoot && (window.IronQuestLoot.getState) && window.IronQuestLoot.getState)().chests || 0}</div>
         <div class="btnRow">
           <button class="secondary" id="openChestDash">Open Chest</button>
         </div>
@@ -152,7 +152,7 @@
       </div>
     `;
 
-    if (window.IronQuestAttributes?.renderAttributes){
+    if ((window.IronQuestAttributes && window.IronQuestAttributes.renderAttributes)){
       window.IronQuestAttributes.renderAttributes(el.querySelector("#attrMount"));
     }
 
@@ -160,22 +160,22 @@
       const v=el.querySelector("#startDateInput").value;
       if(!v) return;
       localStorage.setItem("ironquest_startdate_v5", v);
-      window.Toast?.toast("Startdatum gespeichert", v);
+      (window.Toast && window.Toast.toast)("Startdatum gespeichert", v);
     };
     el.querySelector("#startReset").onclick=()=>{
       const today=window.Utils.isoDate(new Date());
       localStorage.setItem("ironquest_startdate_v5", today);
       el.querySelector("#startDateInput").value=today;
-      window.Toast?.toast("Startdatum gesetzt", today);
+      (window.Toast && window.Toast.toast)("Startdatum gesetzt", today);
     };
 
     el.querySelector("#claimDaily").onclick = async ()=>{
       const ok = await window.IronQuestRPG.claimDaily();
-      if(!ok) window.Toast?.toast("Daily Quest", "Noch nicht erfüllt oder bereits geclaimed.");
+      if(!ok) (window.Toast && window.Toast.toast)("Daily Quest", "Noch nicht erfüllt oder bereits geclaimed.");
     };
     el.querySelector("#claimWeekly").onclick = async ()=>{
       const ok = await window.IronQuestRPG.claimWeekly();
-      if(!ok) window.Toast?.toast("Weekly Quest", "Noch nicht erfüllt oder bereits geclaimed.");
+      if(!ok) (window.Toast && window.Toast.toast)("Weekly Quest", "Noch nicht erfüllt oder bereits geclaimed.");
     };
 
 
@@ -201,14 +201,14 @@
           const ok = window.IronQuestClass.set(sel.value);
           const now = window.IronQuestClass.get();
           cm.querySelector("#classDesc").textContent = now.desc || "";
-          if (ok) window.IronQuestUI?.systemMessage?.(`Class set: ${now.name}`);
+          if (ok) (window.IronQuestUI && (window.IronQuestUI.systemMessage) && window.IronQuestUI.systemMessage)(`Class set: ${now.name}`);
         };
       }
     }
 
     // Equipment panel
     const em = el.querySelector("#equipMount");
-    if (em && window.IronQuestEquipment?.renderEquipmentPanel){
+    if (em && (window.IronQuestEquipment && window.IronQuestEquipment.renderEquipmentPanel)){
       window.IronQuestEquipment.renderEquipmentPanel(em);
     }
 
@@ -217,26 +217,26 @@
     if (openBtn){
       openBtn.onclick = ()=>{
         const res = window.IronQuestLoot.rollDrop();
-        if (!res.ok) return window.Toast?.toast("Chest", "No chests available.");
-        window.IronQuestUI?.systemMessage?.(res.drop ? `Loot acquired: ${res.drop}` : "Loot acquired: XP shard");
+        if (!res.ok) return (window.Toast && window.Toast.toast)("Chest", "No chests available.");
+        (window.IronQuestUI && (window.IronQuestUI.systemMessage) && window.IronQuestUI.systemMessage)(res.drop ? `Loot acquired: ${res.drop}` : "Loot acquired: XP shard");
         el.querySelector("#dropResultDash").textContent = res.drop ? `You obtained: ${res.drop}` : "Nothing found… but you gained resolve.";
       };
     }
 
     el.querySelector("#claimStory").onclick = async ()=>{
       const ok = await window.IronQuestRPG.claimStory();
-      if(!ok) window.Toast?.toast("Story Quest", "Noch nicht bereit oder bereits geclaimed.");
+      if(!ok) (window.Toast && window.Toast.toast)("Story Quest", "Noch nicht bereit oder bereits geclaimed.");
     };
 
     el.querySelector("#openChest").onclick = ()=>{
       const res = window.IronQuestLoot.rollDrop();
-      if (!res.ok) return window.Toast?.toast("Chest", "Keine Chest verfügbar.");
-      window.Toast?.toast("Chest opened", res.drop || "Nothing (XP shard)");
+      if (!res.ok) return (window.Toast && window.Toast.toast)("Chest", "Keine Chest verfügbar.");
+      (window.Toast && window.Toast.toast)("Chest opened", res.drop || "Nothing (XP shard)");
       renderDashboard(el);
     };
 
     el.querySelector("#goLog").onclick = ()=>{
-      document.querySelector('nav button[data-tab="log"]')?.click();
+      document.querySelector('nav button[data-tab="log"]'() && ).click)();
     };
   }
 
@@ -474,18 +474,18 @@
     el.querySelector("#sessStart").onclick = ()=>{
       const day = Number(daySel.value||1);
       window.IronQuestSession.start(day);
-      window.Toast?.toast("Session started", `Day ${day}`);
+      (window.Toast && window.Toast.toast)("Session started", `Day ${day}`);
       renderLog(el);
     };
     el.querySelector("#sessStop").onclick = ()=>{
       window.IronQuestSession.stop();
-      window.Toast?.toast("Session stopped");
+      (window.Toast && window.Toast.toast)("Session stopped");
       renderLog(el);
     };
     el.querySelector("#sessFinish").onclick = ()=>{
       const res = window.IronQuestSession.finishAndReward();
       if (!res.ok) return;
-      window.Toast?.toast("Session finished", "+1 Chest");
+      (window.Toast && window.Toast.toast)("Session finished", "+1 Chest");
       renderLog(el);
     };
 
@@ -494,7 +494,7 @@
       if (!ex) return;
       window.IronQuestSession.toggleDone(ex.name);
       rebuildPreview();
-      window.Toast?.toast("Session", `Done: ${ex.name}`);
+      (window.Toast && window.Toast.toast)("Session", `Done: ${ex.name}`);
     };
 
     el.querySelector("#lSave").onclick = async ()=>{
@@ -516,9 +516,9 @@
 
       // Coach PR
       const pr = window.IronQuestCoach.updatePR(entry);
-      if (pr?.isNew) window.Toast?.toast("NEW PR!", `${ex.name} volume ${pr.best.bestVolume}`);
+      if ((pr && pr.isNew)) (window.Toast && window.Toast.toast)("NEW PR!", `${ex.name} volume ${pr.best.bestVolume}`);
 
-      window.Toast?.toast("Entry saved", `${ex.name} (+${xp} XP)`);
+      (window.Toast && window.Toast.toast)("Entry saved", `${ex.name} (+${xp} XP)`);
       await renderLog(el);
     };
 
@@ -543,7 +543,7 @@
 
     el.querySelector("#logClear").onclick = async ()=>{
       await window.IronDB.clearAllEntries();
-      window.Toast?.toast("Log", "Alle Einträge gelöscht");
+      (window.Toast && window.Toast.toast)("Log", "Alle Einträge gelöscht");
       await renderLog(el);
     };
   }
