@@ -1,155 +1,174 @@
 (() => {
   "use strict";
 
-  const KEY="iq_equipment_v10";
-  const SLOTS = ["weapon","armor","relic","ring"];
-  const SETS = {
-    berserker:{
-      name:"Berserker",
-      bonuses:{
-        2:{ typeXp:{ Mehrgelenkig:1.10 } },
-        4:{ bossDamage:1.25 }
-      }
+  const LS_KEY = "iq_equipment_v1";
+
+  const DEFAULT_STATE = {
+    // simple equipment model
+    slots: {
+      weapon: null,
+      armor: null,
+      accessory: null
     },
-    scholar:{
-      name:"Scholar",
-      bonuses:{
-        2:{ typeXp:{ Core:1.15 } },
-        4:{ globalXp:1.10 }
-      }
-    },
-    endurance:{
-      name:"Endurance",
-      bonuses:{
-        2:{ typeXp:{ Conditioning:1.20 } },
-        4:{ gateHpMult:0.80 }
-      }
-    },
-    monarch:{
-      name:"Monarch",
-      bonuses:{
-        2:{ globalXp:1.10 },
-        4:{ lootLuck:1.30 }
-      }
-    }
+    inventory: [], // [{id,name,rarity,setId,bonuses:{xpPct,gateDmg,crit,def}}]
+    lastUpdated: Date.now()
   };
 
-  function load(){
-    try{ return JSON.parse(localStorage.getItem(KEY)||"null")||null; }catch(_){ return null; }
+  function safeParse(json, fallback) {
+    try { return JSON.parse(json); } catch { return fallback; }
   }
-  function save(st){ localStorage.setItem(KEY, JSON.stringify(st)); }
-  function defaultState(){
-    const eq={};
-    SLOTS.forEach(s=>eq[s]=null);
-    return { slots:eq };
+
+  function clone(obj) {
+    return JSON.parse(JSON.stringify(obj));
   }
-  function state(){
-    const st = load() || defaultState();
-    if(!st.slots) st.slots = defaultState().slots;
-    SLOTS.forEach(s=>{ if(!(s in st.slots)) st.slots[s]=null; });
+
+  function ensureItemShape(it) {
+    if (!it || typeof it !== "object") return null;
+    const out = Object.assign({
+      id: String(it.id || cryptoId()),
+      name: String(it.name || "Unknown Item"),
+      rarity: it.rarity || "Common",
+      setId: it.setId || null,
+      bonuses: Object.assign({ xpPct: 0, gateDmg: 0, crit: 0, def: 0 }, it.bonuses || {})
+    }, it);
+
+    // hard safety
+    if (typeof out.bonuses.xpPct !== "number") out.bonuses.xpPct = Number(out.bonuses.xpPct) || 0;
+    if (typeof out.bonuses.gateDmg !== "number") out.bonuses.gateDmg = Number(out.bonuses.gateDmg) || 0;
+    if (typeof out.bonuses.crit !== "number") out.bonuses.crit = Number(out.bonuses.crit) || 0;
+    if (typeof out.bonuses.def !== "number") out.bonuses.def = Number(out.bonuses.def) || 0;
+
+    return out;
+  }
+
+  function cryptoId() {
+    // iOS-safe fallback
+    return "it_" + Math.random().toString(16).slice(2) + "_" + Date.now().toString(16);
+  }
+
+  function loadState() {
+    const raw = localStorage.getItem(LS_KEY);
+    const st = raw ? safeParse(raw, clone(DEFAULT_STATE)) : clone(DEFAULT_STATE);
+
+    // ensure shape
+    if (!st.slots) st.slots = clone(DEFAULT_STATE.slots);
+    if (!st.inventory) st.inventory = [];
+    if (!st.slots.weapon) st.slots.weapon = null;
+    if (!st.slots.armor) st.slots.armor = null;
+    if (!st.slots.accessory) st.slots.accessory = null;
+
+    // normalize inventory items
+    st.inventory = st.inventory.map(ensureItemShape).filter(Boolean);
+
     return st;
   }
-  function equip(slot, item){
-    const st = state();
-    st.slots[slot]=item||null;
-    save(st);
-  }
-  function unequip(slot){ equip(slot, null); }
 
-  function equippedItems(){
-    const st = state();
-    return SLOTS.map(s=>st.slots[s]).filter(Boolean);
+  function saveState(st) {
+    st.lastUpdated = Date.now();
+    localStorage.setItem(LS_KEY, JSON.stringify(st));
   }
 
-  function setCounts(){
-    const counts={};
-    for(const it of equippedItems()){
-      if(it.setId){
-        counts[it.setId]=(counts[it.setId]||0)+1;
-      }
-    }
-    return counts;
+  // --- Public API ---
+  let _state = loadState();
+
+  function getState() { return clone(_state); }
+  function setState(next) {
+    _state = next ? next : clone(DEFAULT_STATE);
+    // normalize
+    _state = loadStateFrom(_state);
+    saveState(_state);
+    return getState();
   }
 
-  function activeBonuses(){
-    const counts = setCounts();
-    // keep defaults stable for all screens (some expect gateDmg as a number)
-    const bonus = { globalXp:1, lootLuck:1, bossDamage:1, gateHpMult:1, gateDmg:0, typeXp:{} };
-    for(const setId in counts){
-      const c=counts[setId];
-      const def=SETS[setId];
-      if(!def) continue;
-      if(c>=2 && def.bonuses[2]){
-        applyBonus(bonus, def.bonuses[2]);
-      }
-      if(c>=4 && def.bonuses[4]){
-        applyBonus(bonus, def.bonuses[4]);
-      }
-    }
-    return bonus;
+  function load() {
+    _state = loadState();
+    return getState();
   }
 
-  function applyBonus(target, b){
-    if(b.globalXp) target.globalXp *= b.globalXp;
-    if(b.lootLuck) target.lootLuck *= b.lootLuck;
-    if(b.bossDamage) target.bossDamage *= b.bossDamage;
-    if(b.gateHpMult) target.gateHpMult *= b.gateHpMult;
-    if(typeof b.gateDmg === "number") target.gateDmg += b.gateDmg;
-    if(b.typeXp){
-      for(const k in b.typeXp){
-        target.typeXp[k] = (target.typeXp[k]||1) * b.typeXp[k];
-      }
-    }
+  function save() {
+    saveState(_state);
   }
 
-  function renderGrid(el){
-    const st = state();
-    const counts = setCounts();
-    const items = st.slots;
+  function loadStateFrom(candidate) {
+    const st = candidate && typeof candidate === "object" ? clone(candidate) : clone(DEFAULT_STATE);
+    if (!st.slots) st.slots = clone(DEFAULT_STATE.slots);
+    if (!st.inventory) st.inventory = [];
+    st.inventory = st.inventory.map(ensureItemShape).filter(Boolean);
+    if (!("weapon" in st.slots)) st.slots.weapon = null;
+    if (!("armor" in st.slots)) st.slots.armor = null;
+    if (!("accessory" in st.slots)) st.slots.accessory = null;
+    return st;
+  }
 
-    el.innerHTML = `
-      <div class="card">
-        <h2>Equipment</h2>
-        <div class="equip-grid">
-          ${SLOTS.map(slot=>{
-            const it = items[slot];
-            const rarity = it && it.rarity ? it.rarity : "common";
-            const setId = it && it.setId ? it.setId : "";
-            const setName = setId && SETS[setId] ? SETS[setId].name : "";
-            const prog = setId ? `${counts[setId]||0}/4` : "";
-            return `
-              <button class="equip-slot rarity-${rarity}" data-slot="${slot}">
-                <div class="equip-slot-title">${slot.toUpperCase()}</div>
-                <div class="equip-slot-item">${it? it.name : "Empty"}</div>
-                <div class="equip-slot-sub">${setName ? (setName+" "+prog) : ""}</div>
-              </button>`;
-          }).join("")}
-        </div>
-      </div>
-    `;
+  function addItem(item) {
+    const it = ensureItemShape(item);
+    if (!it) return null;
+    _state.inventory.push(it);
+    save();
+    return it.id;
+  }
 
-    el.querySelectorAll(".equip-slot").forEach(btn=>{
-      btn.addEventListener("click", ()=>{
-        const slot = btn.getAttribute("data-slot");
-        const current = state().slots[slot];
-        if(current){
-          if(confirm("Unequip this item?")) unequip(slot);
-        }
-        renderGrid(el);
-      });
+  function equip(slot, itemId) {
+    if (!slot) return;
+    const it = _state.inventory.find(x => x.id === itemId);
+    if (!it) return;
+    if (!_state.slots) _state.slots = clone(DEFAULT_STATE.slots);
+    _state.slots[slot] = it.id;
+    save();
+  }
+
+  function unequip(slot) {
+    if (!_state.slots) _state.slots = clone(DEFAULT_STATE.slots);
+    _state.slots[slot] = null;
+    save();
+  }
+
+  function equippedItems() {
+    const ids = Object.values(_state.slots || {}).filter(Boolean);
+    return ids.map(id => _state.inventory.find(x => x.id === id)).filter(Boolean);
+  }
+
+  // ✅ required by gates.js in your screenshots
+  function equippedNames() {
+    return equippedItems().map(it => it.name);
+  }
+
+  function activeBonuses() {
+    const items = equippedItems();
+    const sum = { xpPct: 0, gateDmg: 0, crit: 0, def: 0 };
+
+    items.forEach(it => {
+      const b = it.bonuses || {};
+      sum.xpPct += Number(b.xpPct || 0);
+      sum.gateDmg += Number(b.gateDmg || 0);
+      sum.crit += Number(b.crit || 0);
+      sum.def += Number(b.def || 0);
     });
+
+    // ✅ hard defaults so .toFixed never crashes
+    if (!isFinite(sum.gateDmg)) sum.gateDmg = 0;
+    if (!isFinite(sum.xpPct)) sum.xpPct = 0;
+    if (!isFinite(sum.crit)) sum.crit = 0;
+    if (!isFinite(sum.def)) sum.def = 0;
+
+    return sum;
   }
+
+  // Backwards compatible aliases used by older modules:
+  // gates/log refer to bonuses()
+  function bonuses() { return activeBonuses(); }
 
   window.IronQuestEquipment = {
-    SLOTS,
-    SETS,
-    // compat helpers used by some modules
-    load: () => state(),
-    state,
-    equip,
-    unequip,
+    // core
+    load, save,
+    getState, setState,
+    // inventory
+    addItem,
+    equip, unequip,
+    // computed
+    equippedItems,
+    equippedNames,      // ✅ fix for your gates error
     activeBonuses,
-    bonuses: activeBonuses,
-    renderGrid
+    bonuses             // ✅ compat alias
   };
 })();
