@@ -31,7 +31,7 @@
     o.querySelector("#luTitle").textContent = `Lv ${level}`;
     o.querySelector("#luSub").textContent = title ? `${title}` : "—";
     o.querySelector("#luHint").textContent = "SYSTEM: Your power has increased.";
-    try { navigator.vibrate?.(40); } catch {}
+    try { (navigator.vibrate && navigator.vibrate(40); } catch {}
   }
 
   function hide(){
@@ -54,11 +54,11 @@
     if (L.lvl > last){
       setLastLevel(L.lvl);
       show(L.lvl, L.title);
-      window.UIEffects?.systemMessage([`Level increased: Lv ${L.lvl}`, `${L.title}`]);
+      (window.UIEffects && window.UIEffects.systemMessage)([`Level increased: Lv ${L.lvl}`, `${L.title}`]);
       // chest every 3 levels
-      if (L.lvl % 3 === 0) window.IronQuestLoot?.addChest?.(1);
+      if (L.lvl % 3 === 0) (window.IronQuestLoot && (window.IronQuestLoot.addChest) && window.IronQuestLoot.addChest)(1);
       // notify rpg
-      await window.IronQuestRPG?.onProgressChanged?.(L.lvl);
+      await (window.IronQuestRPG && (window.IronQuestRPG.onProgressChanged) && window.IronQuestRPG.onProgressChanged)(L.lvl);
     }
     return L;
   }
