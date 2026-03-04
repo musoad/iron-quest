@@ -17,7 +17,10 @@
   function save(st){ localStorage.setItem(KEY, JSON.stringify(st)); }
   function defaultState(){
     return {
-      passive: { Mehrgelenkig:0, Unilateral:0, Core:0, Conditioning:0, Komplexe:0, NEAT:0 },
+    getActiveBuff,
+    setActiveBuff,
+    consumeActiveBuff,
+passive: { Mehrgelenkig:0, Unilateral:0, Core:0, Conditioning:0, Komplexe:0, NEAT:0 },
       active: {} // id -> {lastUsed, charges}
     };
   }
@@ -58,7 +61,39 @@
     const st = _activeState();
     st.active[id] = { lastUsed: Date.now() };
     save(st);
-    return { ok:true, skill };
+    
+  // ----- Active Skill Buff (used by Log XP calc) -----
+  const KEY_ACTIVE_BUFF = "iq_active_buff_v2";
+  function _readBuff(){
+    let b = window.__IQ_ACTIVE_BUFFS || null;
+    if(!b){
+      try{
+        const raw = localStorage.getItem(KEY_ACTIVE_BUFF);
+        if(raw){
+          const obj = JSON.parse(raw);
+          if(obj && obj.buffs) b = obj.buffs;
+        }
+      }catch(e){}
+    }
+    return b;
+  }
+  function setActiveBuff(buffs){
+    window.__IQ_ACTIVE_BUFFS = buffs || null;
+    try{
+      if(buffs) localStorage.setItem(KEY_ACTIVE_BUFF, JSON.stringify({ buffs, ts: Date.now() }));
+      else localStorage.removeItem(KEY_ACTIVE_BUFF);
+    }catch(e){}
+  }
+  function getActiveBuff(){
+    // NOTE: read-only; do not consume on read because UI recalculates often
+    const b = _readBuff();
+    return b || null;
+  }
+  function consumeActiveBuff(){
+    // call this after saving a log entry (one-time buff)
+    setActiveBuff(null);
+  }
+return { ok:true, skill };
   }
 
   window.IronQuestSkilltreeV2 = {
