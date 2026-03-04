@@ -54,7 +54,13 @@
     entries.sort((a,b)=> (a.date<b.date?1:-1));
 
     const today = window.Utils.isoDate(new Date());
-    const eqBonus = window.IronQuestEquipment.bonuses();
+    // Equipment can be missing/partially loaded on some clients (iOS/Safari caching).
+    // Always normalize bonus object to avoid "undefined.toFixed" crashes.
+    const eqBonusRaw = window.IronQuestEquipment?.bonuses?.() || {};
+    const eqBonus = {
+      globalXp: Number(eqBonusRaw.globalXp ?? 1),
+      gateDmg: Number(eqBonusRaw.gateDmg ?? 1)
+    };
 
     container.innerHTML = `
       <div class="card">
