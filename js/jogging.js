@@ -83,7 +83,7 @@
         xp
       });
 
-      window.Toast?.toast("Run saved", `+${xp} XP`);
+      (window.Toast && window.Toast.toast)("Run saved", `+${xp} XP`);
       await renderRunning(el);
     };
 
