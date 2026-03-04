@@ -122,13 +122,13 @@
     chest.classList.remove("open");
 
     // Build card HTML
-    const name = item?.name || "XP Dust";
-    const rarity = item?.rarity || "Common";
+    const name = (item && item.name) || "XP Dust";
+    const rarity = (item && item.rarity) || "Common";
     const burstKind = (/monarch|sss|ss|epic/i.test(rarity)) ? "purple" : (/legend/i.test(rarity)) ? "gold" : (/rare/i.test(rarity)) ? "green" : "green";
-    const setName = item?.setName || (item?.setId ? (window.IronQuestEquipment?.SET_BONUSES?.[item.setId]?.name || item.setId) : "—");
-    const bonus = item?.bonus ? JSON.stringify(item.bonus) : "";
+    const setName = (item && item.setName) || ((item && item.setId) ? (((window.IronQuestEquipment && window.IronQuestEquipment.SET_BONUSES) && window.IronQuestEquipment.SET_BONUSES[item.setId] && window.IronQuestEquipment.SET_BONUSES[item.setId].name) || item.setId) : "—");
+    const bonus = (item && item.bonus) ? JSON.stringify(item.bonus) : "";
 
-    const rarClass = window.IronQuestEquipment?.rarityClass?.(rarity) || "rarCommon";
+    const rarClass = (window.IronQuestEquipment && (window.IronQuestEquipment.rarityClass) && window.IronQuestEquipment.rarityClass)(rarity) || "rarCommon";
 
     card.innerHTML = `
       <div class="icTop ${rarClass}">
@@ -165,7 +165,7 @@
 
     hdr.textContent = `Choose ${label}`;
 
-    const loot = (window.IronQuestLoot?.getState?.() || window.IronQuestLoot?.load?.() || { inv:[] });
+    const loot = ((window.IronQuestLoot && (window.IronQuestLoot.getState) && window.IronQuestLoot.getState)() || (window.IronQuestLoot && (window.IronQuestLoot.load) && window.IronQuestLoot.load)() || { inv:[] });
     const inv = loot.inv || [];
 
     const kindMap = { title:"title", badge:"badge", aura:"aura", relic:"relic" };
@@ -183,7 +183,7 @@
     list.innerHTML = rows.map(it=>{
       const active = (it.id && eq[slot]===it.id) ? "active" : (!it.id && !eq[slot]) ? "active" : "";
       const rarClass = window.IronQuestEquipment.rarityClass(it.rarity);
-      const setName = it.setName || (it.setId ? (window.IronQuestEquipment?.SET_BONUSES?.[it.setId]?.name || it.setId) : "—");
+      const setName = it.setName || (it.setId ? (((window.IronQuestEquipment && window.IronQuestEquipment.SET_BONUSES) && window.IronQuestEquipment.SET_BONUSES[it.setId] && window.IronQuestEquipment.SET_BONUSES[it.setId].name) || it.setId) : "—");
       return `
         <button class="equipRow ${active} ${rarClass}" data-equip-id="${it.id||""}">
           <div class="equipRowName">${escapeHtml(it.name || "—")}</div>
@@ -196,12 +196,12 @@
       btn.onclick = ()=>{
         const id = btn.getAttribute("data-equip-id") || null;
         window.IronQuestEquipment.equip(slot, id);
-        window.Toast?.toast("Equipment", `${label} updated.`);
+        (window.Toast && window.Toast.toast)("Equipment", `${label} updated.`);
         hide("equipOverlay");
         // refresh home if visible
         const homeEl = document.getElementById('home');
         if(homeEl && homeEl.classList.contains('active')){
-          window.IronQuestHome?.render?.(homeEl);
+          (window.IronQuestHome && (window.IronQuestHome.render) && window.IronQuestHome.render)(homeEl);
         }
       };
     });
