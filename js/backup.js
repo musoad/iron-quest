@@ -57,14 +57,14 @@
         }
       };
       download(`ironquest_v8_backup_${window.Utils.isoDate(new Date())}.json`, JSON.stringify(snapshot,null,2));
-      window.Toast?.toast("Backup exported");
+      (window.Toast && window.Toast.toast)("Backup exported");
     };
 
     container.querySelector("#im").onclick=async()=>{
-      const f=container.querySelector("#file").files?.[0];
-      if(!f) return window.Toast?.toast("Import", "Bitte JSON wählen.");
+      var _files = container.querySelector("#file").files; const f = _files && _files[0];
+      if(!f) return (window.Toast && window.Toast.toast)("Import", "Bitte JSON wählen.");
       let snap=null;
-      try{ snap=JSON.parse(await f.text()); }catch{ return window.Toast?.toast("Import", "Ungültiges JSON."); }
+      try{ snap=JSON.parse(await f.text()); }catch{ return (window.Toast && window.Toast.toast)("Import", "Ungültiges JSON."); }
 
       const merge=async(name, rows, sigFn)=>{
         const cur=await window.DB.getAll(name);
@@ -101,17 +101,17 @@
         }
       }
 
-      window.Toast?.toast("Import done", "Daten gemerged ✅");
+      (window.Toast && window.Toast.toast)("Import done", "Daten gemerged ✅");
     };
 
     container.querySelector("#sysExport").onclick=async()=>{
       const sys=await window.IronDB.getAllSystem();
       download(`ironquest_v8_systemlog_${window.Utils.isoDate(new Date())}.json`, JSON.stringify(sys,null,2));
-      window.Toast?.toast("System log exported");
+      (window.Toast && window.Toast.toast)("System log exported");
     };
     container.querySelector("#sysClear").onclick=async()=>{
       await window.IronDB.clearSystem();
-      window.Toast?.toast("System log cleared");
+      (window.Toast && window.Toast.toast)("System log cleared");
     };
   }
 
