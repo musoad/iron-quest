@@ -2,6 +2,15 @@
   "use strict";
 
   const KEY="iq_skilltree_v2";
+  const MAX_PASSIVE = 25;
+  const COOLDOWN_MS = 24*60*60*1000;
+
+  // Simple active-skill definitions (effects are applied as temporary buffs)
+  const ACTIVE = [
+    { id:"focus", name:"Focus", desc:"+10% XP für den nächsten Log-Eintrag.", effect:{ xpMult:1.10 } },
+    { id:"burst", name:"Burst", desc:"+15% Gate Damage für den nächsten Gate-Run.", effect:{ gateDmg:0.15 } },
+    { id:"calm", name:"Calm", desc:"-10% Gate HP (leichter) für den nächsten Gate-Run.", effect:{ gateHpMult:0.90 } }
+  ];
   function load(){
     try{ return JSON.parse(localStorage.getItem(KEY)||"null") || null; }catch(_){ return null; }
   }
@@ -20,7 +29,7 @@
   function addPassive(type){
     const st = state();
     if(!st.passive[type]) st.passive[type]=0;
-    st.passive[type] = Math.min(25, Number(st.passive[type]||0)+1);
+    st.passive[type] = Math.min(MAX_PASSIVE, Number(st.passive[type]||0)+1);
     save(st);
   }
   function passiveMultiplier(type){
@@ -29,11 +38,38 @@
     return 1 + Math.min(0.25, pts * 0.02);
   }
 
+  function _activeState(){
+    const st = state();
+    if(!st.active) st.active = {};
+    return st;
+  }
+
+  function canUseActive(id){
+    const st = _activeState();
+    const a = st.active[id];
+    if(!a || !a.lastUsed) return true;
+    return (Date.now() - a.lastUsed) >= COOLDOWN_MS;
+  }
+
+  function useActive(id){
+    const skill = ACTIVE.find(s=>s.id===id);
+    if(!skill) return { ok:false, reason:"not_found" };
+    if(!canUseActive(id)) return { ok:false, reason:"cooldown", skill };
+    const st = _activeState();
+    st.active[id] = { lastUsed: Date.now() };
+    save(st);
+    return { ok:true, skill };
+  }
+
   window.IronQuestSkilltreeV2 = {
     // persistence helpers (some screens call .load())
     load: state,
     save: function(st){ save(st); },
     state,
+    MAX_PASSIVE,
+    ACTIVE,
+    canUseActive,
+    useActive,
     addPassive,
     passiveMultiplier,
     setPassive: function(type, pts){
