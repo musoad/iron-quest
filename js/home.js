@@ -21,7 +21,7 @@
   }
 
   function renderSetProgress(){
-    if(!window.IronQuestEquipment?.setProgress) return "";
+    if(!(window.IronQuestEquipment && window.IronQuestEquipment.setProgress)) return "";
     const sp = window.IronQuestEquipment.setProgress();
     if(!sp.length) return `<p class="hint">No active set bonuses yet. Equip 2/4 items from the same set.</p>`;
     return `
@@ -47,11 +47,11 @@
   }
 
   async function render(el){
-    const name = window.IronQuestProfile?.getName?.() || "Hunter";
-    const start = window.IronQuestProgression?.getStartDate?.() || window.Utils.isoDate(new Date());
+    const name = (window.IronQuestProfile && (window.IronQuestProfile.getName) && window.IronQuestProfile.getName)() || "Hunter";
+    const start = (window.IronQuestProgression && (window.IronQuestProgression.getStartDate) && window.IronQuestProgression.getStartDate)() || window.Utils.isoDate(new Date());
     const xp = await totalXp();
-    const levelInfo = window.IronQuestProgression?.levelFromTotalXp?.(xp) || { lvl:1, title:"Rookie", nextXp:0, curXp:xp };
-    const rank = window.IronQuestHunterRank?.compute?.(levelInfo.lvl, xp) || "E";
+    const levelInfo = (window.IronQuestProgression && (window.IronQuestProgression.levelFromTotalXp) && window.IronQuestProgression.levelFromTotalXp)(xp) || { lvl:1, title:"Rookie", nextXp:0, curXp:xp };
+    const rank = (window.IronQuestHunterRank && (window.IronQuestHunterRank.compute) && window.IronQuestHunterRank.compute)(levelInfo.lvl, xp) || "E";
 
     const profileCard = card("Profile", `
       <div class="grid2">
@@ -75,7 +75,7 @@
         <div class="kpi"><div class="k">Level</div><div class="v">${levelInfo.lvl}</div><div class="s">${esc(levelInfo.title||"")}</div></div>
         <div class="kpi"><div class="k">Rank</div><div class="v">${esc(rank)}</div><div class="s">Hunter Class</div></div>
         <div class="kpi"><div class="k">Total XP</div><div class="v">${Math.floor(xp)}</div><div class="s">All-time</div></div>
-        <div class="kpi"><div class="k">Week</div><div class="v">W${window.IronQuestProgression?.getWeekNumber?.() ?? 1}</div><div class="s">12-week cycle</div></div>
+        <div class="kpi"><div class="k">Week</div><div class="v">W${(window.IronQuestProgression && (window.IronQuestProgression.getWeekNumber) && window.IronQuestProgression.getWeekNumber)() ?? 1}</div><div class="s">12-week cycle</div></div>
       </div>
     `);
 
@@ -101,24 +101,24 @@
     const btn = el.querySelector("#iq_save_profile");
     if(btn){
       btn.onclick = async () => {
-        const newName = el.querySelector("#iq_name")?.value?.trim() || "Hunter";
-        const newStart = el.querySelector("#iq_start")?.value || window.Utils.isoDate(new Date());
-        window.IronQuestProfile?.setName?.(newName);
-        window.IronQuestProgression?.setStartDate?.(newStart);
-        window.Toast?.toast?.("Saved.");
-        window.IronQuestApp?.navigate?.("home");
+        const newName = el.querySelector("#iq_name"() && ().value) && ).value).trim)() || "Hunter";
+        const newStart = el.querySelector("#iq_start"() && ).value) || window.Utils.isoDate(new Date());
+        (window.IronQuestProfile && (window.IronQuestProfile.setName) && window.IronQuestProfile.setName)(newName);
+        (window.IronQuestProgression && (window.IronQuestProgression.setStartDate) && window.IronQuestProgression.setStartDate)(newStart);
+        (window.Toast && (window.Toast.toast) && window.Toast.toast)("Saved.");
+        (window.IronQuestApp && (window.IronQuestApp.navigate) && window.IronQuestApp.navigate)("home");
       };
     }
 
     // mount attributes + equipment
     try{
       const a = el.querySelector("#attrMount");
-      if(a && window.IronQuestAttributes?.render) window.IronQuestAttributes.render(a);
+      if(a && (window.IronQuestAttributes && window.IronQuestAttributes.render)) window.IronQuestAttributes.render(a);
     }catch(e){ console.warn(e); }
 
     try{
       const m = el.querySelector("#equipMount");
-      if(m && window.IronQuestEquipment?.renderGrid) window.IronQuestEquipment.renderGrid(m);
+      if(m && (window.IronQuestEquipment && window.IronQuestEquipment.renderGrid)) window.IronQuestEquipment.renderGrid(m);
     }catch(e){ console.warn(e); }
   }
 
