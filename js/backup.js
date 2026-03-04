@@ -18,6 +18,13 @@
       </div>
 
       <div class="card">
+        <h2>Repair</h2>
+        <p class="hint">Wenn iPhone/Safari hängt (Booting…), lösche hier Cache + Service Worker.</p>
+        <button class="secondary" id="btnRepairCache">Cache / SW Reset</button>
+        <button class="secondary" id="btnDiag">Diagnose öffnen</button>
+      </div>
+
+      <div class="card">
         <h2>Export</h2>
         <button class="primary" id="ex">Backup JSON herunterladen</button>
       </div>
@@ -112,6 +119,24 @@
     container.querySelector("#sysClear").onclick=async()=>{
       await window.IronDB.clearSystem();
       (window.Toast && window.Toast.toast)("System log cleared");
+    };
+
+    container.querySelector("#btnDiag").onclick=function(){
+      try{ if(window.IronQuestDiagnostics && window.IronQuestDiagnostics.open) window.IronQuestDiagnostics.open(); }catch(e){}
+    };
+
+    container.querySelector("#btnRepairCache").onclick=async function(){
+      try{
+        if("serviceWorker" in navigator){
+          const regs = await navigator.serviceWorker.getRegistrations();
+          for(let i=0;i<regs.length;i++) await regs[i].unregister();
+        }
+        if(window.caches){
+          const keys = await caches.keys();
+          for(let j=0;j<keys.length;j++) await caches.delete(keys[j]);
+        }
+      }catch(e){ console.warn(e); }
+      location.reload();
     };
   }
 
