@@ -45,7 +45,7 @@
     if (!st.active) return { ok:false };
     st.active = false;
     save(st);
-    window.IronQuestLoot?.addChest?.(1);
+    (window.IronQuestLoot && (window.IronQuestLoot.addChest) && window.IronQuestLoot.addChest)(1);
     return { ok:true };
   }
 
