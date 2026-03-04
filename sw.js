@@ -1,4 +1,4 @@
-const SW_VERSION = "v10-html-hotfix-1";
+const SW_VERSION = "v10-html-hotfix-2";
 const CACHE_NAME = `ironquest-${SW_VERSION}`;
 
 const CORE = [
