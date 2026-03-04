@@ -40,31 +40,79 @@
     return { totalXp, lvl, title, rank };
   }
 
-  function cardHtml({name, rank, lvl, title, totalXp}){
+  function cardHtml({name, rank, lvl, title, totalXp}) {
+    const gender = window.IronQuestProfile?.getGender?.() || "male";
+    const classState = window.IronQuestClasses?.getState?.() || { selected: "unassigned" };
+    const classId = classState.selected || "unassigned";
+    const cls = (window.IronQuestClasses?.CLASSES || []).find(c => c.id === classId) || { name: "Unassigned", aura: "#6b7280" };
+    const avatar = `assets/avatars/${classId}_${gender}.png`;
+
+    const attrs = window.IronQuestAttributes?.ATTRS || [];
+    const statLabels = { strength: "STR", endurance: "END", intelligence: "INT", dexterity: "DEX", charisma: "CHA" };
+    const statsHtml = attrs.map(a => {
+      const v = window.IronQuestAttributes?.get?.(a.key) || 0;
+      return `<div class="stat-pill"><div class="k">${statLabels[a.key] || a.key}</div><div class="v">${v}</div></div>`;
+    }).join("");
+
+    const genderBtn = (g, label) => {
+      const active = (gender === g) ? "active" : "";
+      return `<button class="seg ${active}" data-gender="${g}" type="button">${label}</button>`;
+    };
+
     return `
-      <div class="card">
-        <h2>Hunter Card</h2>
-        <div class="row" style="gap:10px;align-items:center;justify-content:space-between;flex-wrap:wrap">
-          <div>
-            <div class="hint">Name</div>
-            <div style="font-size:20px;font-weight:800">${escapeHtml(name)}</div>
-            <div class="hint" style="margin-top:6px">Rank</div>
-            <div style="font-size:18px;font-weight:800">${escapeHtml(rank)}</div>
+      <div class="card hunter-card">
+        <div class="hc-top">
+          <div class="hc-avatar">
+            <img src="${avatar}" alt="${cls.name} ${gender}" loading="eager" decoding="async"
+                 onerror="this.onerror=null;this.src='assets/avatars/unassigned_${gender}.png';" />
+            <div class="hc-aura" style="--aura:${cls.aura}"></div>
           </div>
-          <div style="text-align:right">
-            <div class="hint">Level</div>
-            <div style="font-size:22px;font-weight:900">${lvl}</div>
-            <div class="hint" style="margin-top:6px">${escapeHtml(title)}</div>
-            <div class="hint" style="margin-top:10px">Total XP: <b>${Math.round(totalXp)}</b></div>
+
+          <div class="hc-meta">
+            <div class="hc-name">${escapeHtml(name || "Hunter")}</div>
+            <div class="hc-sub">
+              <span class="badge" style="border-color:${cls.aura};color:${cls.aura}">${cls.name}</span>
+              <span class="dot">•</span>
+              <span class="muted">${title || "Hunter"}</span>
+            </div>
+
+            <div class="hc-kpis">
+              <div class="kpi"><div class="k">Rank</div><div class="v">${rank}</div></div>
+              <div class="kpi"><div class="k">Level</div><div class="v">${lvl}</div></div>
+              <div class="kpi"><div class="k">XP</div><div class="v">${formatNum(totalXp)}</div></div>
+            </div>
+
+            <div class="segmented" aria-label="Gender">
+              ${genderBtn("male","Male")}
+              ${genderBtn("female","Female")}
+            </div>
           </div>
+        </div>
+
+        <div class="hc-stats">
+          ${statsHtml}
+        </div>
+
+        <div class="hint" style="margin-top:10px">
+          Tip: Pick your class in <b>Skills</b>. Your portrait updates automatically.
         </div>
       </div>
     `;
   }
 
-  function escapeHtml(s){
-    return String(s).replace(/[&<>"']/g, m => ({ "&":"&amp;","<":"&lt;",">":"&gt;","\"":"&quot;","'":"&#39;" }[m]));
+  function wireHunterCard(root){
+    const seg = root.querySelector(".hunter-card .segmented");
+    if(!seg) return;
+    seg.querySelectorAll("button[data-gender]").forEach(btn=>{
+      btn.addEventListener("click", ()=>{
+        const g = btn.dataset.gender;
+        window.IronQuestProfile?.setGender?.(g);
+        // rerender home
+        render(root).catch(()=>{});
+      });
+    });
   }
+}
 
   async function render(el){
     const profile = loadProfile();
@@ -103,6 +151,9 @@
         <div class="card"><h2>Gespeichert ✅</h2><p class="hint">Name und Startdatum wurden aktualisiert.</p></div>
       `;
     };
+    // bind hunter card controls
+    try{ wireHunterCard(el); }catch(e){}
+
   }
 
   window.IronQuestHome = { render };
