@@ -5,7 +5,7 @@
     const entries = await window.IronDB.getAllEntries();
     const totalXp = (entries||[]).reduce((s,e)=> s + Number(e.xp||0), 0);
     const L = window.IronQuestProgression.levelFromTotalXp(totalXp);
-    const name = window.IronQuestProfile?.getName?.() || "Hunter";
+    const name = (window.IronQuestProfile && (window.IronQuestProfile.getName) && window.IronQuestProfile.getName)() || "Hunter";
     const cls = window.IronQuestClasses.meta(window.IronQuestClasses.get());
     const rankKey = window.IronQuestHunterRank.compute(L.lvl, totalXp);
 
@@ -67,7 +67,7 @@
         text: 'My Hunter Card (IRON QUEST)',
         files: [file]
       });
-      window.Toast?.toast('Share', 'Shared.');
+      (window.Toast && window.Toast.toast)('Share', 'Shared.');
       return;
     }
 
@@ -80,7 +80,7 @@
     a.click();
     a.remove();
     setTimeout(()=>URL.revokeObjectURL(url), 2000);
-    window.Toast?.toast('Share', 'Downloaded image.');
+    (window.Toast && window.Toast.toast)('Share', 'Downloaded image.');
   }
 
   function roundRect(ctx, x, y, w, h, r, fill){
