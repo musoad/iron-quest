@@ -20,7 +20,7 @@
 
   function passiveMultiplier(type){
     const st=load();
-    const pts=Math.min(MAX_PASSIVE, Number(st.passive?.[type]||0));
+    const pts=Math.min(MAX_PASSIVE, Number((st.passive && st.passive[type]) || 0));
     return 1 + Math.min(0.25, pts*PASSIVE_PER_POINT);
   }
 
@@ -29,7 +29,7 @@
     const st=load();
     const a=ACTIVE.find(x=>x.id===id);
     if(!a) return false;
-    const info=st.active?.[id] || { lastUsed:0, charges:0 };
+    const info=(st.active && st.active[id]) || { lastUsed:0, charges:0 };
     const ms = a.cdHours*3600*1000;
     return (_now()-Number(info.lastUsed||0)) >= ms;
   }
@@ -39,7 +39,7 @@
     const a=ACTIVE.find(x=>x.id===id);
     if(!a) return { ok:false, reason:"unknown" };
     if(!canUseActive(id)) return { ok:false, reason:"cooldown" };
-    st.active[id] = { lastUsed:_now(), charges: (st.active[id]?.charges||0)+1 };
+    st.active[id] = { lastUsed:_now(), charges: (st.active[(id] && id].charges)||0)+1 };
     save(st);
     return { ok:true, skill:a };
   }
