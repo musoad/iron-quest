@@ -73,7 +73,8 @@
 
   function activeBonuses(){
     const counts = setCounts();
-    const bonus = { globalXp:1, lootLuck:1, bossDamage:1, gateHpMult:1, typeXp:{} };
+    // keep defaults stable for all screens (some expect gateDmg as a number)
+    const bonus = { globalXp:1, lootLuck:1, bossDamage:1, gateHpMult:1, gateDmg:0, typeXp:{} };
     for(const setId in counts){
       const c=counts[setId];
       const def=SETS[setId];
@@ -93,6 +94,7 @@
     if(b.lootLuck) target.lootLuck *= b.lootLuck;
     if(b.bossDamage) target.bossDamage *= b.bossDamage;
     if(b.gateHpMult) target.gateHpMult *= b.gateHpMult;
+    if(typeof b.gateDmg === "number") target.gateDmg += b.gateDmg;
     if(b.typeXp){
       for(const k in b.typeXp){
         target.typeXp[k] = (target.typeXp[k]||1) * b.typeXp[k];
@@ -141,6 +143,8 @@
   window.IronQuestEquipment = {
     SLOTS,
     SETS,
+    // compat helpers used by some modules
+    load: () => state(),
     state,
     equip,
     unequip,
