@@ -1,118 +1,184 @@
 (() => {
   "use strict";
 
-  const KEY="iq_skilltree_v2";
-  const MAX_PASSIVE = 25;
-  const COOLDOWN_MS = 24*60*60*1000;
+  // Skilltree V2 (passive points + active buffs)
+  // iOS/Safari-safe: uses localStorage only.
 
-  // Simple active-skill definitions (effects are applied as temporary buffs)
+  const STORAGE_KEY = "iq_skilltree_v2_state";
+  const ACTIVE_KEY = "iq_skilltree_v2_active";
+  const COOLDOWN_KEY = "iq_skilltree_v2_cooldowns";
+
+  const TYPES = ["MULTI", "UNI", "CORE", "END"];
+  const MAX_PASSIVE = 25; // max points per type
+  const PASSIVE_PER_POINT = 0.02; // +2% per point
+
+  // Active buffs are multipliers (XP system multiplies directly).
   const ACTIVE = [
-    { id:"focus", name:"Focus", desc:"+10% XP für den nächsten Log-Eintrag.", effect:{ xpMult:1.10 } },
-    { id:"burst", name:"Burst", desc:"+15% Gate Damage für den nächsten Gate-Run.", effect:{ gateDmg:0.15 } },
-    { id:"calm", name:"Calm", desc:"-10% Gate HP (leichter) für den nächsten Gate-Run.", effect:{ gateHpMult:0.90 } }
+    {
+      id: "FOCUS_SURGE",
+      name: "Focus Surge",
+      desc: "Next entry gets +15% XP.",
+      durationMin: 30,
+      cooldownMin: 240,
+      effect: { globalXp: 1.15 }
+    },
+    {
+      id: "IRON_WILL",
+      name: "Iron Will",
+      desc: "Next entry gets +10% XP and +5% streak power.",
+      durationMin: 60,
+      cooldownMin: 360,
+      effect: { globalXp: 1.10, streakXp: 1.05 }
+    },
+    {
+      id: "BLOOD_RUSH",
+      name: "Blood Rush",
+      desc: "Next entry gets +10% XP and +10% volume bonus.",
+      durationMin: 30,
+      cooldownMin: 360,
+      effect: { globalXp: 1.10, volume: 1.10 }
+    }
   ];
-  function load(){
-    try{ return JSON.parse(localStorage.getItem(KEY)||"null") || null; }catch(_){ return null; }
+
+  function safeParse(json, fallback) {
+    try {
+      const v = JSON.parse(json);
+      return v ?? fallback;
+    } catch {
+      return fallback;
+    }
   }
-  function save(st){ localStorage.setItem(KEY, JSON.stringify(st)); }
-  function defaultState(){
+
+  function defaultState() {
     return {
-    getActiveBuff,
-    setActiveBuff,
-    consumeActiveBuff,
-passive: { Mehrgelenkig:0, Unilateral:0, Core:0, Conditioning:0, Komplexe:0, NEAT:0 },
-      active: {} // id -> {lastUsed, charges}
+      passive: { MULTI: 0, UNI: 0, CORE: 0, END: 0 },
+      updatedAt: Date.now()
     };
   }
-  function state(){
-    const st = load() || defaultState();
-    if(!st.passive) st.passive = defaultState().passive;
-    return st;
-  }
-  function addPassive(type){
-    const st = state();
-    if(!st.passive[type]) st.passive[type]=0;
-    st.passive[type] = Math.min(MAX_PASSIVE, Number(st.passive[type]||0)+1);
-    save(st);
-  }
-  function passiveMultiplier(type){
-    const st = state();
-    const pts = Number((st.passive && st.passive[type]) || 0);
-    return 1 + Math.min(0.25, pts * 0.02);
-  }
 
-  function _activeState(){
-    const st = state();
-    if(!st.active) st.active = {};
-    return st;
-  }
-
-  function canUseActive(id){
-    const st = _activeState();
-    const a = st.active[id];
-    if(!a || !a.lastUsed) return true;
-    return (Date.now() - a.lastUsed) >= COOLDOWN_MS;
-  }
-
-  function useActive(id){
-    const skill = ACTIVE.find(s=>s.id===id);
-    if(!skill) return { ok:false, reason:"not_found" };
-    if(!canUseActive(id)) return { ok:false, reason:"cooldown", skill };
-    const st = _activeState();
-    st.active[id] = { lastUsed: Date.now() };
-    save(st);
-    
-  // ----- Active Skill Buff (used by Log XP calc) -----
-  const KEY_ACTIVE_BUFF = "iq_active_buff_v2";
-  function _readBuff(){
-    let b = window.__IQ_ACTIVE_BUFFS || null;
-    if(!b){
-      try{
-        const raw = localStorage.getItem(KEY_ACTIVE_BUFF);
-        if(raw){
-          const obj = JSON.parse(raw);
-          if(obj && obj.buffs) b = obj.buffs;
-        }
-      }catch(e){}
+  function load() {
+    const raw = localStorage.getItem(STORAGE_KEY);
+    const state = raw ? safeParse(raw, defaultState()) : defaultState();
+    state.passive = state.passive || {};
+    for (const t of TYPES) {
+      const n = Number(state.passive[t] || 0);
+      state.passive[t] = Number.isFinite(n) ? Math.max(0, Math.min(MAX_PASSIVE, n)) : 0;
     }
-    return b;
+    return state;
   }
-  function setActiveBuff(buffs){
-    window.__IQ_ACTIVE_BUFFS = buffs || null;
-    try{
-      if(buffs) localStorage.setItem(KEY_ACTIVE_BUFF, JSON.stringify({ buffs, ts: Date.now() }));
-      else localStorage.removeItem(KEY_ACTIVE_BUFF);
-    }catch(e){}
+
+  function save(state) {
+    const s = state || defaultState();
+    s.updatedAt = Date.now();
+    localStorage.setItem(STORAGE_KEY, JSON.stringify(s));
+    return s;
   }
-  function getActiveBuff(){
-    // NOTE: read-only; do not consume on read because UI recalculates often
-    const b = _readBuff();
-    return b || null;
+
+  function passiveMultiplier(type) {
+    const s = load();
+    const pts = Number(s.passive?.[type] || 0);
+    return 1 + (Math.max(0, Math.min(MAX_PASSIVE, pts)) * PASSIVE_PER_POINT);
   }
-  function consumeActiveBuff(){
-    // call this after saving a log entry (one-time buff)
-    setActiveBuff(null);
+
+  function allPassiveMultipliers() {
+    const out = {};
+    for (const t of TYPES) out[t] = passiveMultiplier(t);
+    return out;
   }
-return { ok:true, skill };
+
+  function addPassivePoint(type, delta = 1) {
+    const s = load();
+    if (!TYPES.includes(type)) return s;
+    const v = Number(s.passive[type] || 0) + Number(delta || 0);
+    s.passive[type] = Math.max(0, Math.min(MAX_PASSIVE, v));
+    return save(s);
+  }
+
+  function resetPassive() {
+    return save(defaultState());
+  }
+
+  // --- Active buff helpers ---
+  function getCooldowns() {
+    return safeParse(localStorage.getItem(COOLDOWN_KEY) || "{}", {});
+  }
+
+  function setCooldown(id, until) {
+    const cd = getCooldowns();
+    cd[id] = until;
+    localStorage.setItem(COOLDOWN_KEY, JSON.stringify(cd));
+  }
+
+  function getActiveBuff() {
+    const raw = localStorage.getItem(ACTIVE_KEY);
+    if (!raw) return null;
+    const a = safeParse(raw, null);
+    if (!a || !a.id) return null;
+    if (a.expiresAt && Date.now() > a.expiresAt) {
+      localStorage.removeItem(ACTIVE_KEY);
+      return null;
+    }
+    return a;
+  }
+
+  function clearActiveBuff() {
+    localStorage.removeItem(ACTIVE_KEY);
+  }
+
+  function canUseActive(id) {
+    const skill = ACTIVE.find(x => x.id === id);
+    if (!skill) return { ok: false, reason: "Unknown skill" };
+    const cd = getCooldowns();
+    const until = Number(cd[id] || 0);
+    if (until && Date.now() < until) {
+      const mins = Math.ceil((until - Date.now()) / 60000);
+      return { ok: false, reason: `Cooldown: ${mins} min` };
+    }
+    return { ok: true };
+  }
+
+  function useActive(id) {
+    const skill = ACTIVE.find(x => x.id === id);
+    if (!skill) return { ok: false, reason: "Unknown skill" };
+    const check = canUseActive(id);
+    if (!check.ok) return check;
+
+    const payload = {
+      id: skill.id,
+      name: skill.name,
+      effect: skill.effect || {},
+      usedAt: Date.now(),
+      expiresAt: Date.now() + (Number(skill.durationMin || 0) * 60000)
+    };
+
+    localStorage.setItem(ACTIVE_KEY, JSON.stringify(payload));
+    setCooldown(id, Date.now() + (Number(skill.cooldownMin || 0) * 60000));
+    return { ok: true, active: payload };
+  }
+
+  // Consume active buff once (Log calls after successful save)
+  function consumeActiveBuff() {
+    const a = getActiveBuff();
+    if (!a) return null;
+    clearActiveBuff();
+    return a;
   }
 
   window.IronQuestSkilltreeV2 = {
-    // persistence helpers (some screens call .load())
-    load: state,
-    save: function(st){ save(st); },
-    state,
+    TYPES,
     MAX_PASSIVE,
+    PASSIVE_PER_POINT,
     ACTIVE,
+    load,
+    save,
+    passiveMultiplier,
+    allPassiveMultipliers,
+    addPassivePoint,
+    resetPassive,
+    getActiveBuff,
+    clearActiveBuff,
     canUseActive,
     useActive,
-    addPassive,
-    passiveMultiplier,
-    setPassive: function(type, pts){
-      const st = state();
-      if(!st.passive) st.passive = defaultState().passive;
-      st.passive[type] = Math.max(0, Math.min(25, Number(pts||0)));
-      save(st);
-    },
-    reset: function(){ save(defaultState()); }
+    consumeActiveBuff
   };
 })();
