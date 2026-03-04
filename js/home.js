@@ -1,159 +1,203 @@
 (() => {
   "use strict";
 
-  const KEY = "iq_profile_v1";
+  // Hunter Card (mobile-first)
 
-  function safeParse(s, fb){ try{ return JSON.parse(s); }catch{ return fb; } }
-  function isoToday(){
-    const d=new Date();
-    const pad=n=>String(n).padStart(2,"0");
-    return `${d.getFullYear()}-${pad(d.getMonth()+1)}-${pad(d.getDate())}`;
+  const CLASSES = [
+    { key: "unassigned", label: "Unassigned" },
+    { key: "berserker", label: "Berserker" },
+    { key: "assassin", label: "Assassin" },
+    { key: "guardian", label: "Guardian" },
+    { key: "ranger", label: "Ranger" },
+    { key: "monarch", label: "Monarch" },
+  ];
+
+  const GENDERS = [
+    { key: "male", label: "Male" },
+    { key: "female", label: "Female" },
+  ];
+
+  function safe(v, fallback) {
+    return (v === undefined || v === null || v === "") ? fallback : v;
   }
 
-  function loadProfile(){
-    const raw = localStorage.getItem(KEY);
-    const st = raw ? safeParse(raw, {}) : {};
-    if (!st.name) st.name = "Hunter";
-    if (!st.challengeStart) st.challengeStart = isoToday();
-    return st;
+  function avatarPath(clsKey, genderKey) {
+    // files live at assets/avatars/<class>_<gender>.png
+    const c = (clsKey || "unassigned").toLowerCase();
+    const g = (genderKey || "male").toLowerCase();
+    return `assets/avatars/${c}_${g}.png`;
   }
 
-  function saveProfile(st){
-    localStorage.setItem(KEY, JSON.stringify(st));
-  }
-
-  async function computeTotals(){
-    const entries = (await window.IronDB.getAllEntries?.()) || [];
-    const totalXp = entries.reduce((s,e)=>s + Number(e.xp||0), 0);
-
-    const lvlObj = window.IronQuestProgression?.levelFromTotalXp
-      ? window.IronQuestProgression.levelFromTotalXp(totalXp)
-      : { lvl: Math.floor(totalXp/1000)+1 };
-
-    const lvl = lvlObj?.lvl || 1;
-    const title = lvlObj?.title || "Anfänger";
-
-    const rank = window.IronQuestHunterRank?.compute
-      ? window.IronQuestHunterRank.compute(lvl, totalXp)
-      : "E";
-
-    return { totalXp, lvl, title, rank };
-  }
-
-  function cardHtml({name, rank, lvl, title, totalXp}) {
+  function getProfile() {
+    const name = window.IronQuestProfile?.getName?.() || "Hunter";
+    const cls = window.IronQuestProfile?.getClass?.() || "unassigned";
+    const startDate = window.IronQuestProfile?.getStartDate?.() || window.Utils?.isoDate?.(new Date()) || "";
     const gender = window.IronQuestProfile?.getGender?.() || "male";
-    const classState = window.IronQuestClasses?.getState?.() || { selected: "unassigned" };
-    const classId = classState.selected || "unassigned";
-    const cls = (window.IronQuestClasses?.CLASSES || []).find(c => c.id === classId) || { name: "Unassigned", aura: "#6b7280" };
-    const avatar = `assets/avatars/${classId}_${gender}.png`;
+    return { name, cls, startDate, gender };
+  }
 
-    const attrs = window.IronQuestAttributes?.ATTRS || [];
-    const statLabels = { strength: "STR", endurance: "END", intelligence: "INT", dexterity: "DEX", charisma: "CHA" };
-    const statsHtml = attrs.map(a => {
-      const v = window.IronQuestAttributes?.get?.(a.key) || 0;
-      return `<div class="stat-pill"><div class="k">${statLabels[a.key] || a.key}</div><div class="v">${v}</div></div>`;
-    }).join("");
+  async function getTotals() {
+    try {
+      const entries = await window.IronDB.getAllEntries();
+      const totalXp = entries.reduce((s, e) => s + Number(e.xp || 0), 0);
+      const lvlObj = window.IronQuestProgression?.levelFromTotalXp?.(totalXp) || { lvl: 1, next: 100, into: totalXp };
+      const lvl = Number(lvlObj.lvl || 1);
+      const rank = window.IronQuestHunterRank?.compute?.(lvl, totalXp) || "E";
+      const next = Number(lvlObj.next || 100);
+      const into = Number(lvlObj.into || 0);
+      const pct = Math.max(0, Math.min(100, Math.round((into / Math.max(1, next)) * 100)));
+      return { totalXp, lvl, rank, next, into, pct };
+    } catch {
+      return { totalXp: 0, lvl: 1, rank: "E", next: 100, into: 0, pct: 0 };
+    }
+  }
 
-    const genderBtn = (g, label) => {
-      const active = (gender === g) ? "active" : "";
-      return `<button class="seg ${active}" data-gender="${g}" type="button">${label}</button>`;
-    };
+  function getStats() {
+    const st = window.IronQuestAttributes?.getState?.();
+    const base = { STR: 0, END: 0, AGI: 0, INT: 0, PER: 0, LCK: 0 };
+    const s = Object.assign({}, base, st || {});
+    return [
+      { k: "STR", label: "Strength" },
+      { k: "END", label: "Endurance" },
+      { k: "AGI", label: "Agility" },
+      { k: "INT", label: "Intellect" },
+      { k: "PER", label: "Perception" },
+      { k: "LCK", label: "Luck" },
+    ].map(x => ({ ...x, v: Number(s[x.k] || 0) }));
+  }
 
-    return `
-      <div class="card hunter-card">
-        <div class="hc-top">
-          <div class="hc-avatar">
-            <img src="${avatar}" alt="${cls.name} ${gender}" loading="eager" decoding="async"
-                 onerror="this.onerror=null;this.src='assets/avatars/unassigned_${gender}.png';" />
-            <div class="hc-aura" style="--aura:${cls.aura}"></div>
+  function classAura(clsKey) {
+    switch ((clsKey || "unassigned").toLowerCase()) {
+      case "berserker": return "rgba(255,90,30,.40)";
+      case "assassin": return "rgba(165,90,255,.40)";
+      case "guardian": return "rgba(90,150,255,.40)";
+      case "ranger": return "rgba(90,255,150,.35)";
+      case "monarch": return "rgba(80,220,255,.35)";
+      default: return "rgba(140,160,170,.30)";
+    }
+  }
+
+  function htmlEscape(str) {
+    return String(str).replace(/[&<>"]/g, m => ({ "&": "&amp;", "<": "&lt;", ">": "&gt;", '"': "&quot;" }[m]));
+  }
+
+  async function render(root) {
+    const p = getProfile();
+    const totals = await getTotals();
+    const stats = getStats();
+
+    const clsLabel = (CLASSES.find(c => c.key === p.cls)?.label) || "Unassigned";
+
+    root.innerHTML = `
+      <div class="hq-wrap">
+        <div class="hq-card" style="--aura:${classAura(p.cls)}">
+          <div class="hq-top">
+            <div class="hq-avatar">
+              <img id="hqAvatarImg" alt="Avatar" src="${avatarPath(p.cls, p.gender)}" />
+              <div class="hq-aura"></div>
+            </div>
+            <div class="hq-identity">
+              <div class="hq-name" id="hqName">${htmlEscape(p.name)}</div>
+              <div class="hq-sub">
+                <span class="pill">${htmlEscape(clsLabel)}</span>
+                <span class="pill">Rank ${htmlEscape(String(totals.rank))}</span>
+                <span class="pill">Lvl ${htmlEscape(String(totals.lvl))}</span>
+              </div>
+              <div class="hq-xp">
+                <div class="hq-xp-row">
+                  <span class="muted">XP</span>
+                  <span class="muted">${totals.into} / ${totals.next} (${totals.pct}%)</span>
+                </div>
+                <div class="hq-xpbar"><div class="hq-xpfill" style="width:${totals.pct}%"></div></div>
+              </div>
+            </div>
           </div>
 
-          <div class="hc-meta">
-            <div class="hc-name">${escapeHtml(name || "Hunter")}</div>
-            <div class="hc-sub">
-              <span class="badge" style="border-color:${cls.aura};color:${cls.aura}">${cls.name}</span>
-              <span class="dot">•</span>
-              <span class="muted">${title || "Hunter"}</span>
+          <div class="hq-grid">
+            <div class="hq-section">
+              <div class="hq-section-title">Profile</div>
+              <label class="hq-field">
+                <span>Name</span>
+                <input id="hqNameInput" type="text" maxlength="24" value="${htmlEscape(p.name)}" placeholder="Your name" />
+              </label>
+              <div class="hq-row">
+                <label class="hq-field">
+                  <span>Gender</span>
+                  <select id="hqGender">
+                    ${GENDERS.map(g => `<option value="${g.key}" ${g.key === p.gender ? "selected" : ""}>${g.label}</option>`).join("")}
+                  </select>
+                </label>
+                <label class="hq-field">
+                  <span>Class</span>
+                  <select id="hqClass">
+                    ${CLASSES.map(c => `<option value="${c.key}" ${c.key === p.cls ? "selected" : ""}>${c.label}</option>`).join("")}
+                  </select>
+                </label>
+              </div>
+              <label class="hq-field">
+                <span>Start date</span>
+                <input id="hqStart" type="date" value="${htmlEscape(p.startDate)}" />
+              </label>
+              <div class="hint">Tip: You can set start date retroactively.</div>
             </div>
 
-            <div class="hc-kpis">
-              <div class="kpi"><div class="k">Rank</div><div class="v">${rank}</div></div>
-              <div class="kpi"><div class="k">Level</div><div class="v">${lvl}</div></div>
-              <div class="kpi"><div class="k">XP</div><div class="v">${formatNum(totalXp)}</div></div>
-            </div>
-
-            <div class="segmented" aria-label="Gender">
-              ${genderBtn("male","Male")}
-              ${genderBtn("female","Female")}
+            <div class="hq-section">
+              <div class="hq-section-title">Stats</div>
+              <div class="hq-stats">
+                ${stats.map(s => `
+                  <div class="hq-stat">
+                    <div class="hq-stat-k">${s.k}</div>
+                    <div class="hq-stat-v">${s.v}</div>
+                    <div class="hq-stat-l">${htmlEscape(s.label)}</div>
+                  </div>
+                `).join("")}
+              </div>
+              <div class="hint">Stats are earned through your Logs and Skills.</div>
             </div>
           </div>
-        </div>
-
-        <div class="hc-stats">
-          ${statsHtml}
-        </div>
-
-        <div class="hint" style="margin-top:10px">
-          Tip: Pick your class in <b>Skills</b>. Your portrait updates automatically.
         </div>
       </div>
     `;
-  }
 
-  function wireHunterCard(root){
-    const seg = root.querySelector(".hunter-card .segmented");
-    if(!seg) return;
-    seg.querySelectorAll("button[data-gender]").forEach(btn=>{
-      btn.addEventListener("click", ()=>{
-        const g = btn.dataset.gender;
-        window.IronQuestProfile?.setGender?.(g);
-        // rerender home
-        render(root).catch(()=>{});
+    const nameInput = root.querySelector("#hqNameInput");
+    const genderSel = root.querySelector("#hqGender");
+    const classSel = root.querySelector("#hqClass");
+    const startInput = root.querySelector("#hqStart");
+    const avatarImg = root.querySelector("#hqAvatarImg");
+    const nameLabel = root.querySelector("#hqName");
+
+    const applyAvatar = () => {
+      const cls = classSel?.value || "unassigned";
+      const gender = genderSel?.value || "male";
+      if (avatarImg) avatarImg.src = avatarPath(cls, gender);
+      const card = root.querySelector('.hq-card');
+      if (card) card.style.setProperty('--aura', classAura(cls));
+    };
+
+    if (nameInput) {
+      nameInput.addEventListener("input", () => {
+        const v = safe(nameInput.value.trim(), "Hunter");
+        window.IronQuestProfile?.setName?.(v);
+        if (nameLabel) nameLabel.textContent = v;
       });
-    });
-  }
-}
-
-  async function render(el){
-    const profile = loadProfile();
-    const totals = await computeTotals();
-
-    el.innerHTML = `
-      ${cardHtml({ name: profile.name, ...totals })}
-      <div class="card">
-        <h2>Profile</h2>
-
-        <label class="label">Charaktername</label>
-        <input id="iq_name" class="input" type="text" value="${escapeHtml(profile.name)}" maxlength="24" />
-
-        <div style="height:12px"></div>
-
-        <label class="label">Challenge Startdatum (auch rückwirkend)</label>
-        <input id="iq_start" class="input" type="date" value="${escapeHtml(profile.challengeStart)}" />
-
-        <div style="height:12px"></div>
-
-        <button id="iq_save" class="btn">Speichern</button>
-        <p class="hint" style="margin-top:10px">Tipp: Wenn Safari „hängt“, nutze Backup → Cache/SW Reset.</p>
-      </div>
-    `;
-
-    const btn = el.querySelector("#iq_save");
-    btn.onclick = async () => {
-      const name = (el.querySelector("#iq_name")?.value || "Hunter").trim() || "Hunter";
-      const start = (el.querySelector("#iq_start")?.value || isoToday()).trim() || isoToday();
-      const next = { name, challengeStart: start };
-      saveProfile(next);
-      // refresh card
-      const totals2 = await computeTotals();
-      el.innerHTML = `
-        ${cardHtml({ name: next.name, ...totals2 })}
-        <div class="card"><h2>Gespeichert ✅</h2><p class="hint">Name und Startdatum wurden aktualisiert.</p></div>
-      `;
-    };
-    // bind hunter card controls
-    try{ wireHunterCard(el); }catch(e){}
-
+    }
+    if (genderSel) {
+      genderSel.addEventListener("change", () => {
+        window.IronQuestProfile?.setGender?.(genderSel.value);
+        applyAvatar();
+      });
+    }
+    if (classSel) {
+      classSel.addEventListener("change", () => {
+        window.IronQuestProfile?.setClass?.(classSel.value);
+        applyAvatar();
+      });
+    }
+    if (startInput) {
+      startInput.addEventListener("change", () => {
+        if (window.IronQuestProfile?.setStartDate) window.IronQuestProfile.setStartDate(startInput.value);
+      });
+    }
   }
 
   window.IronQuestHome = { render };
