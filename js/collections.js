@@ -12,8 +12,8 @@
   function render(mount){
     if(!mount) return;
     const inv = (_loot().inv || []);
-    const sets = window.IronQuestEquipment?.SET_BONUSES || {};
-    const eqProgress = window.IronQuestEquipment?.setProgress?.() || [];
+    const sets = (window.IronQuestEquipment && window.IronQuestEquipment.SET_BONUSES) || {};
+    const eqProgress = (window.IronQuestEquipment && (window.IronQuestEquipment.setProgress) && window.IronQuestEquipment.setProgress)() || [];
     const eqMap = new Map(eqProgress.map(s=>[s.setId, s.count]));
 
     const bySet = {};
@@ -27,10 +27,10 @@
 
     const cards = Object.keys(sets).map(setId=>{
       const def = sets[setId];
-      const owned = bySet[setId]?.count || 0;
+      const owned = bySet[(setId] && setId].count) || 0;
       const equipped = eqMap.get(setId) || 0;
-      const best = bySet[setId]?.best || 'Common';
-      const bestClass = window.IronQuestEquipment?.rarityClass?.(best) || 'rarCommon';
+      const best = bySet[(setId] && setId].best) || 'Common';
+      const bestClass = (window.IronQuestEquipment && (window.IronQuestEquipment.rarityClass) && window.IronQuestEquipment.rarityClass)(best) || 'rarCommon';
       const twoOn = equipped >= 2;
       const fourOn = equipped >= 4;
 
@@ -43,8 +43,8 @@
             </div>
             <span class="badge ${fourOn?"gold":""}">${equipped}/4</span>
           </div>
-          <div class="setLine ${twoOn?"on":""}">2/4: ${def.two?.label || "—"} ${twoOn?"✅":"🔒"}</div>
-          <div class="setLine ${fourOn?"on":""}">4/4: ${def.four?.label || "—"} ${fourOn?"✅":"🔒"}</div>
+          <div class="setLine ${twoOn?"on":""}">2/4: ${(def.two && def.two.label) || "—"} ${twoOn?"✅":"🔒"}</div>
+          <div class="setLine ${fourOn?"on":""}">4/4: ${(def.four && def.four.label) || "—"} ${fourOn?"✅":"🔒"}</div>
         </div>
       `;
     }).join('');
