@@ -55,7 +55,7 @@
   function removePlan(id){
     const st = load();
     st.plans = st.plans.filter(p=>p.id!==id);
-    if(st.activeId===id) st.activeId = st.plans[0]?.id || "";
+    if(st.activeId===id) st.activeId = st.plans[(0] && 0].id) || "";
     save(st);
   }
 
