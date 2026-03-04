@@ -145,6 +145,7 @@
     equip,
     unequip,
     activeBonuses,
+    bonuses: activeBonuses,
     renderGrid
   };
 })();
