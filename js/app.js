@@ -9,6 +9,77 @@
     if(el) el.textContent = text;
   }
 
+  // Compatibility shims: prevents crashes if a module failed to load (common on iOS after SW/cache changes).
+  function ensureCoreAPIs(){
+    // Plans
+    if(!window.IronQuestPlans) window.IronQuestPlans = {};
+    if(typeof window.IronQuestPlans.getState !== "function"){
+      window.IronQuestPlans.getState = ()=>({ activeId:"planA", plans:[{id:"planA", name:"Plan A", items:[]}] });
+    }
+    if(typeof window.IronQuestPlans.getActive !== "function"){
+      window.IronQuestPlans.getActive = ()=>{
+        const st = window.IronQuestPlans.getState();
+        const plans = st && st.plans ? st.plans : [];
+        return plans.find(p=>p.id===st.activeId) || plans[0] || { id:"planA", name:"Plan A", items:[] };
+      };
+    }
+
+    // Equipment
+    if(!window.IronQuestEquipment) window.IronQuestEquipment = {};
+    if(typeof window.IronQuestEquipment.getState !== "function"){
+      window.IronQuestEquipment.getState = ()=>({ owned:[], equipped:{}, slots:["weapon","armor","ring","boots"] });
+    }
+    if(typeof window.IronQuestEquipment.load !== "function") window.IronQuestEquipment.load = window.IronQuestEquipment.getState;
+    if(typeof window.IronQuestEquipment.bonuses !== "function"){
+      window.IronQuestEquipment.bonuses = ()=>({ globalXp:1, gateDmg:1, xpPct:0, gatePct:0, setBonuses:[] });
+    }
+    if(typeof window.IronQuestEquipment.activeBonuses !== "function") window.IronQuestEquipment.activeBonuses = window.IronQuestEquipment.bonuses;
+    if(typeof window.IronQuestEquipment.equippedNames !== "function"){
+      window.IronQuestEquipment.equippedNames = ()=>Object.values(window.IronQuestEquipment.getState().equipped||{}).filter(Boolean).map(x=>String(x.name||x.id||"Item"));
+    }
+
+    // Skilltree V2
+    if(!window.IronQuestSkilltreeV2) window.IronQuestSkilltreeV2 = {};
+    if(typeof window.IronQuestSkilltreeV2.load !== "function") window.IronQuestSkilltreeV2.load = ()=>({ points:{}, types:["MULTI","UNI","CORE","END"] });
+    if(typeof window.IronQuestSkilltreeV2.save !== "function") window.IronQuestSkilltreeV2.save = ()=>{};
+  }
+
+
+  // Compatibility shims: prevents crashes if a module failed to load (common on iOS after SW/cache changes).
+  function ensureCoreAPIs(){
+    // Plans
+    if(!window.IronQuestPlans) window.IronQuestPlans = {};
+    if(typeof window.IronQuestPlans.getState !== "function"){
+      window.IronQuestPlans.getState = ()=>({ activeId:"planA", plans:[{id:"planA", name:"Plan A", items:[]}] });
+    }
+    if(typeof window.IronQuestPlans.getActive !== "function"){
+      window.IronQuestPlans.getActive = ()=>{
+        const st = window.IronQuestPlans.getState();
+        const plans = st && st.plans ? st.plans : [];
+        return plans.find(p=>p.id===st.activeId) || plans[0] || { id:"planA", name:"Plan A", items:[] };
+      };
+    }
+
+    // Equipment
+    if(!window.IronQuestEquipment) window.IronQuestEquipment = {};
+    if(typeof window.IronQuestEquipment.getState !== "function"){
+      window.IronQuestEquipment.getState = ()=>({ owned:[], equipped:{}, slots:["weapon","armor","ring","boots"] });
+    }
+    if(typeof window.IronQuestEquipment.load !== "function") window.IronQuestEquipment.load = window.IronQuestEquipment.getState;
+    if(typeof window.IronQuestEquipment.bonuses !== "function"){
+      window.IronQuestEquipment.bonuses = ()=>({ globalXp:1, gateDmg:1, xpPct:0, gatePct:0, setBonuses:[] });
+    }
+    if(typeof window.IronQuestEquipment.activeBonuses !== "function") window.IronQuestEquipment.activeBonuses = window.IronQuestEquipment.bonuses;
+    if(typeof window.IronQuestEquipment.equippedNames !== "function"){
+      window.IronQuestEquipment.equippedNames = ()=>Object.values(window.IronQuestEquipment.getState().equipped||{}).filter(Boolean).map(x=>String(x.name||x.id||"Item"));
+    }
+
+    // Skilltree V2
+    if(!window.IronQuestSkilltreeV2) window.IronQuestSkilltreeV2 = {};
+    if(typeof window.IronQuestSkilltreeV2.load !== "function") window.IronQuestSkilltreeV2.load = ()=>({ points:{}, types:["MULTI","UNI","CORE","END"] });
+    if(typeof window.IronQuestSkilltreeV2.save !== "function") window.IronQuestSkilltreeV2.save = ()=>{};
+  }
+
   async function initServiceWorker(){
     try{
       if(!("serviceWorker" in navigator)) return;
@@ -107,6 +178,8 @@
 
   async function boot(){
     setStatus("Initializing…");
+    ensureCoreAPIs();
+
 
     if(!window.IronDB || typeof window.IronDB.init !== "function"){
       throw new Error("IronDB missing. js/db.js not loaded.");
