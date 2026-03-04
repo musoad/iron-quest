@@ -14,16 +14,16 @@
   function clamp(n, a, b){ return Math.max(a, Math.min(b, n)); }
 
   function iso(d){
-    return window.Utils?.isoDate ? window.Utils.isoDate(d) : new Date(d).toISOString().slice(0,10);
+    return (window.Utils && window.Utils.isoDate) ? window.Utils.isoDate(d) : new Date(d).toISOString().slice(0,10);
   }
   function addDays(d, delta){
-    return window.Utils?.addDays ? window.Utils.addDays(d, delta) : new Date(d.getTime() + delta*86400000);
+    return (window.Utils && window.Utils.addDays) ? window.Utils.addDays(d, delta) : new Date(d.getTime() + delta*86400000);
   }
 
   function dayXpMap(entries){
     const m = {};
     for(const e of (entries || [])){
-      const d = e?.date;
+      const d = (e && e.date);
       if(!d) continue;
       m[d] = (m[d] || 0) + Number(e.xp || 0);
     }
@@ -68,21 +68,21 @@
   function calcExerciseXP({ exercise, type, recSets, recReps, sets, reps, entries, buffs }){
     // exercise may be full object
     const ex = exercise || null;
-    const exType = type || ex?.type || "Mehrgelenkig";
+    const exType = type || (ex && ex.type) || "Mehrgelenkig";
 
     // baseXP is per set (new system)
-    const basePerSet = Number(ex?.baseXP || 0) || Number(BASE_XP_BY_TYPE[exType] || 0);
+    const basePerSet = Number((ex && ex.baseXP) || 0) || Number(BASE_XP_BY_TYPE[exType] || 0);
 
     // start with baseXP * performed sets
     let xp = basePerSet * Math.max(1, Number(sets || 0));
 
     // reps factor relative to recommendation
-    const rr = Number(recReps || ex?.recReps || 1);
+    const rr = Number(recReps || (ex && ex.recReps) || 1);
     const repFactor = clamp((Number(reps || 0) / Math.max(1, rr)), 0.5, 1.4);
     xp *= repFactor;
 
     // volume scaling vs recommendation
-    const rs = Number(recSets || ex?.recSets || 1);
+    const rs = Number(recSets || (ex && ex.recSets) || 1);
     xp *= volumeMult(sets, reps, rs, rr);
 
     // streak
@@ -90,33 +90,33 @@
     xp *= streakMult(s);
 
     // Skilltree passive
-    xp *= window.IronQuestSkilltreeV2?.passiveMultiplier?.(exType) || 1;
+    xp *= (window.IronQuestSkilltreeV2 && (window.IronQuestSkilltreeV2.passiveMultiplier) && window.IronQuestSkilltreeV2.passiveMultiplier)(exType) || 1;
 
     // Class bonus
-    xp *= window.IronQuestClasses?.multiplierForType?.(exType) || 1;
+    xp *= (window.IronQuestClasses && (window.IronQuestClasses.multiplierForType) && window.IronQuestClasses.multiplierForType)(exType) || 1;
 
     // Periodization bias
-    xp *= window.IronQuestPeriodization?.multiplierForType?.(exType) || 1;
+    xp *= (window.IronQuestPeriodization && (window.IronQuestPeriodization.multiplierForType) && window.IronQuestPeriodization.multiplierForType)(exType) || 1;
 
     // Equipment / Set bonuses (global)
-    if(window.IronQuestEquipment?.bonuses){
+    if((window.IronQuestEquipment && window.IronQuestEquipment.bonuses)){
       const b = window.IronQuestEquipment.bonuses();
-      if(b?.globalXp) xp *= b.globalXp;
+      if((b && b.globalXp)) xp *= b.globalXp;
       // Optional type bonuses (set bonuses can set these)
-      if(b?.typeXp && b.typeXp[exType]) xp *= b.typeXp[exType];
-      if(b?.coreXp && exType === "Core") xp *= b.coreXp;
+      if((b && b.typeXp) && b.typeXp[exType]) xp *= b.typeXp[exType];
+      if((b && b.coreXp) && exType === "Core") xp *= b.coreXp;
     }
 
     // Active buffs (session scoped)
-    if(buffs?.globalXp) xp *= buffs.globalXp;
-    if(buffs?.typeXp && buffs.typeXp[exType]) xp *= buffs.typeXp[exType];
+    if((buffs && buffs.globalXp)) xp *= buffs.globalXp;
+    if((buffs && buffs.typeXp) && buffs.typeXp[exType]) xp *= buffs.typeXp[exType];
 
     return Math.round(xp);
   }
 
   // Older modules might store xp directly; keep for compatibility
   function calculateXP(entry){
-    return Number(entry?.xp || 0);
+    return Number((entry && entry.xp) || 0);
   }
 
   window.IronQuestXP = {
