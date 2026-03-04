@@ -20,7 +20,7 @@
 
   function renderPlanList(listEl, plan, onAction){
     listEl.innerHTML = "";
-    if(!plan || !plan.items?.length){
+    if(!plan || !(plan.items && plan.items.length)){
       const li=document.createElement("li");
       li.className="hint";
       li.textContent="Noch keine Übungen im Plan. Wähle eine Übung und klicke „Zum Plan hinzufügen“.";
@@ -220,7 +220,7 @@
       window.IronQuestPlans.addPlan(name);
       refreshPlans();
       refreshExercises();
-      window.Toast?.show?.("Plan erstellt", name);
+      (window.Toast && (window.Toast.show) && window.Toast.show)("Plan erstellt", name);
     });
 
     pDel.addEventListener("click", ()=>{
@@ -230,7 +230,7 @@
       window.IronQuestPlans.removePlan(active.id);
       refreshPlans();
       refreshExercises();
-      window.Toast?.show?.("Plan gelöscht", active.name);
+      (window.Toast && (window.Toast.show) && window.Toast.show)("Plan gelöscht", active.name);
     });
 
     refreshPlans();
@@ -279,7 +279,7 @@
 
       if(pOnly.value === "1"){
         const active = window.IronQuestPlans.getActive();
-        const set = new Set(active?.items || []);
+        const set = new Set((active && active.items) || []);
         list = list.filter(e => set.has(e.name));
       }
       list.sort((a,b)=>a.name.localeCompare(b.name));
@@ -315,7 +315,7 @@
     refreshExercises();
 
     function coachText(ex, sets, reps){
-      const fatigue = window.IronQuestCoachPlus?.fatigueScore?.(entries) || 0;
+      const fatigue = (window.IronQuestCoachPlus && (window.IronQuestCoachPlus.fatigueScore) && window.IronQuestCoachPlus.fatigueScore)(entries) || 0;
       if(fatigue >= 75) return "Müde → Deload empfohlen (−1 Satz oder −2 Wdh).";
       if(fatigue >= 55) return "Achte auf saubere Technik, nicht grinden.";
       if(Number(sets||0) && Number(reps||0) && (sets>=ex.recSets && reps>=ex.recReps)) return "Stabil! Nächstes Mal +1 Wdh.";
@@ -340,10 +340,10 @@
 
       // next target based on last entry for that exercise
       const last = entries.find(e => e.exercise === ex.name);
-      const lastSets = last?.sets || ex.recSets;
-      const lastReps = last?.reps || ex.recReps;
+      const lastSets = (last && last.sets) || ex.recSets;
+      const lastReps = (last && last.reps) || ex.recReps;
 
-      const fatigue = window.IronQuestCoachPlus?.fatigueScore?.(entries) || 0;
+      const fatigue = (window.IronQuestCoachPlus && (window.IronQuestCoachPlus.fatigueScore) && window.IronQuestCoachPlus.fatigueScore)(entries) || 0;
       let tgtSets = ex.recSets;
       let tgtReps = ex.recReps;
 
@@ -367,7 +367,7 @@
       const sets = Number(setsEl.value || 0);
       const reps = Number(repsEl.value || 0);
 
-      const buffs = window.IronQuestSkilltreeV2?.getActiveBuff?.() || null;
+      const buffs = (window.IronQuestSkilltreeV2 && (window.IronQuestSkilltreeV2.getActiveBuff) && window.IronQuestSkilltreeV2.getActiveBuff)() || null;
 
       const xp = window.IronQuestXP.calcExerciseXP({
         exercise: ex,
@@ -389,16 +389,16 @@
     // Save
     container.querySelector("#lSave").addEventListener("click", async ()=>{
       const ex = window.IronQuestExercises.findByName(exSel.value);
-      if(!ex){ window.Toast?.show?.("Fehler", "Bitte Übung wählen."); return; }
+      if(!ex){ (window.Toast && (window.Toast.show) && window.Toast.show)("Fehler", "Bitte Übung wählen."); return; }
 
       const sets = Number(setsEl.value||0);
       const reps = Number(repsEl.value||0);
       if(!sets || !reps){
-        window.Toast?.show?.("Fehler", "Bitte Sätze und Wdh eingeben.");
+        (window.Toast && (window.Toast.show) && window.Toast.show)("Fehler", "Bitte Sätze und Wdh eingeben.");
         return;
       }
 
-      const buffs = window.IronQuestSkilltreeV2?.consumeActiveBuff?.() || null;
+      const buffs = (window.IronQuestSkilltreeV2 && (window.IronQuestSkilltreeV2.consumeActiveBuff) && window.IronQuestSkilltreeV2.consumeActiveBuff)() || null;
       const xp = window.IronQuestXP.calcExerciseXP({
         exercise: ex,
         type: ex.type,
@@ -431,8 +431,8 @@
       };
 
       await window.IronDB.addEntry(entry);
-      window.Toast?.show?.("Gespeichert", `${ex.name} • +${xp} XP`);
-      window.IronQuestUIEffects?.xpBurst?.(xp);
+      (window.Toast && (window.Toast.show) && window.Toast.show)("Gespeichert", `${ex.name} • +${xp} XP`);
+      (window.IronQuestUIEffects && (window.IronQuestUIEffects.xpBurst) && window.IronQuestUIEffects.xpBurst)(xp);
 
       // re-render to refresh list and streak/coach
       await render(container);
@@ -442,25 +442,25 @@
     container.querySelector("#lAddToPlan").addEventListener("click", ()=>{
       const ex = window.IronQuestExercises.findByName(exSel.value);
       const active = window.IronQuestPlans.getActive();
-      if(!active){ window.Toast?.show?.("Kein Plan", "Erstelle zuerst einen Plan."); return; }
-      if(!ex){ window.Toast?.show?.("Fehler", "Bitte Übung wählen."); return; }
+      if(!active){ (window.Toast && (window.Toast.show) && window.Toast.show)("Kein Plan", "Erstelle zuerst einen Plan."); return; }
+      if(!ex){ (window.Toast && (window.Toast.show) && window.Toast.show)("Fehler", "Bitte Übung wählen."); return; }
       window.IronQuestPlans.addExerciseToPlan(active.id, ex.name);
       refreshPlans();
       refreshExercises();
-      window.Toast?.show?.("Zum Plan hinzugefügt", `${active.name}: ${ex.name}`);
+      (window.Toast && (window.Toast.show) && window.Toast.show)("Zum Plan hinzugefügt", `${active.name}: ${ex.name}`);
     });
 
     // Use skill
     container.querySelector("#lUseSkill").addEventListener("click", ()=>{
-      const ok = window.IronQuestSkilltreeV2?.openActiveSkillPicker?.();
-      if(!ok) window.Toast?.show?.("Skill", "Keine Skills verfügbar oder Cooldown aktiv.");
+      const ok = (window.IronQuestSkilltreeV2 && (window.IronQuestSkilltreeV2.openActiveSkillPicker) && window.IronQuestSkilltreeV2.openActiveSkillPicker)();
+      if(!ok) (window.Toast && (window.Toast.show) && window.Toast.show)("Skill", "Keine Skills verfügbar oder Cooldown aktiv.");
     });
 
     // Clear log
     container.querySelector("#logClear").addEventListener("click", async ()=>{
       if(!confirm("Wirklich alle Einträge löschen?")) return;
       await window.IronDB.clearEntries();
-      window.Toast?.show?.("Gelöscht", "Alle Entries entfernt.");
+      (window.Toast && (window.Toast.show) && window.Toast.show)("Gelöscht", "Alle Entries entfernt.");
       await render(container);
     });
 
