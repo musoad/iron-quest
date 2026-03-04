@@ -79,3 +79,63 @@
 
   window.IronQuestCoach={ load, save, updatePR, weeklySummary, nextTarget, parseDid };
 })();
+
+
+/* ---------------------------------------------------------
+   CoachPlus – lightweight "fatigue" signal (0–100)
+   Used by Log to suggest deload / progression.
+--------------------------------------------------------- */
+(function(){
+  function parseDateAny(d){
+    if(!d) return null;
+    if(d instanceof Date) return d;
+    // expected ISO "YYYY-MM-DD"
+    if(typeof d === "string"){
+      const m = d.match(/^(\d{4})-(\d{2})-(\d{2})/);
+      if(m){
+        const y=+m[1], mo=+m[2]-1, da=+m[3];
+        return new Date(y, mo, da);
+      }
+      const t = Date.parse(d);
+      if(!Number.isNaN(t)) return new Date(t);
+    }
+    return null;
+  }
+
+  function fatigueScore(entries){
+    try{
+      const now = new Date();
+      const cutoff = new Date(now.getFullYear(), now.getMonth(), now.getDate()-6); // last 7 days incl today
+      const recent = (entries||[]).filter(e=>{
+        const dt = parseDateAny(e.date) || parseDateAny(e.createdAt) || null;
+        return dt && dt >= cutoff;
+      });
+      const daySet = new Set();
+      let xp = 0;
+      for(const e of recent){
+        if(e && e.date) daySet.add(String(e.date));
+        xp += Number(e.xp||0);
+      }
+      const days = daySet.size;
+      // heuristic: training frequency + load
+      //  - 5-7 days/week and/or very high XP => high fatigue
+      let score = 0;
+      score += days * 12;        // 0..84
+      score += xp / 300;         // +0.. (depends)
+      // small streak penalty if training many consecutive days
+      if(days >= 5) score += 10;
+      if(days >= 6) score += 10;
+      if(days >= 7) score += 10;
+      score = Math.max(0, Math.min(100, score));
+      return Math.round(score);
+    }catch(err){
+      return 0;
+    }
+  }
+
+  window.IronQuestCoachPlus = window.IronQuestCoachPlus || {};
+  if(typeof window.IronQuestCoachPlus.fatigueScore !== "function"){
+    window.IronQuestCoachPlus.fatigueScore = fatigueScore;
+  }
+})();
+
