@@ -347,12 +347,7 @@
     refreshExercises();
 
     function coachText(ex, sets, reps){
-      let fatigue = 0;
-      try {
-        if(window.IronQuestCoachPlus && typeof window.IronQuestCoachPlus.fatigueScore === 'function'){
-          fatigue = Number(window.IronQuestCoachPlus.fatigueScore(entries) || 0);
-        }
-      } catch(e) { fatigue = 0; }
+      const fatigue = (window.IronQuestCoachPlus && (window.IronQuestCoachPlus.fatigueScore) && window.IronQuestCoachPlus.fatigueScore)(entries) || 0;
       if(fatigue >= 75) return "Müde → Deload empfohlen (−1 Satz oder −2 Wdh).";
       if(fatigue >= 55) return "Achte auf saubere Technik, nicht grinden.";
       if(Number(sets||0) && Number(reps||0) && (sets>=ex.recSets && reps>=ex.recReps)) return "Stabil! Nächstes Mal +1 Wdh.";
@@ -380,12 +375,7 @@
       const lastSets = (last && last.sets) || ex.recSets;
       const lastReps = (last && last.reps) || ex.recReps;
 
-      let fatigue = 0;
-      try {
-        if(window.IronQuestCoachPlus && typeof window.IronQuestCoachPlus.fatigueScore === 'function'){
-          fatigue = Number(window.IronQuestCoachPlus.fatigueScore(entries) || 0);
-        }
-      } catch(e) { fatigue = 0; }
+      const fatigue = (window.IronQuestCoachPlus && (window.IronQuestCoachPlus.fatigueScore) && window.IronQuestCoachPlus.fatigueScore)(entries) || 0;
       let tgtSets = ex.recSets;
       let tgtReps = ex.recReps;
 
