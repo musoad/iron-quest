@@ -1,4 +1,4 @@
-const SW_VERSION = "v10-1-master-2026-03-04";
+const SW_VERSION = "v10-2-master-2026-03-04";
 const CACHE_NAME = "ironquest-" + SW_VERSION;
 
 const CORE = [
