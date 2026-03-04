@@ -14,7 +14,7 @@
   }
 
   function updatePR(entry){
-    if(!entry?.exercise) return { isNew:false };
+    if(!(entry && entry.exercise)) return { isNew:false };
     const st=load();
     const key=_sig(entry.exercise);
     const {sets,reps}=parseDid(entry.detail||"");
@@ -71,7 +71,7 @@
   }
 
   function nextTarget(ex, lastSets, lastReps){
-    const recS=Number(ex?.recSets||3), recR=Number(ex?.recReps||8);
+    const recS=Number((ex && ex.recSets)||3), recR=Number((ex && ex.recReps)||8);
     const s=Number(lastSets||recS), r=Number(lastReps||recR);
     if(s>=recS && r>=recR) return { sets: recS, reps: Math.min(recR+4, r+1) };
     return { sets: recS, reps: recR };
