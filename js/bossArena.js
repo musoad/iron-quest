@@ -21,7 +21,7 @@
     }
     // equipment & active buffs
     const eq=window.IronQuestEquipment.bonuses();
-    const active=window.__IQ_ACTIVE_BUFFS?.gateDmg || 1;
+    const active=(window.__IQ_ACTIVE_BUFFS && window.__IQ_ACTIVE_BUFFS.gateDmg) || 1;
     dmg *= (eq.gateDmg||1) * active;
     return Math.round(dmg);
   }
@@ -104,7 +104,7 @@
         await window.IronDB.addSystem({ date: today, msg:`Boss defeated: ${boss.name}. Reward: +${boss.reward} chest.` });
 
         window.IronQuestUIFX.showFinish(`FINISH!\n\n${boss.name} defeated.\nReward: +${boss.reward} Chest\nBonus: +${boss.xp} XP`);
-        window.Toast?.toast("Boss defeated", `+${boss.reward} Chest`);
+        (window.Toast && window.Toast.toast)("Boss defeated", `+${boss.reward} Chest`);
 
         await render(container);
       };
