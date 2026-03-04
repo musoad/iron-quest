@@ -30,8 +30,18 @@
   }
 
   window.IronQuestSkilltreeV2 = {
+    // persistence helpers (some screens call .load())
+    load: state,
+    save: function(st){ save(st); },
     state,
     addPassive,
-    passiveMultiplier
+    passiveMultiplier,
+    setPassive: function(type, pts){
+      const st = state();
+      if(!st.passive) st.passive = defaultState().passive;
+      st.passive[type] = Math.max(0, Math.min(25, Number(pts||0)));
+      save(st);
+    },
+    reset: function(){ save(defaultState()); }
   };
 })();
