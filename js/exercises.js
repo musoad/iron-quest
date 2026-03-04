@@ -145,6 +145,8 @@
 
   window.IronQuestExercises = {
     EXERCISES,
+    // canonical exercise type list used by Skills/XP systems
+    TYPES: ["Mehrgelenkig","Unilateral","Core","Conditioning","Komplexe","NEAT"],
     MUSCLE_GROUPS,
     SUB_GROUPS,
     byGroup,
