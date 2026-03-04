@@ -14,7 +14,36 @@
       if(!("serviceWorker" in navigator)) return;
       const reg = await navigator.serviceWorker.register("./sw.js");
       try{ await reg.update(); }catch(_){}
-      // Optional: update banner handled in uiEffects/diagnostics if present
+      // Update banner (shows when SW is waiting)
+      try{
+        const banner=document.getElementById("updateBanner");
+        const btn=document.getElementById("btnUpdateReload");
+        function showBanner(){
+          if(!banner) return;
+          banner.style.display="flex";
+          if(btn){
+            btn.onclick=function(){
+              try{
+                if(reg && reg.waiting) reg.waiting.postMessage({ type:"SKIP_WAITING" });
+              }catch(_){}
+              setTimeout(function(){ location.reload(); }, 250);
+            };
+          }
+        }
+        if(reg && reg.waiting) showBanner();
+        reg.addEventListener("updatefound", function(){
+          const sw=reg.installing;
+          if(!sw) return;
+          sw.addEventListener("statechange", function(){
+            if(sw.state === "installed" && navigator.serviceWorker.controller){
+              showBanner();
+            }
+          });
+        });
+        navigator.serviceWorker.addEventListener("controllerchange", function(){
+          // new SW took control
+        });
+      }catch(_){}
       return reg;
     }catch(e){
       console.warn("SW register failed", e);
