@@ -94,18 +94,18 @@
     const bonus = { globalXp:1, gateDmg:1, lootLuck:1, typeXp:{} };
 
     const relic = eq.relic ? byId.get(eq.relic) : null;
-    if(relic?.bonus?.globalXp) bonus.globalXp *= relic.bonus.globalXp;
-    if(relic?.bonus?.gateDmg)  bonus.gateDmg  *= relic.bonus.gateDmg;
-    if(relic?.bonus?.lootLuck) bonus.lootLuck *= relic.bonus.lootLuck;
-    if(relic?.bonus?.typeXp){
+    if((relic && (relic.bonus) && relic.bonus).globalXp)) bonus.globalXp *= relic.bonus.globalXp;
+    if((relic && (relic.bonus) && relic.bonus).gateDmg))  bonus.gateDmg  *= relic.bonus.gateDmg;
+    if((relic && (relic.bonus) && relic.bonus).lootLuck)) bonus.lootLuck *= relic.bonus.lootLuck;
+    if((relic && (relic.bonus) && relic.bonus).typeXp)){
       for(const [k,v] of Object.entries(relic.bonus.typeXp)){
         bonus.typeXp[k] = (bonus.typeXp[k]||1) * v;
       }
     }
 
     for(const sp of setProgress()){
-      if(sp.count >= 2) applyBonus(bonus, sp.two?.patch);
-      if(sp.count >= 4) applyBonus(bonus, sp.four?.patch);
+      if(sp.count >= 2) applyBonus(bonus, (sp.two && sp.two.patch));
+      if(sp.count >= 4) applyBonus(bonus, (sp.four && sp.four.patch));
     }
 
     return bonus;
@@ -124,7 +124,7 @@
 
   function equippedNames(){
     const slotToItem = equippedItems();
-    const name = (it)=> it?.name || "—";
+    const name = (it)=> (it && it.name) || "—";
     return {
       title: name(slotToItem.title),
       badge: name(slotToItem.badge),
@@ -157,9 +157,9 @@
     const slotCards = SLOTS.map(slot=>{
       const it = slotToItem[slot];
       const m = slotMeta[slot];
-      const setName = it?.setName || (it?.setId ? (SET_BONUSES[it.setId]?.name || it.setId) : "—");
-      const rc = rarityClass(it?.rarity);
-      const name = it?.name || "—";
+      const setName = (it && it.setName) || ((it && it.setId) ? (SET_BONUSES[(it.setId] && it.setId].name) || it.setId) : "—");
+      const rc = rarityClass((it && it.rarity));
+      const name = (it && it.name) || "—";
       const sub = it ? `${setName}` : "Not equipped";
       return `
         <div class="eqSlot ${rc}" data-slot="${slot}">
@@ -186,8 +186,8 @@
               <div class="hint">Set progress: <span class="badge ${fourOn?"gold":"ok"}">${badge}</span></div>
             </div>
           </div>
-          <div class="setLine ${twoOn?"on":""}">2/4: ${s.two?.label || "—"} ${twoOn?"✅":"🔒"}</div>
-          <div class="setLine ${fourOn?"on":""}">4/4: ${s.four?.label || "—"} ${fourOn?"✅":"🔒"}</div>
+          <div class="setLine ${twoOn?"on":""}">2/4: ${(s.two && s.two.label) || "—"} ${twoOn?"✅":"🔒"}</div>
+          <div class="setLine ${fourOn?"on":""}">4/4: ${(s.four && s.four.label) || "—"} ${fourOn?"✅":"🔒"}</div>
         </div>
       `;
     }).join("") : `<div class="hint">Rüste Items aus, um Set-Boni zu aktivieren (2/4 & 4/4).</div>`;
@@ -201,7 +201,7 @@
     mount.querySelectorAll('.eqSlot').forEach(el=>{
       el.onclick = ()=>{
         const slot = el.getAttribute('data-slot');
-        window.IronQuestUIFX?.openEquipModal?.(slot);
+        (window.IronQuestUIFX && (window.IronQuestUIFX.openEquipModal) && window.IronQuestUIFX.openEquipModal)(slot);
       };
     });
   }
