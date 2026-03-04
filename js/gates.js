@@ -41,7 +41,7 @@
 
     // equipment + active buffs affect gate damage
     const eq=window.IronQuestEquipment.bonuses();
-    const active=window.__IQ_ACTIVE_BUFFS?.gateDmg || 1;
+    const active=(window.__IQ_ACTIVE_BUFFS && window.__IQ_ACTIVE_BUFFS.gateDmg) || 1;
     dmg *= (eq.gateDmg||1) * active;
 
     // rank scales damage slightly
@@ -116,8 +116,8 @@
 
     container.querySelector("#btnOpenChest").onclick=()=>{
       const res=window.IronQuestLoot.roll();
-      if(!res.ok) return window.Toast?.toast("Chest", "Keine Chests verfügbar.");
-      window.Toast?.toast("Chest", res.msg);
+      if(!res.ok) return (window.Toast && window.Toast.toast)("Chest", "Keine Chests verfügbar.");
+      (window.Toast && window.Toast.toast)("Chest", res.msg);
       renderInventory(container.querySelector("#invMount"));
     };
 
@@ -138,7 +138,7 @@
       await window.IronDB.addSystem({ date: today, msg:`Gate cleared (W${week}) — Rank ${rankKey}. Reward: +1 Chest.` });
 
       window.IronQuestUIFX.showSystem(`Gate cleared.\n\n[ REWARD ]\n+1 Chest\nHunter Rank progress increased.`);
-      window.Toast?.toast("Gate cleared", "+1 Chest");
+      (window.Toast && window.Toast.toast)("Gate cleared", "+1 Chest");
 
       await render(container);
     };
@@ -195,7 +195,7 @@ Relic: ${names.relic}
         const slot=sel.getAttribute("data-eq");
         const id=sel.value||null;
         window.IronQuestEquipment.equip(slot, id);
-        window.Toast?.toast("Equipment updated", `${slot.toUpperCase()} equipped.`);
+        (window.Toast && window.Toast.toast)("Equipment updated", `${slot.toUpperCase()} equipped.`);
         renderInventory(mount);
       };
     });
