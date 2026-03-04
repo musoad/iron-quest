@@ -347,7 +347,7 @@
     refreshExercises();
 
     function coachText(ex, sets, reps){
-      const fatigue = (window.IronQuestCoachPlus && (window.IronQuestCoachPlus.fatigueScore) && window.IronQuestCoachPlus.fatigueScore)(entries) || 0;
+      const fatigue = (typeof window.IronQuestCoachPlus?.fatigueScore === "function") ? (window.IronQuestCoachPlus.fatigueScore(entries) || 0) : 0;
       if(fatigue >= 75) return "Müde → Deload empfohlen (−1 Satz oder −2 Wdh).";
       if(fatigue >= 55) return "Achte auf saubere Technik, nicht grinden.";
       if(Number(sets||0) && Number(reps||0) && (sets>=ex.recSets && reps>=ex.recReps)) return "Stabil! Nächstes Mal +1 Wdh.";
@@ -375,7 +375,7 @@
       const lastSets = (last && last.sets) || ex.recSets;
       const lastReps = (last && last.reps) || ex.recReps;
 
-      const fatigue = (window.IronQuestCoachPlus && (window.IronQuestCoachPlus.fatigueScore) && window.IronQuestCoachPlus.fatigueScore)(entries) || 0;
+      const fatigue = (typeof window.IronQuestCoachPlus?.fatigueScore === "function") ? (window.IronQuestCoachPlus.fatigueScore(entries) || 0) : 0;
       let tgtSets = ex.recSets;
       let tgtReps = ex.recReps;
 
@@ -399,7 +399,7 @@
       const sets = Number(setsEl.value || 0);
       const reps = Number(repsEl.value || 0);
 
-      const buffs = (window.IronQuestSkilltreeV2 && (window.IronQuestSkilltreeV2.getActiveBuff) && window.IronQuestSkilltreeV2.getActiveBuff)() || null;
+      const buffs = (typeof window.IronQuestSkilltreeV2?.getActiveBuff === "function") ? (window.IronQuestSkilltreeV2.getActiveBuff() || null) : null;
 
       const xp = window.IronQuestXP.calcExerciseXP({
         exercise: ex,
@@ -430,7 +430,7 @@
         return;
       }
 
-      const buffs = (window.IronQuestSkilltreeV2 && (window.IronQuestSkilltreeV2.consumeActiveBuff) && window.IronQuestSkilltreeV2.consumeActiveBuff)() || null;
+      const buffs = (typeof window.IronQuestSkilltreeV2?.consumeActiveBuff === "function") ? (window.IronQuestSkilltreeV2.consumeActiveBuff() || null) : null;
       const xp = window.IronQuestXP.calcExerciseXP({
         exercise: ex,
         type: ex.type,
