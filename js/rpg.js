@@ -136,16 +136,16 @@
 
       if (ok){
         state.ach[a.id] = { done:true, date: window.Utils.isoDate(new Date()) };
-        window.Toast?.toast("Achievement unlocked!", a.title);
+        (window.Toast && window.Toast.toast)("Achievement unlocked!", a.title);
       }
     }
   }
 
   function storyStatus(state, summary, entriesCount){
-    const idx = Math.max(0, Math.min(STORY.length-1, Number(state.story?.idx||0)));
+    const idx = Math.max(0, Math.min(STORY.length-1, Number((state.story && state.story.idx)||0)));
     const cur = STORY[idx];
     const done = cur ? !!cur.check(summary, entriesCount) : true;
-    const claimed = !!state.story?.claimed?.[cur?.id||""];
+    const claimed = !!(state.story && state.story.claimed && state.story.claimed[(cur && cur.id) || ""]);
     return { idx, cur, done, claimed, isLast: idx>=STORY.length-1 };
   }
 
@@ -159,8 +159,8 @@
 
     state.story.claimed[ss.cur.id] = true;
     await awardQuestXP(ss.cur.title, ss.cur.reward);
-    window.IronQuestLoot?.addChest?.(1);
-    window.Toast?.toast("Story cleared!", `${ss.cur.title} (+${ss.cur.reward} XP, +1 Chest)`);
+    (window.IronQuestLoot && (window.IronQuestLoot.addChest) && window.IronQuestLoot.addChest)(1);
+    (window.Toast && window.Toast.toast)("Story cleared!", `${ss.cur.title} (+${ss.cur.reward} XP, +1 Chest)`);
 
     if (!ss.isLast) state.story.idx = ss.idx + 1;
     save(state);
@@ -176,8 +176,8 @@
     state.daily.claimed = true;
     save(state);
     await awardQuestXP(def.title, def.reward);
-    window.IronQuestLoot?.addChest?.(1);
-    window.Toast?.toast("Daily claimed", `+${def.reward} XP, +1 Chest`);
+    (window.IronQuestLoot && (window.IronQuestLoot.addChest) && window.IronQuestLoot.addChest)(1);
+    (window.Toast && window.Toast.toast)("Daily claimed", `+${def.reward} XP, +1 Chest`);
     return true;
   }
 
@@ -190,8 +190,8 @@
     state.weekly.claimed = true;
     save(state);
     await awardQuestXP(def.title, def.reward);
-    window.IronQuestLoot?.addChest?.(2);
-    window.Toast?.toast("Weekly claimed", `+${def.reward} XP, +2 Chests`);
+    (window.IronQuestLoot && (window.IronQuestLoot.addChest) && window.IronQuestLoot.addChest)(2);
+    (window.Toast && window.Toast.toast)("Weekly claimed", `+${def.reward} XP, +2 Chests`);
     return true;
   }
 
