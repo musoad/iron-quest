@@ -89,7 +89,7 @@
         waist: Number(container.querySelector("#hWaist").value||0),
       };
       await window.IronDB.addHealth(h);
-      window.Toast?.toast("Health saved", h.date);
+      (window.Toast && window.Toast.toast)("Health saved", h.date);
       await render(container);
     };
 
