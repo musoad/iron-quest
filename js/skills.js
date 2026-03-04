@@ -75,19 +75,19 @@
       const v=container.querySelector("#startDate").value;
       if(!v) return;
       window.IronQuestProgression.setStartDate(v);
-      window.Toast?.toast("Startdatum gespeichert", v);
+      (window.Toast && window.Toast.toast)("Startdatum gespeichert", v);
     };
     container.querySelector("#todayStart").onclick=()=>{
       const t=window.Utils.isoDate(new Date());
       container.querySelector("#startDate").value=t;
       window.IronQuestProgression.setStartDate(t);
-      window.Toast?.toast("Startdatum gesetzt", t);
+      (window.Toast && window.Toast.toast)("Startdatum gesetzt", t);
     };
 
     // class
     container.querySelector("#clsSel").onchange=(e)=>{
       window.IronQuestClasses.set(e.target.value);
-      window.Toast?.toast("Klasse gewählt", window.IronQuestClasses.meta(e.target.value).name);
+      (window.Toast && window.Toast.toast)("Klasse gewählt", window.IronQuestClasses.meta(e.target.value).name);
     };
 
     // Periodization wiring
@@ -100,7 +100,7 @@
     if(periSel){
       periSel.onchange=()=>{
         window.IronQuestPeriodization.setMode(periSel.value);
-        window.Toast?.toast("Phase updated", window.IronQuestPeriodization.getMode().name);
+        (window.Toast && window.Toast.toast)("Phase updated", window.IronQuestPeriodization.getMode().name);
         updPeri();
       };
       updPeri();
@@ -111,7 +111,7 @@
     const grid=container.querySelector("#passiveGrid");
     grid.innerHTML="";
     types.forEach(t=>{
-      const pts=Number(st.passive?.[t]||0);
+      const pts = Number((st.passive && st.passive[t]) || 0);
       const mult=window.IronQuestSkilltreeV2.passiveMultiplier(t);
       const card=document.createElement("div");
       card.className="card soft";
@@ -135,7 +135,7 @@
       const s=window.IronQuestSkilltreeV2.load();
       s.passive[t]=Math.min(window.IronQuestSkilltreeV2.MAX_PASSIVE, Number(s.passive[t]||0)+1);
       window.IronQuestSkilltreeV2.save(s);
-      window.Toast?.toast("Skill Point", `${t} +1`);
+      (window.Toast && window.Toast.toast)("Skill Point", `${t} +1`);
       render(container);
     });
     grid.querySelectorAll("[data-sub]").forEach(b=>b.onclick=()=>{
@@ -168,7 +168,7 @@
         const id=btn.getAttribute("data-use");
         const res=window.IronQuestSkilltreeV2.useActive(id);
         if(!res.ok){
-          window.Toast?.toast("Skill", "Cooldown aktiv.");
+          (window.Toast && window.Toast.toast)("Skill", "Cooldown aktiv.");
           return;
         }
         window.__IQ_ACTIVE_BUFFS = { ...res.skill.effect };
