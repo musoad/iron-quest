@@ -28,7 +28,7 @@
     const found = MODES.find(m=>m.key===modeKey) || MODES[0];
     const st = load();
     st.mode = found.key;
-    st.changedAt = window.Utils?.isoDate(new Date()) || "";
+    st.changedAt = (window.Utils && window.Utils.isoDate)(new Date()) || "";
     save(st);
     return getMode();
   }
