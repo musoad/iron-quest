@@ -18,6 +18,32 @@
     return "★".repeat(d) + "☆".repeat(5-d);
   }
 
+  function safeGetPlansState(){
+    const P = window.IronQuestPlans;
+    if(P && typeof P.getState === "function") return P.getState();
+    if(P && typeof P.state === "function") return P.state();
+    return { activeId:"planA", plans:[{id:"planA", name:"Plan A", items:[]}] };
+  }
+
+  function safeGetActivePlan(){
+    const P = window.IronQuestPlans;
+    if(P && typeof P.getActive === "function") return P.getActive();
+    const st = safeGetPlansState();
+    const plans = st && st.plans ? st.plans : [];
+    return plans.find(p=>p.id===st.activeId) || plans[0] || { id:"planA", name:"Plan A", items:[] };
+  }
+
+  function safeSetActivePlan(id){
+    const P = window.IronQuestPlans;
+    if(P && typeof P.setActive === "function") return P.setActive(id);
+    try{
+      const st = safeGetPlansState();
+      st.activeId = id;
+      if(P && typeof P.setState === "function") P.setState(st);
+    }catch{}
+  }
+
+
   function renderPlanList(listEl, plan, onAction){
     listEl.innerHTML = "";
     if(!plan || !(plan.items && plan.items.length)){
@@ -198,9 +224,9 @@
           pActive.appendChild(o);
         }
       }
-      const plan = window.IronQuestPlans.getActive();
+      const plan = safeGetActivePlan();
       renderPlanList(pList, plan, (action, exName)=>{
-        const active = window.IronQuestPlans.getActive();
+        const active = safeGetActivePlan();
         if(!active) return;
         if(action==="remove") window.IronQuestPlans.removeExerciseFromPlan(active.id, exName);
         if(action==="up") window.IronQuestPlans.moveExercise(active.id, exName, "up");
@@ -211,7 +237,7 @@
     }
 
     pActive.addEventListener("change", ()=>{
-      window.IronQuestPlans.setActive(pActive.value);
+      safeSetActivePlan(pActive.value);
       refreshPlans();
       refreshExercises();
     });
@@ -230,7 +256,7 @@
     });
 
     pDel.addEventListener("click", ()=>{
-      const active = window.IronQuestPlans.getActive();
+      const active = safeGetActivePlan();
       if(!active) return;
       if(!confirm(`Plan „${active.name}“ wirklich löschen?`)) return;
       window.IronQuestPlans.removePlan(active.id);
@@ -284,7 +310,7 @@
       let list = window.IronQuestExercises.EXERCISES.filter(e => e.muscleGroup===mg && e.subGroup===sg);
 
       if(pOnly.value === "1"){
-        const active = window.IronQuestPlans.getActive();
+        const active = safeGetActivePlan();
         const set = new Set((active && active.items) || []);
         list = list.filter(e => set.has(e.name));
       }
@@ -447,7 +473,7 @@
     // Add to plan
     container.querySelector("#lAddToPlan").addEventListener("click", ()=>{
       const ex = window.IronQuestExercises.findByName(exSel.value);
-      const active = window.IronQuestPlans.getActive();
+      const active = safeGetActivePlan();
       if(!active){ (window.Toast && (window.Toast.show) && window.Toast.show)("Kein Plan", "Erstelle zuerst einen Plan."); return; }
       if(!ex){ (window.Toast && (window.Toast.show) && window.Toast.show)("Fehler", "Bitte Übung wählen."); return; }
       window.IronQuestPlans.addExerciseToPlan(active.id, ex.name);
