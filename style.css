@@ -556,3 +556,35 @@ button.secondary{
   margin-top: 10px;
 }
 .chartLegend .pill{ font-variant-numeric: tabular-nums; }
+
+
+/* --- Hunter Card (mobile-first) --- */
+.hunter-card{padding:14px}
+.hunter-card .hc-top{display:flex;gap:12px;align-items:stretch}
+.hunter-card .hc-avatar{position:relative;flex:0 0 96px;width:96px;height:96px;border-radius:18px;overflow:hidden;border:1px solid rgba(255,255,255,.12);background:rgba(0,0,0,.25)}
+.hunter-card .hc-avatar img{width:100%;height:100%;object-fit:cover;display:block}
+.hunter-card .hc-avatar .hc-aura{position:absolute;inset:-12px;filter:blur(14px);opacity:.55;background:radial-gradient(circle at 50% 50%, var(--aura, #22c55e), transparent 55%);pointer-events:none}
+.hunter-card .hc-meta{flex:1;min-width:0;display:flex;flex-direction:column;gap:8px}
+.hunter-card .hc-name{font-size:20px;line-height:1.1;font-weight:800;letter-spacing:.3px;white-space:nowrap;overflow:hidden;text-overflow:ellipsis}
+.hunter-card .hc-sub{display:flex;align-items:center;gap:8px;flex-wrap:wrap}
+.hunter-card .hc-sub .dot{opacity:.4}
+.hunter-card .badge{display:inline-flex;align-items:center;gap:6px;padding:4px 9px;border-radius:999px;border:1px solid rgba(255,255,255,.14);background:rgba(0,0,0,.18);font-size:12px;font-weight:700}
+.hunter-card .muted{opacity:.8;font-size:12px}
+.hunter-card .hc-kpis{display:grid;grid-template-columns:repeat(3,minmax(0,1fr));gap:8px}
+.hunter-card .kpi{padding:8px 10px;border-radius:14px;border:1px solid rgba(255,255,255,.10);background:rgba(0,0,0,.18)}
+.hunter-card .kpi .k{font-size:11px;opacity:.75}
+.hunter-card .kpi .v{font-size:14px;font-weight:800;margin-top:2px}
+.hunter-card .segmented{display:flex;gap:8px;margin-top:2px}
+.hunter-card .segmented .seg{flex:1;padding:10px 10px;border-radius:14px;border:1px solid rgba(255,255,255,.12);background:rgba(0,0,0,.18);color:inherit;font-weight:800;font-size:13px}
+.hunter-card .segmented .seg.active{border-color:rgba(34,197,94,.65);box-shadow:0 0 0 1px rgba(34,197,94,.25) inset}
+.hunter-card .hc-stats{display:grid;grid-template-columns:repeat(5,minmax(0,1fr));gap:8px;margin-top:12px}
+.hunter-card .stat-pill{padding:10px 8px;border-radius:14px;border:1px solid rgba(255,255,255,.10);background:rgba(0,0,0,.18);text-align:center}
+.hunter-card .stat-pill .k{font-size:10px;letter-spacing:.7px;opacity:.75}
+.hunter-card .stat-pill .v{font-size:16px;font-weight:900;margin-top:4px}
+
+/* tighter on very small screens */
+@media (max-width:360px){
+  .hunter-card .hc-avatar{flex-basis:84px;width:84px;height:84px;border-radius:16px}
+  .hunter-card .hc-kpis{grid-template-columns:repeat(2,minmax(0,1fr))}
+  .hunter-card .hc-stats{grid-template-columns:repeat(3,minmax(0,1fr))}
+}
