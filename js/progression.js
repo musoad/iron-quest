@@ -15,8 +15,13 @@
     return window.Utils.clamp(w,1,52);
   }
   function xpNeededForNextLevel(level){
+    // New scaling: starts light, ramps harder (RPG feel)
+    // Examples (approx): L1~100, L2~145, L3~205, L4~295, L5~425 ... and keeps accelerating.
     const l=Math.max(1,Number(level||1));
-    return Math.round(380 + 130*l + 36*(l**1.78));
+    const rate = 1.33;
+    const lin  = 0.08;
+    const need = 100 * (rate ** (l-1)) * (1 + lin*(l-1));
+    return Math.max(100, Math.round(need));
   }
   function levelFromTotalXp(totalXp){
     let lvl=1; let xp=Math.max(0,Math.round(totalXp||0));
