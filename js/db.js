@@ -60,21 +60,49 @@
   window.IronDB={
     init,
     getAllEntries: ()=>getAll("entries"),
-    addEntry: (e)=>add("entries", e),
-    updateEntry: (e)=>put("entries", e),
-    deleteEntry: (id)=>del("entries", id),
-    clearAllEntries: ()=>clear("entries"),
+    addEntry: (e)=>{
+      try{
+        if(window.IronQuestSchema && window.IronQuestSchema.normalizeEntry){
+          e = window.IronQuestSchema.normalizeEntry(e).entry;
+        }
+      }catch(_){ }
+      return add("entries", e).then((id)=>{ try{ if(window.IronQuestState) window.IronQuestState.invalidate(); }catch(_){} return id; });
+    },
+    updateEntry: (e)=>{
+      try{
+        if(window.IronQuestSchema && window.IronQuestSchema.normalizeEntry){
+          e = window.IronQuestSchema.normalizeEntry(e).entry;
+        }
+      }catch(_){ }
+      return put("entries", e).then((id)=>{ try{ if(window.IronQuestState) window.IronQuestState.invalidate(); }catch(_){} return id; });
+    },
+    deleteEntry: (id)=>del("entries", id).then((x)=>{ try{ if(window.IronQuestState) window.IronQuestState.invalidate(); }catch(_){} return x; }),
+    clearAllEntries: ()=>clear("entries").then((x)=>{ try{ if(window.IronQuestState) window.IronQuestState.invalidate(); }catch(_){} return x; }),
     // backward compatibility for older modules
-    clearEntries: ()=>clear("entries"),
+    clearEntries: ()=>clear("entries").then((x)=>{ try{ if(window.IronQuestState) window.IronQuestState.invalidate(); }catch(_){} return x; }),
     addHealth: (h)=>add("health", h),
     getAllHealth: ()=>getAll("health"),
     addSystem: (m)=>add("system", m),
     getAllSystem: ()=>getAll("system"),
     clearSystem: ()=>clear("system"),
-    addRun: (r)=>add("runs", r),
-    updateRun: (r)=>put("runs", r),
+    addRun: (r)=>{
+      try{
+        if(window.IronQuestSchema && window.IronQuestSchema.normalizeRun){
+          r = window.IronQuestSchema.normalizeRun(r).run;
+        }
+      }catch(_){ }
+      return add("runs", r).then((id)=>{ try{ if(window.IronQuestState) window.IronQuestState.invalidate(); }catch(_){} return id; });
+    },
+    updateRun: (r)=>{
+      try{
+        if(window.IronQuestSchema && window.IronQuestSchema.normalizeRun){
+          r = window.IronQuestSchema.normalizeRun(r).run;
+        }
+      }catch(_){ }
+      return put("runs", r).then((id)=>{ try{ if(window.IronQuestState) window.IronQuestState.invalidate(); }catch(_){} return id; });
+    },
     getAllRuns: ()=>getAll("runs"),
-    clearRuns: ()=>clear("runs"),
-    deleteRun: (id)=>del("runs", id)
+    clearRuns: ()=>clear("runs").then((x)=>{ try{ if(window.IronQuestState) window.IronQuestState.invalidate(); }catch(_){} return x; }),
+    deleteRun: (id)=>del("runs", id).then((x)=>{ try{ if(window.IronQuestState) window.IronQuestState.invalidate(); }catch(_){} return x; })
   };
 })();
