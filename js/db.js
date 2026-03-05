@@ -37,19 +37,26 @@
     const s=await store(name,"readwrite");
     return await new Promise((res,rej)=>{ const r=s.add(val); r.onsuccess=()=>res(r.result); r.onerror=()=>rej(r.error); });
   }
+  async function del(name, key){
+    const s=await store(name,"readwrite");
+    return await new Promise((res,rej)=>{ const r=s.delete(key); r.onsuccess=()=>res(true); r.onerror=()=>rej(r.error); });
+  }
   async function clear(name){
     const s=await store(name,"readwrite");
     return await new Promise((res,rej)=>{ const r=s.clear(); r.onsuccess=()=>res(true); r.onerror=()=>rej(r.error); });
   }
 
-  window.DB={ init, getAll, add, clear };
+  window.DB={ init, getAll, add, del, clear };
 
   // Convenience
   window.IronDB={
     init,
     getAllEntries: ()=>getAll("entries"),
     addEntry: (e)=>add("entries", e),
+    deleteEntry: (id)=>del("entries", id),
     clearAllEntries: ()=>clear("entries"),
+    // backward compatibility for older modules
+    clearEntries: ()=>clear("entries"),
     addHealth: (h)=>add("health", h),
     getAllHealth: ()=>getAll("health"),
     addSystem: (m)=>add("system", m),
@@ -57,6 +64,7 @@
     clearSystem: ()=>clear("system"),
     addRun: (r)=>add("runs", r),
     getAllRuns: ()=>getAll("runs"),
-    clearRuns: ()=>clear("runs")
+    clearRuns: ()=>clear("runs"),
+    deleteRun: (id)=>del("runs", id)
   };
 })();
