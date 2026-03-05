@@ -6,17 +6,8 @@
   // v11+: { name, sets, reps }
   // (Older saves were string names → auto-upgraded.)
   const KEY = "iq_plans_v10";
-
-  function load(){
-    try{ return JSON.parse(localStorage.getItem(KEY) || "null") || null; }catch(_){ return null; }
-  }
-  function save(st){
-    localStorage.setItem(KEY, JSON.stringify(st));
-  }
-  function defaultState(){
-    return { activeId: "planA", plans: [{ id:"planA", name:"Plan A", items: [], week: normalizeWeek(null) }] };
-  
   const WEEK_KEYS = ["mon","tue","wed","thu","fri","sat","sun"];
+
   function normalizeWeek(w){
     const o = (w && typeof w === "object") ? w : {};
     const out = {};
@@ -28,7 +19,15 @@
     return out;
   }
 
-}
+  function load(){
+    try{ return JSON.parse(localStorage.getItem(KEY) || "null") || null; }catch(_){ return null; }
+  }
+  function save(st){
+    localStorage.setItem(KEY, JSON.stringify(st));
+  }
+  function defaultState(){
+    return { activeId: "planA", plans: [{ id:"planA", name:"Plan A", items: [], week: normalizeWeek(null) }] };
+  }
 
   function normalizeState(st){
     const s = st || defaultState();
@@ -74,7 +73,7 @@
   function createPlan(name){
     const st = getState();
     const id = "plan_" + (window.Utils && window.Utils.uid ? window.Utils.uid() : (Date.now()+""));
-    st.plans.push({ id, name: name || "New Plan", items: [] });
+    st.plans.push({ id, name: name || "New Plan", items: [], week: normalizeWeek(null) });
     st.activeId = id;
     save(st);
     return id;
