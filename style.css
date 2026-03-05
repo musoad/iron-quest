@@ -822,3 +822,10 @@ button.secondary{
 
 .pill.small { font-size: 12px; padding: 2px 8px; border-radius: 999px; }
 
+
+
+/* Home mini progress bars */
+.miniBars{display:flex;flex-direction:column;gap:6px}
+.miniBar{height:8px;border-radius:999px;background:rgba(255,255,255,.08);overflow:hidden}
+.miniFill{height:100%;background:linear-gradient(90deg,#34d399,#10b981)}
+.miniLbl{font-size:12px;line-height:1.2}
