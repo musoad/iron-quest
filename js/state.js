@@ -72,7 +72,8 @@
         let lvl=1, xp=totalXp, need=500;
         while(xp >= need){
           xp -= need; lvl += 1;
-          need = Math.floor(500 * Math.pow(lvl, 1.2));
+          const curve = Number((window.IronQuestBalance?.load?.()||{}).levelCurve ?? 1.2) || 1.2;
+          need = Math.floor(500 * Math.pow(lvl, curve));
           if(lvl>999) break;
         }
         return { lvl, remainder: xp, nextNeed: need };
@@ -84,9 +85,10 @@
 
     const rank = window.IronQuestHunterRank?.compute?.(lvl, totalXp) || "E";
 
-    // goals (tunable in one place)
-    const WEEK_XP_GOAL = 1800;     // adjust anytime
-    const WEEK_WORKOUT_GOAL = 4;   // days/training entries goal
+    // goals (configurable via IronQuestBalance)
+    const bal = window.IronQuestBalance?.load?.() || {};
+    const WEEK_XP_GOAL = Number(bal.weekXpGoal ?? 1800) || 1800;
+    const WEEK_WORKOUT_GOAL = Number(bal.weekWorkoutGoal ?? 4) || 4;   // days with logs
 
     const nextUnlock = (lvl < 10)
       ? { title: "Class Unlock", desc: `Unlock your class at Level 10 (${10-lvl} levels left)` }
