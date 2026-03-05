@@ -204,6 +204,35 @@ button.secondary{
 .historyName{ overflow:hidden; text-overflow:ellipsis; white-space:nowrap; }
 .historyItem .iconBtn{ width:42px; height:42px; border-radius:14px; }
 .historyItem .iconBtn.danger{ border-color: rgba(255,80,80,.35); background: rgba(255,80,80,.08); }
+
+/* Plans */
+.planItem{
+  border: 1px solid rgba(255,255,255,.10);
+  background: rgba(255,255,255,.04);
+  border-radius: 18px;
+  padding: 12px;
+  margin-bottom: 10px;
+}
+.planItemTop{ display:flex; align-items:flex-start; justify-content:space-between; gap:10px; }
+.planItemName{ min-width:0; }
+.planBtns{ display:flex; gap:6px; flex-shrink:0; }
+.planParams{
+  display:flex;
+  gap:10px;
+  align-items:flex-end;
+  margin-top:10px;
+}
+.miniField{ display:flex; flex-direction:column; gap:6px; flex:0 0 92px; }
+.miniField span{ font-size:12px; opacity:.75; }
+.miniField input{
+  width:100%;
+  padding: 10px 10px;
+  border-radius: 14px;
+  border: 1px solid rgba(255,255,255,.12);
+  background: rgba(0,0,0,.22);
+  color: inherit;
+}
+.btn.small{ padding: 10px 12px; border-radius: 14px; }
 .historySearchRow{ display:flex; gap:10px; margin-top: 10px; }
 .historySearchRow input{
   flex: 1 1 auto;
@@ -757,3 +786,39 @@ button.secondary{
   .hq-avatar{ width: 112px; height: 112px; flex-basis: 112px; }
   .hq-name{ font-size: 22px; }
 }
+
+
+/* Select inputs */
+.select{
+  width: 100%;
+  padding: 10px 12px;
+  border-radius: 12px;
+  border: 1px solid rgba(255,255,255,0.14);
+  background: rgba(0,0,0,0.28);
+  color: inherit;
+}
+
+
+
+/* Plans: weekly schedule */
+.planWeek { padding-top: 10px; border-top: 1px solid rgba(255,255,255,.08); }
+.weekDays { display:flex; gap:8px; margin:10px 0; overflow-x:auto; padding-bottom:4px; }
+.weekDayBtn { flex:0 0 auto; border:1px solid rgba(255,255,255,.14); background: rgba(255,255,255,.06); color: inherit; border-radius: 12px; padding:8px 10px; font-weight:700; }
+.weekDayBtn.active { border-color: rgba(255,255,255,.35); background: rgba(255,255,255,.12); }
+.weekControls { margin: 8px 0 10px; }
+.weekList { display:flex; flex-direction:column; gap:8px; }
+.weekRow { display:flex; justify-content:space-between; align-items:center; gap:10px; padding:10px; border-radius:14px; background: rgba(255,255,255,.05); border:1px solid rgba(255,255,255,.10); }
+.weekRow .wName { font-weight:800; }
+.weekRow .wBtns { display:flex; gap:8px; }
+
+/* Home: Today Plan card */
+.hq-plan { margin-top: 12px; padding: 12px; border-radius: 18px; border:1px solid rgba(255,255,255,.12); background: rgba(255,255,255,.04); }
+.hq-planT { font-weight: 900; margin-bottom: 8px; letter-spacing:.2px; }
+.hq-planList { display:flex; flex-direction:column; gap:8px; }
+.hq-planRow { display:flex; justify-content:space-between; align-items:center; gap:10px; padding:10px; border-radius:14px; background: rgba(255,255,255,.05); border:1px solid rgba(255,255,255,.10); }
+.hq-planRow.done { opacity:.75; }
+.hq-planName { font-weight: 800; }
+.hq-planBtns { display:flex; gap:8px; align-items:center; }
+
+.pill.small { font-size: 12px; padding: 2px 8px; border-radius: 999px; }
+
