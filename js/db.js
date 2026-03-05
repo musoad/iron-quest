@@ -1,7 +1,9 @@
 (() => {
   "use strict";
   const DB_NAME="ironquest_unified_final";
-  const DB_VERSION=2;
+  // v3: guarantees that missing stores (e.g. runs) are created for users who
+  // already had an older DB version without triggering onupgradeneeded.
+  const DB_VERSION=3;
   const STORES={
     entries:{ keyPath:"id", autoIncrement:true },
     health:{ keyPath:"id", autoIncrement:true },
@@ -37,6 +39,12 @@
     const s=await store(name,"readwrite");
     return await new Promise((res,rej)=>{ const r=s.add(val); r.onsuccess=()=>res(r.result); r.onerror=()=>rej(r.error); });
   }
+
+  // Update/insert by keyPath
+  async function put(name, val){
+    const s=await store(name,"readwrite");
+    return await new Promise((res,rej)=>{ const r=s.put(val); r.onsuccess=()=>res(r.result); r.onerror=()=>rej(r.error); });
+  }
   async function del(name, key){
     const s=await store(name,"readwrite");
     return await new Promise((res,rej)=>{ const r=s.delete(key); r.onsuccess=()=>res(true); r.onerror=()=>rej(r.error); });
@@ -46,13 +54,14 @@
     return await new Promise((res,rej)=>{ const r=s.clear(); r.onsuccess=()=>res(true); r.onerror=()=>rej(r.error); });
   }
 
-  window.DB={ init, getAll, add, del, clear };
+  window.DB={ init, getAll, add, put, del, clear };
 
   // Convenience
   window.IronDB={
     init,
     getAllEntries: ()=>getAll("entries"),
     addEntry: (e)=>add("entries", e),
+    updateEntry: (e)=>put("entries", e),
     deleteEntry: (id)=>del("entries", id),
     clearAllEntries: ()=>clear("entries"),
     // backward compatibility for older modules
@@ -63,6 +72,7 @@
     getAllSystem: ()=>getAll("system"),
     clearSystem: ()=>clear("system"),
     addRun: (r)=>add("runs", r),
+    updateRun: (r)=>put("runs", r),
     getAllRuns: ()=>getAll("runs"),
     clearRuns: ()=>clear("runs"),
     deleteRun: (id)=>del("runs", id)
