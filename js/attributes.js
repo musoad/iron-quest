@@ -38,13 +38,13 @@
       <div class="card soft">
         <h2>Attributes</h2>
         <p class="hint">Langsames Leveln wie im RPG. Jede Trainingseinheit macht dich stärker.</p>
-        <div class="row2">
+        <div class="attrGrid">
           ${ATTRS.map(a=>{
             const s=st[a.key];
             const need=xpNeed(s.level);
             const pct=Math.max(0, Math.min(100, (s.xp/need)*100));
             return `
-              <div class="card soft" style="margin:0; padding:12px;">
+              <div class="attrCard">
                 <div class="itemTop">
                   <div><b>${a.name}</b><div class="hint">${a.key}</div></div>
                   <span class="badge">${"Lv "+s.level}</span>
