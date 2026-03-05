@@ -423,6 +423,15 @@
     }
     await window.IronDB.init();
 
+    // Data integrity / XP audit (fixes NaN XP, missing weeks, run mirrors, attributes rebuild)
+    try{
+      if(window.IronQuestIntegrity && typeof window.IronQuestIntegrity.run === "function"){
+        await window.IronQuestIntegrity.run();
+      }
+    }catch(e){
+      console.warn("Integrity audit failed", e);
+    }
+
     // hook XP pipeline (safe)
     try{
       const origAdd = window.IronDB.addEntry;
