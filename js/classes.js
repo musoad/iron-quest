@@ -9,9 +9,13 @@
     { id:"ranger", name:"Ranger", desc:"+8% Conditioning/NEAT XP", bonus:{ Conditioning:1.08, NEAT:1.08 } },
     { id:"monarch", name:"Monarch", desc:"+4% global XP", bonus:{ "*":1.04 } },
   ];
-  function get(){ return localStorage.getItem(KEY) || "none"; }
-  function set(id){ localStorage.setItem(KEY, id); }
-  function meta(id){ return CLASSES.find(c=>c.id===id) || CLASSES[0]; }
+  function norm(id){
+    const v = String(id||"none").toLowerCase();
+    return (v === "unassigned") ? "none" : v;
+  }
+  function get(){ return norm(localStorage.getItem(KEY) || "none"); }
+  function set(id){ localStorage.setItem(KEY, norm(id)); }
+  function meta(id){ return CLASSES.find(c=>c.id===norm(id)) || CLASSES[0]; }
   function multiplierForType(type){
     const c=meta(get());
     const b=c.bonus||{};
