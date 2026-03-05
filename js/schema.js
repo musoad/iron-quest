@@ -1,54 +1,87 @@
-(function(){
+// v11: safer update strategy for GitHub Pages PWA
+// - Network-first for navigations (so new index.html lands)
+// - Stale-while-revalidate for JS/CSS
+// - Cache-first for other GET assets
+const CACHE = "ironquest-v11-2026-03-05";
+const ASSETS = [
+  "./",
+  "./index.html",
+  "./style.css",
+  "./manifest.json",
+  "./js/app.js",
+  "./js/state.js",
+  "./js/schema.js"
+];
 
-function toISODate(d){
-  if(!d) return new Date().toISOString().slice(0,10);
-  if(typeof d === "string" && d.length === 10) return d;
-  try{
-    return new Date(d).toISOString().slice(0,10);
-  }catch(e){
-    return new Date().toISOString().slice(0,10);
-  }
-}
+self.addEventListener("install", (event) => {
+  event.waitUntil(
+    caches.open(CACHE).then((cache) => cache.addAll(ASSETS)).then(() => self.skipWaiting())
+  );
+});
 
-function normalizeEntry(e){
-  if(!e) return e;
+self.addEventListener("activate", (event) => {
+  event.waitUntil(
+    caches.keys().then((keys) => Promise.all(keys.filter(k => k !== CACHE).map(k => caches.delete(k))))
+      .then(() => self.clients.claim())
+  );
+});
 
-  e.date = toISODate(e.date);
+self.addEventListener("fetch", (event) => {
+  const req = event.request;
+  if (req.method !== "GET") return;
 
-  if(typeof e.sets !== "number") e.sets = Number(e.sets) || 0;
-  if(typeof e.reps !== "number") e.reps = Number(e.reps) || 0;
+  const url = new URL(req.url);
+  const isSameOrigin = url.origin === self.location.origin;
+  const isNav = req.mode === "navigate";
+  const isJS = isSameOrigin && url.pathname.endsWith(".js");
+  const isCSS = isSameOrigin && url.pathname.endsWith(".css");
 
-  if(e.km) e.km = Number(e.km) || 0;
-  if(e.minutes) e.minutes = Number(e.minutes) || 0;
-
-  if(!e.type){
-    if(e.exercise === "Jogging") e.type = "Conditioning";
-    else e.type = "Strength";
-  }
-
-  if(typeof e.xp !== "number" || isNaN(e.xp)){
-    if(window.IronQuestXP){
-      if(e.exercise === "Jogging"){
-        e.xp = IronQuestXP.jogXP(e.km || 0, e.minutes || 0);
-      }else{
-        e.xp = IronQuestXP.calcExerciseXP(
-          e.exercise,
-          e.sets || 0,
-          e.reps || 0
-        );
+  // Network-first for navigations
+  if(isNav){
+    event.respondWith((async()=>{
+      try{
+        const fresh = await fetch(req);
+        const cache = await caches.open(CACHE);
+        cache.put("./index.html", fresh.clone()).catch(()=>{});
+        return fresh;
+      }catch(_){
+        const cache = await caches.open(CACHE);
+        const cached = await cache.match("./index.html");
+        return cached || caches.match(req);
       }
-    }else{
-      e.xp = 0;
-    }
+    })());
+    return;
   }
 
-  if(e.xp < 0) e.xp = 0;
+  // Stale-while-revalidate for JS/CSS
+  if(isJS || isCSS){
+    event.respondWith((async()=>{
+      const cache = await caches.open(CACHE);
+      const cached = await cache.match(req);
+      const fetchPromise = fetch(req).then(res=>{
+        cache.put(req, res.clone()).catch(()=>{});
+        return res;
+      }).catch(()=>cached);
+      return cached || fetchPromise;
+    })());
+    return;
+  }
 
-  return e;
-}
+  // Cache-first for everything else
+  event.respondWith((async()=>{
+    const cached = await caches.match(req);
+    if(cached) return cached;
+    try{
+      const res = await fetch(req);
+      const cache = await caches.open(CACHE);
+      cache.put(req, res.clone()).catch(()=>{});
+      return res;
+    }catch(_){
+      return cached;
+    }
+  })());
+});
 
-window.IronQuestSchema = {
-  normalizeEntry
-};
-
-})();
+self.addEventListener("message", (event) => {
+  if (event.data && event.data.type === "SKIP_WAITING") self.skipWaiting();
+});
