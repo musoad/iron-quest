@@ -31,6 +31,9 @@
         <p class="hint">Suche nach Übungen und klappe Tage ein/aus. Tippe auf 🗑️ um einzelne Einträge zu löschen.</p>
         <div class="historySearchRow">
           <input id="historyQ" type="text" placeholder="Search (e.g. Push Ups, Squats)…" autocomplete="off" />
+          <select id="historyPlan" class="select">
+            <option value="">All Plans</option>
+          </select>
           <button class="secondary" id="historyToday">Today</button>
         </div>
       </div>
@@ -39,13 +42,49 @@
 
     const body = root.querySelector("#historyBody");
     const qEl = root.querySelector("#historyQ");
+    const planEl = root.querySelector("#historyPlan");
     const btnToday = root.querySelector("#historyToday");
 
     const todayIso = window.Utils?.isoDate?.(new Date()) || new Date().toISOString().slice(0,10);
 
-    function draw(filter){
-      const t = String(filter||"").trim().toLowerCase();
-      const filtered = !t ? entries : entries.filter(e => {
+    // Plan filter
+    function getPlans(){
+      try{
+        const P = window.IronQuestPlans;
+        const st = (P && (typeof P.getState==="function" ? P.getState() : (typeof P.state==="function" ? P.state() : null))) || null;
+        return (st && Array.isArray(st.plans)) ? st.plans : [];
+      }catch(_){ return []; }
+    }
+    function populatePlanOptions(){
+      if(!planEl) return;
+      const plans = getPlans();
+      // keep first option
+      planEl.querySelectorAll("option[data-dyn=\"1\"]").forEach(o=>o.remove());
+      plans.forEach(p=>{
+        const opt=document.createElement("option");
+        opt.value = String(p.id||"");
+        opt.textContent = p.name || "Plan";
+        opt.dataset.dyn="1";
+        planEl.appendChild(opt);
+      });
+    }
+
+    function draw(query, planId){
+      const t = String(query||"").trim().toLowerCase();
+      const pid = String(planId||"");
+      let planSet = null;
+      if(pid){
+        const p = getPlans().find(x=>String(x.id)===pid);
+        if(p && Array.isArray(p.items)) planSet = new Set(p.items.map(x=>String((x && (x.name||x.exercise)) || x).toLowerCase()));
+      }
+      const base = entries.filter(e => {
+        if(planSet){
+          const exn = String(e.exercise||"").toLowerCase();
+          if(!planSet.has(exn)) return false;
+        }
+        return true;
+      });
+      const filtered = !t ? base : base.filter(e => {
         const name = String(e.exercise || e.type || "").toLowerCase();
         const mg = String(e.muscleGroup||"").toLowerCase();
         const sg = String(e.subGroup||"").toLowerCase();
@@ -100,16 +139,20 @@
       });
     }
 
-    draw("");
+    populatePlanOptions();
+    draw("", planEl ? planEl.value : "");
 
     if(qEl){
-      qEl.addEventListener("input", ()=>draw(qEl.value));
+      qEl.addEventListener("input", ()=>draw(qEl.value, planEl ? planEl.value : ""));
+    if(planEl){
+      planEl.addEventListener("change", ()=>draw(qEl.value, planEl.value));
+    }
     }
     if(btnToday){
       btnToday.addEventListener("click", ()=>{
         if(qEl) qEl.value = "";
         // open today's group if present
-        draw("");
+        draw("", planEl ? planEl.value : "");
         setTimeout(()=>{
           try{
             const day = root.querySelector(`details.historyDay summary + ul`);
