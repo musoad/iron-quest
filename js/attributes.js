@@ -10,7 +10,7 @@
   ];
   function load(){ try{ return JSON.parse(localStorage.getItem(KEY))||{}; }catch{ return {}; } }
   function save(st){ localStorage.setItem(KEY, JSON.stringify(st)); }
-  function xpNeed(l){ const L=Math.max(1,Number(l||1)); return Math.round(260 + 120*L + 28*(L**1.7)); }
+  function xpNeed(l){ const L=Math.max(1,Number(l||1)); return Math.round(600 + 220*L + 60*(L**1.75)); }
   function get(){
     const raw=load();
     const st={};
