@@ -31,6 +31,7 @@
   <main class="app">
     <section class="tab" id="home"></section>
     <section class="tab" id="log"></section>
+    <section class="tab" id="history"></section>
     <section class="tab" id="run"></section>
     <section class="tab" id="stats"></section>
     <section class="tab" id="quests"></section>
@@ -43,18 +44,16 @@
   </main>
 
   <nav class="bottom-nav">
+    <!-- Mobile-first: keep primary tabs always visible, everything else via "More" sheet (no feature loss) -->
     <button data-tab="home" class="active"><span class="i">🏠</span><span>Home</span></button>
     <button data-tab="log"><span class="i">📒</span><span>Log</span></button>
     <button data-tab="run"><span class="i">🏃</span><span>Run</span></button>
     <button data-tab="stats"><span class="i">📊</span><span>Stats</span></button>
-    <button data-tab="quests"><span class="i">🗺️</span><span>Quests</span></button>
-    <button data-tab="gates"><span class="i">🌀</span><span>Gates</span></button>
-    <button data-tab="boss"><span class="i">👑</span><span>Boss</span></button>
-    <button data-tab="skills"><span class="i">🧬</span><span>Skills</span></button>
-    <button data-tab="review"><span class="i">📈</span><span>Review</span></button>
-    <button data-tab="health"><span class="i">❤️</span><span>Health</span></button>
-    <button data-tab="backup"><span class="i">💾</span><span>Backup</span></button>
+    <button id="btnMore"><span class="i">⋯</span><span>More</span></button>
   </nav>
+
+  <!-- Global Quick-Add (less clicks): opens an action sheet from anywhere -->
+  <button id="fabGlobal" class="fab" title="Quick Add" aria-label="Quick Add">＋</button>
 
   <!-- SCRIPTS: Reihenfolge ist wichtig -->
   <script defer src="js/utils.js"></script>
@@ -88,6 +87,7 @@
   <script defer src="js/home.js"></script>
   <script defer src="js/skills.js"></script>
   <script defer src="js/logFeature.js"></script>
+  <script defer src="js/history.js"></script>
   <script defer src="js/jogging.js"></script>
   <script defer src="js/analytics.js"></script>
   <script defer src="js/challenges.js"></script>
