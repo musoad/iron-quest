@@ -107,7 +107,10 @@
                 <div class="historyLeft">
                   <div class="historyName"><b>${esc(e.exercise || e.type || "Entry")}</b></div>
                   <div class="small">${esc(e.muscleGroup||"")}${e.subGroup?" / "+esc(e.subGroup):""}${e.dayTag?" • "+esc(e.dayTag):""}</div>
-                  <div class="small">${esc(e.sets ?? "—")}×${esc(e.reps ?? "—")} • <span class="badge ok" style="margin-left:6px;">+${esc(e.xp||0)} XP</span></div>
+                  ${String(e.exercise||"").toLowerCase()==="jogging" && e.detail
+                    ? `<div class="small">${esc(e.detail)} • <span class="badge ok" style="margin-left:6px;">+${esc(e.xp||0)} XP</span></div>`
+                    : `<div class="small">${esc(e.sets ?? "—")}×${esc(e.reps ?? "—")} • <span class="badge ok" style="margin-left:6px;">+${esc(e.xp||0)} XP</span></div>`
+                  }
                 </div>
                 <button class="iconBtn danger" title="Delete" data-del="${esc(e.id)}">🗑️</button>
               </li>
