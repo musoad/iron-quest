@@ -3,12 +3,12 @@
 
   // Legacy fallback per type if an exercise doesn't provide baseXP
   const BASE_XP_BY_TYPE = {
-    Mehrgelenkig: 190,
-    Unilateral: 170,
-    Core: 120,
-    Conditioning: 200,
-    Komplexe: 240,
-    NEAT: 80
+    Mehrgelenkig: 25,
+    Unilateral: 22,
+    Core: 16,
+    Conditioning: 20,
+    Komplexe: 30,
+    NEAT: 8
   };
 
   function clamp(n, a, b){ return Math.max(a, Math.min(b, n)); }
@@ -78,7 +78,7 @@
 
     // reps factor relative to recommendation
     const rr = Number(recReps || (ex && ex.recReps) || 1);
-    const repFactor = clamp((Number(reps || 0) / Math.max(1, rr)), 0.5, 1.4);
+    const repFactor = clamp((Number(reps || 0) / Math.max(1, rr)), 0.6, 1.25);
     xp *= repFactor;
 
     // volume scaling vs recommendation
@@ -127,13 +127,13 @@
     if(d<=0 || t<=0) return 0;
 
     // Base: distance dominates, time adds effort
-    let xp = (d * 90) + (t * 4);
+    let xp = (d * 32) + (t * 1.5);
 
     // Pace modifier (min/km)
     const p = t / d;
     if(p > 0){
-      if(p <= 6) xp *= 1.10;
-      else if(p >= 9) xp *= 0.92;
+      if(p <= 6) xp *= 1.06;
+      else if(p >= 9) xp *= 0.95;
     }
 
     // Equipment/global XP bonuses
