@@ -143,7 +143,16 @@
 
   async function render(root) {
     const p = getProfile();
-    const totals = await getTotals();
+    const snap = window.IronQuestState?.getSnapshot?.();
+    const totals = (snap && snap.level) ? (function(){
+      const totalXp = Number(snap.totalXp||0);
+      const lvl = Number(snap.level.lvl||1);
+      const rank = String(snap.rank||"E");
+      const next = Number(snap.level.nextNeed||100);
+      const into = Number(snap.level.remainder||0);
+      const pct = Math.max(0, Math.min(100, Math.round((into / Math.max(1, next)) * 100)));
+      return { totalXp, lvl, rank, next, into, pct };
+    })() : await getTotals();
     const stats = getStats();
     const today = await getTodaySummary();
 
@@ -165,7 +174,7 @@
         };
       }).filter(x=>x.name);
     }catch(_){ todayPlan = []; }
-    const streak = await computeStreak();
+    const streak = (snap && typeof snap.streak === "number") ? snap.streak : await computeStreak();
 
     const locked = totals.lvl < 10;
     const clsSafe = locked ? "none" : (p.cls || "none");
@@ -214,11 +223,17 @@
               <div class="hq-miniV"><b>${htmlEscape(today.lastName)}</b></div>
               <div class="hq-miniS">${htmlEscape(today.lastDate)}</div>
             </div>
+            <div class="hq-miniCard">
+              <div class="hq-miniT">Next unlock</div>
+              <div class="hq-miniV"><b>${locked ? "Classes" : "—"}</b></div>
+              <div class="hq-miniS">${locked ? "Unlocked at Level 10" : "Keep grinding"}</div>
+            </div>
           </div>
 
           ${todayPlan && todayPlan.length ? `
             <div class="hq-plan">
               <div class="hq-planT">Today Plan</div>
+              <div class="hq-planSub muted">${todayPlan.filter(x=>x.done).length} / ${todayPlan.length} done</div>
               <div class="hq-planList">
                 ${todayPlan.map(it=>{
                   const sub = (it.sets||it.reps) ? `${htmlEscape(it.sets)}x${htmlEscape(it.reps)}` : "";
