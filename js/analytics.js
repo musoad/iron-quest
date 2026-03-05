@@ -212,6 +212,10 @@
 
     const total = (entries||[]).reduce(function(s,e){ return s+Number((e&&e.xp)||0); }, 0);
 
+    const hs = (window.IronQuestHunterStats && window.IronQuestHunterStats.getSnapshot)
+      ? await window.IronQuestHunterStats.getSnapshot()
+      : null;
+
     const dayMap = groupByDay(entries);
     const xp30 = lastNDaysSeries(dayMap, 30);
     const wk12 = weeklyTotals(entries, 12);
@@ -223,6 +227,22 @@
         <h2>Analytics</h2>
         <div class="row"><div>Total XP</div><div class="pill">${Math.round(total)}</div></div>
       </div>
+
+      ${hs ? `
+        <div class="card soft">
+          <h2>Hunter Stats</h2>
+          <div class="hint">Abgeleitet aus deinen Logs (kein extra Klick nötig).</div>
+          <div class="hq-stats" style="margin-top:10px;">
+            ${hs.order.map(k=>`
+              <div class="hq-stat">
+                <div class="hq-stat-k">${k}</div>
+                <div class="hq-stat-v">${hs.stats[k].level}</div>
+                <div class="hq-stat-l">${hs.labels[k]}</div>
+              </div>
+            `).join("")}
+          </div>
+        </div>
+      ` : ``}
 
       <div class="card chartCard">
         <h2>XP (letzte 30 Tage)</h2>
