@@ -126,6 +126,24 @@
           const idRaw = btn.getAttribute("data-del");
           const id = (idRaw !== null && idRaw !== "") ? (isNaN(Number(idRaw)) ? idRaw : Number(idRaw)) : idRaw;
           if(!confirm("Eintrag wirklich löschen?")) return;
+
+          // If this entry is a Run, also delete the corresponding run record so "Last Runs" stays in sync.
+          try{
+            const entryObj = (Array.isArray(entries) ? entries.find(x => String(x.id)===String(id)) : null);
+            const runId = entryObj && (entryObj.runId || entryObj.run_id);
+            const isRun = entryObj && (String(entryObj.exercise||"").toLowerCase()==="jogging" || String(entryObj.type||"").toLowerCase().includes("condition"));
+            if(runId && typeof window.IronDB?.deleteRun === "function"){
+              await window.IronDB.deleteRun(runId);
+            }else if(isRun && typeof window.IronDB?.getAllRuns === "function" && typeof window.IronDB?.deleteRun === "function"){
+              // fallback: match by date + km/min
+              const allRuns = await window.IronDB.getAllRuns();
+              const d = String(entryObj.date||"").slice(0,10);
+              const km = Number(entryObj.km||0);
+              const minutes = Number(entryObj.minutes||0);
+              const hit = (allRuns||[]).find(r => String(r.date||"").slice(0,10)===d && Math.abs(Number(r.km||0)-km)<0.01 && Math.abs(Number(r.minutes||0)-minutes)<0.01);
+              if(hit && hit.id) await window.IronDB.deleteRun(hit.id);
+            }
+          }catch(_){}
           try{
             if(typeof window.IronDB?.deleteEntry === "function"){
               await window.IronDB.deleteEntry(id);
