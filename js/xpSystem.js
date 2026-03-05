@@ -119,12 +119,44 @@
     return Number((entry && entry.xp) || 0);
   }
 
+  // Running XP (Jogging)
+  // Stable formula that scales well with the new level curve.
+  function jogXP(km, minutes){
+    const d = Math.max(0, Number(km||0));
+    const t = Math.max(0, Number(minutes||0));
+    if(d<=0 || t<=0) return 0;
+
+    // Base: distance dominates, time adds effort
+    let xp = (d * 90) + (t * 4);
+
+    // Pace modifier (min/km)
+    const p = t / d;
+    if(p > 0){
+      if(p <= 6) xp *= 1.10;
+      else if(p >= 9) xp *= 0.92;
+    }
+
+    // Equipment/global XP bonuses
+    try{
+      if(window.IronQuestEquipment && typeof window.IronQuestEquipment.bonuses === "function"){
+        const b = window.IronQuestEquipment.bonuses();
+        if(b && b.globalXp) xp *= b.globalXp;
+      }
+    }catch(_){}
+
+    // Clamp
+    xp = Math.max(60, Math.min(2500, xp));
+    return Math.round(xp);
+  }
+
+
   window.IronQuestXP = {
     BASE_XP_BY_TYPE,
     streak,
     streakFromEntries,
     streakMult,
     calcExerciseXP,
-    calculateXP
+    calculateXP,
+    jogXP
   };
 })();
