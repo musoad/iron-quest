@@ -6,38 +6,15 @@
     const totalXp=entries.reduce((s,e)=>s+Number(e.xp||0),0);
     const L=window.IronQuestProgression.levelFromTotalXp(totalXp);
 
-    const start=window.IronQuestProgression.getStartDate();
-    const clsId=window.IronQuestClasses.get();
-    const clsMeta=window.IronQuestClasses.meta(clsId);
+    // Identity (name/gender/start/class) lives on HOME now.
 
     const st=window.IronQuestSkilltreeV2.load();
     const types=window.IronQuestExercises.TYPES;
 
     container.innerHTML=`
       <div class="card">
-        <h2>Skills & Setup</h2>
-        <p class="hint">Hybrid: Premium ruhig, aber Anime-Momente bei Level/Rank/Finisher.</p>
-      </div>
-
-      <div class="card soft">
-        <h2>Challenge Start</h2>
-        <label>Startdatum (Woche 1)</label>
-        <input id="startDate" type="date" value="${start}">
-        <div class="btnRow">
-          <button class="primary" id="saveStart">Speichern</button>
-          <button class="secondary" id="todayStart">Heute</button>
-        </div>
-      </div>
-
-      <div class="card soft">
-        <h2>Klasse (ab Level 10)</h2>
-        <div class="pill"><b>Aktuell:</b> ${clsMeta.name}</div>
-        <div class="hint">${clsMeta.desc}</div>
-        <label>Wähle Klasse</label>
-        <select id="clsSel" ${L.lvl<10?"disabled":""}>
-          ${window.IronQuestClasses.CLASSES.map(c=>`<option value="${c.id}" ${c.id===clsId?"selected":""}>${c.name}</option>`).join("")}
-        </select>
-        <div class="hint">${L.lvl<10?"Locked bis Level 10.":"Änderung wirkt sofort auf XP-Multiplikatoren."}</div>
+        <h2>Skills</h2>
+        <p class="hint">Passive & Active Skills. Klassenwahl und Startdatum findest du jetzt auf Home.</p>
       </div>
 
 
@@ -69,26 +46,6 @@
         <div id="setCollectionMount"></div>
       </div>
     `;
-
-    // start date
-    container.querySelector("#saveStart").onclick=()=>{
-      const v=container.querySelector("#startDate").value;
-      if(!v) return;
-      window.IronQuestProgression.setStartDate(v);
-      (window.Toast && window.Toast.toast)("Startdatum gespeichert", v);
-    };
-    container.querySelector("#todayStart").onclick=()=>{
-      const t=window.Utils.isoDate(new Date());
-      container.querySelector("#startDate").value=t;
-      window.IronQuestProgression.setStartDate(t);
-      (window.Toast && window.Toast.toast)("Startdatum gesetzt", t);
-    };
-
-    // class
-    container.querySelector("#clsSel").onchange=(e)=>{
-      window.IronQuestClasses.set(e.target.value);
-      (window.Toast && window.Toast.toast)("Klasse gewählt", window.IronQuestClasses.meta(e.target.value).name);
-    };
 
     // Periodization wiring
     const periSel = container.querySelector("#periSel");
