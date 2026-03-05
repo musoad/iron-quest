@@ -72,15 +72,19 @@
       if (km<=0 || minutes<=0) return;
       const date = el.querySelector("#rDate").value || today;
 
-      await window.DB.add("runs",{date,km,minutes,xp});
+      const runId = await window.DB.add("runs",{date,km,minutes,xp});
 
       const week = window.IronQuestProgression.getWeekNumberFor(date);
       await window.IronDB.addEntry({
         date, week,
-        type:"Joggen",
+        // Use Conditioning so Attributes/Stats connect logically to endurance.
+        type:"Conditioning",
         exercise:"Jogging",
         detail:`${km} km • ${minutes} min • ${p||""}`,
-        xp
+        xp,
+        runId,
+        km,
+        minutes
       });
 
       (window.Toast && window.Toast.toast)("Run saved", `+${xp} XP`);
