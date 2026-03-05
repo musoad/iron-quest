@@ -363,6 +363,7 @@
       { tab:"review", label:"Review", icon:"📈" },
       { tab:"health", label:"Health", icon:"❤️" },
       { tab:"backup", label:"Backup", icon:"💾" },
+      { action:"integrity", label:"Integrity Check", icon:"🛠️" },
     ];
 
     const quickActions = [
@@ -386,15 +387,32 @@
       const t = String(filterText||"").trim().toLowerCase();
       const items = !t ? itemsAll : itemsAll.filter(it => it.label.toLowerCase().includes(t) || it.tab.toLowerCase().includes(t));
       grid.innerHTML = items.map(it=>`
-        <button class="moreItem" data-tab="${it.tab}">
+        <button class="moreItem" ${it.tab?`data-tab="${it.tab}"`:""} ${it.action?`data-action="${it.action}"`:""}>
           <span class="miIcon">${it.icon}</span>
           <span class="miLabel">${it.label}</span>
         </button>
       `).join("");
-      grid.querySelectorAll("[data-tab]").forEach(b=>{
-        b.addEventListener("click", ()=>{
+      grid.querySelectorAll(".moreItem").forEach(b=>{
+        b.addEventListener("click", async ()=>{
+          const tab = b.getAttribute("data-tab");
+          const act = b.getAttribute("data-action");
           closeMoreSheet();
-          navigate(b.getAttribute("data-tab"));
+          if(tab){
+            navigate(tab);
+            return;
+          }
+          if(act === "integrity"){
+            try{
+              if(window.IronQuestToast && window.IronQuestToast.show) window.IronQuestToast.show("Running integrity check…");
+              const rep = (window.IronQuestIntegrity && window.IronQuestIntegrity.run) ? await window.IronQuestIntegrity.run({ force:true }) : null;
+              if(window.IronQuestState && window.IronQuestState.recompute) await window.IronQuestState.recompute();
+              const msg = rep ? `Fixed entries: ${rep.fixedEntries}, runs: ${rep.fixedRuns}, run mirrors: ${rep.createdRunMirrors}` : "Integrity module missing.";
+              if(window.IronQuestToast && window.IronQuestToast.show) window.IronQuestToast.show(msg);
+              else alert(msg);
+            }catch(e){
+              alert(String(e && (e.message||e)));
+            }
+          }
         });
       });
     }
@@ -431,6 +449,9 @@
     }catch(e){
       console.warn("Integrity audit failed", e);
     }
+
+    // Prime central snapshot so first render is consistent.
+    try{ if(window.IronQuestState && window.IronQuestState.recompute) await window.IronQuestState.recompute(); }catch(_){ }
 
     // hook XP pipeline (safe)
     try{
