@@ -152,7 +152,16 @@
         </div>
 
         <label>Übung</label>
-        <select id="lExercise"></select>
+        <div class="row2" style="grid-template-columns: 1fr auto; align-items:end;">
+          <select id="lExercise"></select>
+          <button class="favBtn" id="lFav" title="Favorite" aria-label="Favorite">⭐</button>
+        </div>
+
+        <div class="quickAddBox">
+          <div class="chipHdr"><div class="t">Quick add</div><div class="miniHint">Tap → prefilled</div></div>
+          <div class="chipRow" id="logFavRow" style="margin-bottom:8px;"></div>
+          <div class="chipRow" id="logRecentRow"></div>
+        </div>
 
         <div class="row2">
           <div class="pill" id="lRec"><b>Empfohlen:</b> —</div>
@@ -198,7 +207,10 @@
           <button class="danger" id="logClear">Alle Einträge löschen</button>
           <div class="pill"><b>Anzahl:</b> ${entries.length}</div>
         </div>
-        <ul class="list" id="logList"></ul>
+        <div class="btnRow" style="margin-top:10px;">
+          <button class="secondary" id="openHistory">History öffnen</button>
+        </div>
+        <p class="hint">Die komplette Übungshistorie ist jetzt im Tab <b>History</b> (mit Löschen einzelner Einträge).</p>
       </div>
     `;
 
@@ -271,6 +283,59 @@
     const mgSel = container.querySelector("#lMG");
     const sgSel = container.querySelector("#lSG");
     const exSel = container.querySelector("#lExercise");
+    const favBtn = container.querySelector("#lFav");
+    const favRow = container.querySelector("#logFavRow");
+    const recentRow = container.querySelector("#logRecentRow");
+
+    const FAV_KEY = "iq_fav_ex";
+    function getFavs(){
+      try{ return JSON.parse(localStorage.getItem(FAV_KEY)||"[]") || []; }catch(_){ return []; }
+    }
+    function setFavs(list){
+      try{ localStorage.setItem(FAV_KEY, JSON.stringify(Array.from(new Set(list)).slice(0,30))); }catch(_){ }
+    }
+    function isFav(name){ return getFavs().includes(String(name||"")); }
+    function toggleFav(name){
+      const n = String(name||"").trim();
+      if(!n) return;
+      const favs = getFavs();
+      const idx = favs.indexOf(n);
+      if(idx>=0) favs.splice(idx,1); else favs.unshift(n);
+      setFavs(favs);
+    }
+
+    function escapeHtml(s){
+      return String(s||"")
+        .replaceAll("&","&amp;")
+        .replaceAll("<","&lt;")
+        .replaceAll(">","&gt;");
+    }
+
+    function updateFavUI(){
+      if(!favBtn) return;
+      const cur = String(exSel.value||"").trim();
+      const on = cur && isFav(cur);
+      favBtn.classList.toggle("active", !!on);
+      favBtn.title = on ? "Unfavorite" : "Favorite";
+    }
+
+    async function getRecent(limit=10){
+      try{
+        const es = await window.IronDB.getAllEntries();
+        es.sort((a,b)=> (a.date<b.date?1:-1));
+        const seen = new Set();
+        const out=[];
+        for(const e of es){
+          const name = String(e.exercise||"").trim();
+          if(!name) continue;
+          if(seen.has(name)) continue;
+          seen.add(name);
+          out.push(name);
+          if(out.length>=limit) break;
+        }
+        return out;
+      }catch(_){ return []; }
+    }
 
     const recPill = container.querySelector("#lRec");
     const diffPill = container.querySelector("#lDiff");
@@ -340,11 +405,97 @@
 
     mgSel.addEventListener("change", refreshExercises);
     sgSel.addEventListener("change", refreshExercises);
-    exSel.addEventListener("change", onPick);
+    exSel.addEventListener("change", ()=>{ onPick(); updateFavUI(); });
+
+    if(favBtn){
+      favBtn.addEventListener("click", ()=>{
+        const cur = String(exSel.value||"").trim();
+        if(!cur) return;
+        toggleFav(cur);
+        updateFavUI();
+        renderQuickChips();
+        (window.Toast && window.Toast.show) ? window.Toast.show("Favorites", isFav(cur)?"Added" : "Removed") : null;
+      });
+    }
 
     // init subgroups + exercises
     fillSubGroups();
     refreshExercises();
+
+    function pickByName(exName){
+      const ex = window.IronQuestExercises.findByName(String(exName||"").trim());
+      if(!ex) return;
+      mgSel.value = ex.muscleGroup;
+      fillSubGroups();
+      sgSel.value = ex.subGroup;
+      const list = getFilteredExercises();
+      exSel.innerHTML = "";
+      for(const e of list){
+        const o=document.createElement("option");
+        o.value=e.name; o.textContent=e.name;
+        exSel.appendChild(o);
+      }
+      exSel.value = ex.name;
+      onPick();
+      updateFavUI();
+      setTimeout(()=>{ try{ setsEl && setsEl.focus(); }catch(_){} }, 80);
+    }
+
+    async function renderQuickChips(){
+      const favs = getFavs();
+      const recent = await getRecent(10);
+
+      if(favRow){
+        favRow.innerHTML = favs.length
+          ? favs.slice(0,10).map(n=>`<button class="chip star" data-ex="${escapeHtml(n)}">⭐ ${escapeHtml(n)}</button>`).join("")
+          : `<div class="miniHint">Star an exercise to pin it here.</div>`;
+        favRow.querySelectorAll("[data-ex]").forEach(b=>b.addEventListener("click", ()=>pickByName(b.getAttribute("data-ex"))));
+      }
+      if(recentRow){
+        recentRow.innerHTML = recent.length
+          ? recent.map(n=>`<button class="chip" data-ex="${escapeHtml(n)}">${escapeHtml(n)}</button>`).join("")
+          : `<div class="miniHint">Log something to see recents.</div>`;
+        recentRow.querySelectorAll("[data-ex]").forEach(b=>b.addEventListener("click", ()=>pickByName(b.getAttribute("data-ex"))));
+      }
+    }
+
+    renderQuickChips();
+
+    // One-tap intent (from Home quick-log etc.)
+    function applyIntent(){
+      try{
+        const intent = window.IronQuestIntent && window.IronQuestIntent.log;
+        if(!intent) return;
+        // date
+        if(intent.date && dateEl) dateEl.value = String(intent.date).slice(0,10);
+
+        const exName = String(intent.exercise||"").trim();
+        if(exName){
+          const ex = window.IronQuestExercises.findByName(exName);
+          if(ex){
+            mgSel.value = ex.muscleGroup;
+            fillSubGroups();
+            sgSel.value = ex.subGroup;
+            // refresh list for this subgroup
+            const list = getFilteredExercises();
+            exSel.innerHTML = "";
+            for(const e of list){
+              const o=document.createElement("option");
+              o.value=e.name; o.textContent=e.name;
+              exSel.appendChild(o);
+            }
+            exSel.value = ex.name;
+            onPick();
+            // scroll into view (mobile)
+            setTimeout(()=>{ try{ exSel.scrollIntoView({ block:"center", behavior:"smooth" }); }catch(_){} }, 80);
+          }
+        }
+
+        // clear intent
+        window.IronQuestIntent.log = null;
+      }catch(_){ }
+    }
+    applyIntent();
 
     function coachText(ex, sets, reps){
       const fatigue = (typeof window.IronQuestCoachPlus?.fatigueScore === "function") ? (window.IronQuestCoachPlus.fatigueScore(entries) || 0) : 0;
@@ -355,6 +506,7 @@
     }
 
     function onPick(){
+      updateFavUI();
       const ex = window.IronQuestExercises.findByName(exSel.value);
       if(!ex){
         recPill.innerHTML = "<b>Empfohlen:</b> —";
@@ -491,26 +643,14 @@
     // Clear log
     container.querySelector("#logClear").addEventListener("click", async ()=>{
       if(!confirm("Wirklich alle Einträge löschen?")) return;
-      await window.IronDB.clearEntries();
+      await (window.IronDB.clearAllEntries ? window.IronDB.clearAllEntries() : window.IronDB.clearEntries());
       (window.Toast && (window.Toast.show) && window.Toast.show)("Gelöscht", "Alle Entries entfernt.");
       await render(container);
     });
 
-    // Render log list
-    const listEl = container.querySelector("#logList");
-    for(const e of entries.slice(0, 80)){
-      const li=document.createElement("li");
-      li.innerHTML = `
-        <div class="itemTop">
-          <div style="min-width:0;">
-            <b>${escapeHTML(e.exercise)}</b>
-            <div class="small">${escapeHTML(e.date)} • W${escapeHTML(e.week)} • ${escapeHTML(e.muscleGroup||"")} / ${escapeHTML(e.subGroup||"")}</div>
-            <div class="small">Empf. ${e.recSets}×${e.recReps} • Du ${e.sets}×${e.reps} • ${e.xp} XP</div>
-          </div>
-          <span class="badge ok">+${e.xp}</span>
-        </div>
-      `;
-      listEl.appendChild(li);
+    const openHistory = container.querySelector("#openHistory");
+    if(openHistory){
+      openHistory.onclick = ()=>{ try{ window.IronQuestApp && window.IronQuestApp.navigate && window.IronQuestApp.navigate("history"); }catch(_){ location.hash="history"; } };
     }
   }
 
