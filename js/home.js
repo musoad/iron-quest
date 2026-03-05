@@ -24,9 +24,9 @@
 
   function avatarPath(clsKey, genderKey) {
     // files live at assets/avatars/<class>_<gender>.png
-    // "none"/unassigned might not have an image in older zips → fallback gracefully.
+    // Support both "none" and "unassigned" keys → map to the shipped unassigned_* avatars.
     const c0 = (clsKey || "none").toLowerCase();
-    const c = (c0 === "none" || c0 === "unassigned") ? "guardian" : c0;
+    const c = (c0 === "none" || c0 === "unassigned") ? "unassigned" : c0;
     const g = (genderKey || "male").toLowerCase();
     return `assets/avatars/${c}_${g}.png`;
   }
@@ -68,10 +68,11 @@
         xp,
         lastName: (last && (last.exercise || last.type)) || "—",
         lastDate: (last && String(last.date||"").slice(0,10)) || "—",
-        recent: getRecentExercises(entries, 8)
+        recent: getRecentExercises(entries, 8),
+        names: todays.map(e => String((e.exercise||e.name||e.type||"")).trim()).filter(Boolean)
       };
     }catch{
-      return { today, count:0, xp:0, lastName:"—", lastDate:"—", recent:[] };
+      return { today, count:0, xp:0, lastName:"—", lastDate:"—", recent:[], names:[] };
     }
   }
 
@@ -108,9 +109,13 @@
   }
 
   function getStats() {
-    const st = window.IronQuestAttributes?.getState?.();
-    const base = { STR: 0, END: 0, AGI: 0, INT: 0, PER: 0, LCK: 0 };
-    const s = Object.assign({}, base, st || {});
+    // Prefer the Hunter stats system (derived from your logs) if available.
+    const hs = window.IronQuestHunterStats?.getSnapshot?.();
+    if(hs && hs.stats){
+      return hs.order.map(k=>({ k, label: hs.labels[k], v: hs.stats[k].level }));
+    }
+    // Fallback
+    const base = { STR: 1, END: 1, AGI: 1, INT: 1, PER: 1, LCK: 1 };
     return [
       { k: "STR", label: "Strength" },
       { k: "END", label: "Endurance" },
@@ -118,7 +123,7 @@
       { k: "INT", label: "Intellect" },
       { k: "PER", label: "Perception" },
       { k: "LCK", label: "Luck" },
-    ].map(x => ({ ...x, v: Number(s[x.k] || 0) }));
+    ].map(x => ({ ...x, v: base[x.k] }));
   }
 
   function classAura(clsKey) {
@@ -141,6 +146,25 @@
     const totals = await getTotals();
     const stats = getStats();
     const today = await getTodaySummary();
+
+    // Today Plan (weekly schedule from Plans) — shown on Home for 1-tap flow
+    let todayPlan = [];
+    try{
+      const stP = window.IronQuestPlans?.getState?.();
+      const pPlan = stP && stP.plans ? (stP.plans.find(x=>x.id===stP.activeId) || stP.plans[0]) : null;
+      const dayKey = window.IronQuestPlans?.dayKeyForDate?.(new Date()) || "mon";
+      const assigned = (pPlan && pPlan.week && Array.isArray(pPlan.week[dayKey])) ? pPlan.week[dayKey] : [];
+      const doneSet = new Set((today.names||[]).map(x=>String(x).toLowerCase()));
+      todayPlan = assigned.map(name=>{
+        const it = (pPlan.items||[]).find(x=>x.name===name);
+        return {
+          name,
+          sets: it?.sets || "",
+          reps: it?.reps || "",
+          done: doneSet.has(String(name).toLowerCase())
+        };
+      }).filter(x=>x.name);
+    }catch(_){ todayPlan = []; }
     const streak = await computeStreak();
 
     const locked = totals.lvl < 10;
@@ -149,10 +173,10 @@
 
     root.innerHTML = `
       <div class="hq-wrap">
-        <div class="hq-card" style="--aura:${classAura(p.cls)}">
+        <div class="hq-card" style="--aura:${classAura(clsSafe)}">
           <div class="hq-top">
             <div class="hq-avatar">
-              <img id="hqAvatarImg" alt="Avatar" src="${avatarPath(p.cls, p.gender)}" />
+              <img id="hqAvatarImg" alt="Avatar" src="${avatarPath(clsSafe, p.gender)}" />
               <div class="hq-aura"></div>
             </div>
             <div class="hq-identity">
@@ -176,7 +200,7 @@
             <button class="hq-act primary" id="hqGoLog">➕ Log</button>
             <button class="hq-act" id="hqGoRun">🏃 Run</button>
             <button class="hq-act" id="hqGoHistory">🗓️ History</button>
-            <button class="hq-act" id="hqGoGates">🌀 Gates</button>
+            <button class="hq-act" id="hqGoPlans">🧾 Plans</button>
           </div>
 
           <div class="hq-mini">
@@ -191,6 +215,26 @@
               <div class="hq-miniS">${htmlEscape(today.lastDate)}</div>
             </div>
           </div>
+
+          ${todayPlan && todayPlan.length ? `
+            <div class="hq-plan">
+              <div class="hq-planT">Today Plan</div>
+              <div class="hq-planList">
+                ${todayPlan.map(it=>{
+                  const sub = (it.sets||it.reps) ? `${htmlEscape(it.sets)}x${htmlEscape(it.reps)}` : "";
+                  return `
+                    <div class="hq-planRow ${it.done?"done":""}" data-plan="${htmlEscape(it.name)}" data-sets="${htmlEscape(it.sets)}" data-reps="${htmlEscape(it.reps)}">
+                      <div class="hq-planName">${htmlEscape(it.name)} ${sub?`<span class="pill small">${sub}</span>`:""}</div>
+                      <div class="hq-planBtns">
+                        ${it.done?`<span class="pill small">done</span>`:`<button class="btn small" data-plog>Log</button>`}
+                      </div>
+                    </div>
+                  `;
+                }).join("")}
+              </div>
+            </div>
+          ` : ``}
+
 
           ${today.recent && today.recent.length ? `
             <div class="hq-recent">
@@ -244,7 +288,7 @@
                   </div>
                 `).join("")}
               </div>
-              <div class="hint">Stats are earned through your Logs and Skills.</div>
+              <div class="hint">Stats steigen durch Training: Mehrgelenkig→STR, Unilateral→AGI, Core/Conditioning→END, Komplexe→INT, Konsistenz→LCK.</div>
             </div>
           </div>
         </div>
@@ -272,7 +316,7 @@
     root.querySelector("#hqGoLog")?.addEventListener("click", ()=>{ setIntentLog(""); go("log"); });
     root.querySelector("#hqGoRun")?.addEventListener("click", ()=>go("run"));
     root.querySelector("#hqGoHistory")?.addEventListener("click", ()=>go("history"));
-    root.querySelector("#hqGoGates")?.addEventListener("click", ()=>go("gates"));
+    root.querySelector("#hqGoPlans")?.addEventListener("click", ()=>go("plans"));
 
     root.querySelectorAll("[data-qlog]").forEach(btn=>{
       btn.addEventListener("click", ()=>{
