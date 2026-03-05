@@ -111,10 +111,13 @@
     if((buffs && buffs.globalXp)) xp *= buffs.globalXp;
     if((buffs && buffs.typeXp) && buffs.typeXp[exType]) xp *= buffs.typeXp[exType];
 
+    const mult = Number((window.IronQuestBalance?.load?.()||{}).exerciseXPMult ?? 1) || 1;
+    xp *= mult;
+    const multRun = Number((window.IronQuestBalance?.load?.()||{}).runXPMult ?? 1) || 1;
+    xp *= multRun;
     return Math.round(xp);
   }
-
-  // Older modules might store xp directly; keep for compatibility
+// Older modules might store xp directly; keep for compatibility
   function calculateXP(entry){
     return Number((entry && entry.xp) || 0);
   }
