@@ -151,6 +151,7 @@
       home: window.IronQuestHome && window.IronQuestHome.render,
       log: window.IronQuestLog && window.IronQuestLog.render,
       history: window.IronQuestHistory && window.IronQuestHistory.render,
+      plans: window.IronQuestPlansView && window.IronQuestPlansView.render,
       run: window.IronQuestRunning && window.IronQuestRunning.renderRunning,
       stats: window.IronQuestAnalytics && window.IronQuestAnalytics.renderAnalytics,
       quests: window.IronQuestChallenges && window.IronQuestChallenges.renderChallenges,
@@ -354,6 +355,7 @@
     if(!o || !grid) return;
     const itemsAll = [
       { tab:"history", label:"History", icon:"🗓️" },
+      { tab:"plans", label:"Plans", icon:"🧾" },
       { tab:"quests", label:"Quests", icon:"🗺️" },
       { tab:"gates", label:"Gates", icon:"🌀" },
       { tab:"boss", label:"Boss", icon:"👑" },
@@ -368,6 +370,7 @@
       { tab:"log", label:"New Log", icon:"➕" },
       { tab:"run", label:"Start Run", icon:"🏃" },
       { tab:"history", label:"History", icon:"🗓️" },
+      { tab:"plans", label:"Plans", icon:"🧾" },
     ];
     if(quick){
       quick.innerHTML = quickActions.map(a=>`
