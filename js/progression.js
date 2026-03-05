@@ -15,13 +15,12 @@
     return window.Utils.clamp(w,1,52);
   }
   function xpNeededForNextLevel(level){
-    // New scaling: starts light, ramps harder (RPG feel)
-    // Examples (approx): L1~100, L2~145, L3~205, L4~295, L5~425 ... and keeps accelerating.
+    // Harder RPG scaling: sessions should not level you up too fast.
+    // Examples (approx): L1~500, L2~740, L3~1070, L4~1470, L5~1930, L10~4880
     const l=Math.max(1,Number(level||1));
-    const rate = 1.33;
-    const lin  = 0.08;
-    const need = 100 * (rate ** (l-1)) * (1 + lin*(l-1));
-    return Math.max(100, Math.round(need));
+    const x = (l-1);
+    const need = 500 + (150*x) + (90*(x**1.6));
+    return Math.max(500, Math.round(need));
   }
   function levelFromTotalXp(totalXp){
     let lvl=1; let xp=Math.max(0,Math.round(totalXp||0));
@@ -36,9 +35,9 @@
   }
   function starsForDay(dayXp){
     const xp=Number(dayXp||0);
-    if(xp>=2000) return "⭐⭐⭐";
-    if(xp>=1600) return "⭐⭐";
-    if(xp>=1200) return "⭐";
+    if(xp>=650) return "⭐⭐⭐";
+    if(xp>=450) return "⭐⭐";
+    if(xp>=300) return "⭐";
     return "—";
   }
   window.IronQuestProgression={ getStartDate, setStartDate, getWeekNumberFor, getWeekNumber:()=>getWeekNumberFor(window.Utils.isoDate(new Date())), levelFromTotalXp, starsForDay };
