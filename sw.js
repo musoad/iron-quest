@@ -1,13 +1,16 @@
-// v10 hunter-card cache bump
-const CACHE = "ironquest-v10-huntercard-2026-03-04";
+// v11: safer update strategy for GitHub Pages PWA
+// - Network-first for navigations (so new index.html lands)
+// - Stale-while-revalidate for JS/CSS
+// - Cache-first for other GET assets
+const CACHE = "ironquest-v11-2026-03-05";
 const ASSETS = [
   "./",
   "./index.html",
   "./style.css",
   "./manifest.json",
   "./js/app.js",
-  "./js/profile.js",
-  "./js/home.js"
+  "./js/state.js",
+  "./js/schema.js"
 ];
 
 self.addEventListener("install", (event) => {
@@ -26,13 +29,57 @@ self.addEventListener("activate", (event) => {
 self.addEventListener("fetch", (event) => {
   const req = event.request;
   if (req.method !== "GET") return;
-  event.respondWith(
-    caches.match(req).then((hit) => hit || fetch(req).then((res) => {
-      const copy = res.clone();
-      caches.open(CACHE).then((c) => c.put(req, copy)).catch(() => {});
+
+  const url = new URL(req.url);
+  const isSameOrigin = url.origin === self.location.origin;
+  const isNav = req.mode === "navigate";
+  const isJS = isSameOrigin && url.pathname.endsWith(".js");
+  const isCSS = isSameOrigin && url.pathname.endsWith(".css");
+
+  // Network-first for navigations
+  if(isNav){
+    event.respondWith((async()=>{
+      try{
+        const fresh = await fetch(req);
+        const cache = await caches.open(CACHE);
+        cache.put("./index.html", fresh.clone()).catch(()=>{});
+        return fresh;
+      }catch(_){
+        const cache = await caches.open(CACHE);
+        const cached = await cache.match("./index.html");
+        return cached || caches.match(req);
+      }
+    })());
+    return;
+  }
+
+  // Stale-while-revalidate for JS/CSS
+  if(isJS || isCSS){
+    event.respondWith((async()=>{
+      const cache = await caches.open(CACHE);
+      const cached = await cache.match(req);
+      const fetchPromise = fetch(req).then(res=>{
+        cache.put(req, res.clone()).catch(()=>{});
+        return res;
+      }).catch(()=>cached);
+      return cached || fetchPromise;
+    })());
+    return;
+  }
+
+  // Cache-first for everything else
+  event.respondWith((async()=>{
+    const cached = await caches.match(req);
+    if(cached) return cached;
+    try{
+      const res = await fetch(req);
+      const cache = await caches.open(CACHE);
+      cache.put(req, res.clone()).catch(()=>{});
       return res;
-    }).catch(() => hit))
-  );
+    }catch(_){
+      return cached;
+    }
+  })());
 });
 
 self.addEventListener("message", (event) => {
