@@ -486,6 +486,11 @@
             }
             exSel.value = ex.name;
             onPick();
+
+            // optional preset from Plans (sets/reps)
+            if(intent.sets && setsEl) setsEl.value = String(intent.sets);
+            if(intent.reps && repsEl) repsEl.value = String(intent.reps);
+            try{ recalc(); }catch(_){ }
             // scroll into view (mobile)
             setTimeout(()=>{ try{ exSel.scrollIntoView({ block:"center", behavior:"smooth" }); }catch(_){} }, 80);
           }
@@ -628,7 +633,8 @@
       const active = safeGetActivePlan();
       if(!active){ (window.Toast && (window.Toast.show) && window.Toast.show)("Kein Plan", "Erstelle zuerst einen Plan."); return; }
       if(!ex){ (window.Toast && (window.Toast.show) && window.Toast.show)("Fehler", "Bitte Übung wählen."); return; }
-      window.IronQuestPlans.addExerciseToPlan(active.id, ex.name);
+      // store recommended params by default, can be edited in Plan view
+      window.IronQuestPlans.addExerciseToPlan(active.id, ex.name, { sets: ex.recSets, reps: ex.recReps });
       refreshPlans();
       refreshExercises();
       (window.Toast && (window.Toast.show) && window.Toast.show)("Zum Plan hinzugefügt", `${active.name}: ${ex.name}`);
