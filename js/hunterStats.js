@@ -74,7 +74,15 @@
 
     // Consistency -> Luck
     const days = new Set(entries.map(e=>String(e.date||"").slice(0,10)).filter(Boolean));
-    base.LCK += days.size * 65; // ~1 LCK level per few consistent days
+    base.LCK += days.size * 65;
+
+    // Active class bias gives the build a clearer identity
+    try{
+      const bias = window.IronQuestClasses?.statBias?.() || {};
+      for(const [k,m] of Object.entries(bias)){
+        if(base[k] != null) base[k] *= Number(m||1);
+      }
+    }catch(_){ }
 
     const stats = {};
     for(const k of ORDER){
