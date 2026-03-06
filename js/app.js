@@ -160,7 +160,10 @@
       skills: window.IronQuestSkillsScreen && window.IronQuestSkillsScreen.render,
       review: window.IronQuestReview && window.IronQuestReview.render,
       health: window.IronQuestHealth && window.IronQuestHealth.render,
-      backup: window.IronQuestBackup && window.IronQuestBackup.render
+      backup: window.IronQuestBackup && window.IronQuestBackup.render,
+      diagnostics: window.IronQuestDiagnostics && window.IronQuestDiagnostics.render,
+      balance: window.IronQuestBalance && window.IronQuestBalance.render,
+      equipment: window.IronQuestEquipment && window.IronQuestEquipment.render
     };
 
     const fn = renders[tabId];
@@ -359,10 +362,13 @@
       { tab:"quests", label:"Quests", icon:"🗺️" },
       { tab:"gates", label:"Gates", icon:"🌀" },
       { tab:"boss", label:"Boss", icon:"👑" },
+      { tab:"equipment", label:"Equipment", icon:"🧰" },
       { tab:"skills", label:"Skills", icon:"🧬" },
       { tab:"review", label:"Review", icon:"📈" },
       { tab:"health", label:"Health", icon:"❤️" },
       { tab:"backup", label:"Backup", icon:"💾" },
+      { tab:"diagnostics", label:"Diagnostics", icon:"🧪" },
+      { tab:"balance", label:"Balance", icon:"⚖️" },
       { action:"integrity", label:"Integrity Check", icon:"🛠️" },
     ];
 
@@ -370,8 +376,8 @@
       { tab:"home", label:"Hunter Card", icon:"🏠" },
       { tab:"log", label:"New Log", icon:"➕" },
       { tab:"run", label:"Start Run", icon:"🏃" },
-      { tab:"history", label:"History", icon:"🗓️" },
       { tab:"plans", label:"Plans", icon:"🧾" },
+      { tab:"equipment", label:"Equipment", icon:"🧰" },
     ];
     if(quick){
       quick.innerHTML = quickActions.map(a=>`
