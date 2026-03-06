@@ -15,12 +15,20 @@
     return window.Utils.clamp(w,1,52);
   }
   function xpNeededForNextLevel(level){
-    // Harder RPG scaling: sessions should not level you up too fast.
-    // Examples (approx): L1~500, L2~740, L3~1070, L4~1470, L5~1930, L10~4880
-    const l=Math.max(1,Number(level||1));
-    const x = (l-1);
-    const need = 500 + (150*x) + (90*(x**1.6));
-    return Math.max(500, Math.round(need));
+  // Calibrated for: Level 10 in ~4 weeks at ~4 workouts/week (typical sessions).
+  // Uses Balance config so you can tune without editing code.
+  const l = Math.max(1, Number(level||1));
+  const x = (l - 1);
+
+  const cfg = (window.IronQuestBalance?.load?.() || {});
+  const base = Number(cfg.levelBase ?? 300) || 300;
+  const lin  = Number(cfg.levelLinear ?? 90) || 90;
+  const pow  = Number(cfg.levelPower ?? 55) || 55;
+  const exp  = Number(cfg.levelExponent ?? 1.5) || 1.5;
+
+  const need = base + (lin * x) + (pow * Math.pow(x, exp));
+  return Math.max(100, Math.round(need));
+}
   }
   function levelFromTotalXp(totalXp){
     let lvl=1; let xp=Math.max(0,Math.round(totalXp||0));
