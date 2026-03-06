@@ -113,8 +113,6 @@
 
     const mult = Number((window.IronQuestBalance?.load?.()||{}).exerciseXPMult ?? 1) || 1;
     xp *= mult;
-    const multRun = Number((window.IronQuestBalance?.load?.()||{}).runXPMult ?? 1) || 1;
-    xp *= multRun;
     return Math.round(xp);
   }
 // Older modules might store xp directly; keep for compatibility
@@ -144,8 +142,12 @@
       if(window.IronQuestEquipment && typeof window.IronQuestEquipment.bonuses === "function"){
         const b = window.IronQuestEquipment.bonuses();
         if(b && b.globalXp) xp *= b.globalXp;
+        if(b && b.runXp) xp *= b.runXp;
       }
     }catch(_){}
+
+    try{ xp *= Number(window.IronQuestClasses?.runMultiplier?.() || 1); }catch(_){}
+    xp *= Number((window.IronQuestBalance?.load?.()||{}).runXPMult ?? 1) || 1;
 
     // Clamp
     xp = Math.max(60, Math.min(2500, xp));
