@@ -1,112 +1,988 @@
-(() => {
-  "use strict";
+:root{
+  --bg:#060808;
+  --bg-2:#0b1011;
+  --panel:#101617;
+  --panel-2:#131b1c;
+  --panel-3:#182223;
+  --line:#223031;
+  --line-2:#2e4143;
+  --text:#e7f4ef;
+  --muted:#9fb2ae;
+  --soft:#7b8d89;
+  --accent:#00e08f;
+  --accent-2:#00c7ff;
+  --accent-3:#7cf7c8;
+  --danger:#ff5e6c;
+  --warn:#ffcc66;
+  --shadow:0 16px 40px rgba(0,0,0,.42);
+  --glow:0 0 0 1px rgba(0,224,143,.08), 0 8px 24px rgba(0,224,143,.08);
+  --radius:18px;
+  --radius-sm:12px;
+  --radius-xs:10px;
+  --nav-h:92px;
+  --maxw:720px;
+}
 
-  function line(s){ return String(s || ""); }
-  function ok(b){ return b ? "✅" : "❌"; }
+*,
+*::before,
+*::after{
+  box-sizing:border-box;
+}
 
-  async function smoke(){
-    const results = [];
-    let lsOk = true;
-    try{ localStorage.setItem("_t","1"); localStorage.removeItem("_t"); }catch(_){ lsOk = false; }
-    results.push({ name:"LocalStorage writable", pass:lsOk });
-    results.push({ name:"IndexedDB available", pass: !!window.indexedDB });
-    results.push({ name:"IronDB present", pass: !!(window.IronDB && window.IronDB.getAllEntries) });
+html{
+  -webkit-text-size-adjust:100%;
+  text-size-adjust:100%;
+  scroll-behavior:smooth;
+}
 
-    let entries = [], runs = [];
-    try{ entries = await (window.IronDB?.getAllEntries?.() || []); results.push({ name:"Read entries", pass:true, meta:String(entries.length) }); }
-    catch(e){ results.push({ name:"Read entries", pass:false, meta:String(e) }); }
+body{
+  margin:0;
+  padding:0;
+  min-height:100vh;
+  background:
+    radial-gradient(circle at 20% 0%, rgba(0,224,143,.10), transparent 30%),
+    radial-gradient(circle at 85% 0%, rgba(0,199,255,.08), transparent 28%),
+    linear-gradient(180deg, #071011 0%, #060808 28%, #050607 100%);
+  color:var(--text);
+  font-family:Inter, system-ui, -apple-system, BlinkMacSystemFont, "Segoe UI", sans-serif;
+  line-height:1.45;
+  overflow-x:hidden;
+  padding-bottom:calc(var(--nav-h) + 20px);
+}
 
-    try{ runs = await (window.IronDB?.getAllRuns?.() || []); results.push({ name:"Read runs", pass:true, meta:String(runs.length) }); }
-    catch(e){ results.push({ name:"Read runs", pass:false, meta:String(e) }); }
+body::before{
+  content:"";
+  position:fixed;
+  inset:0;
+  pointer-events:none;
+  background:
+    linear-gradient(rgba(255,255,255,.02), rgba(255,255,255,0)) top/100% 120px no-repeat,
+    linear-gradient(transparent 95%, rgba(0,224,143,.035) 100%);
+  background-size:100% 120px, 100% 38px;
+  opacity:.7;
+}
 
-    const xpBad = entries.filter(e => !Number.isFinite(Number(e.xp || 0)) || Number(e.xp || 0) < 0).length;
-    results.push({ name:"Entry XP valid", pass: xpBad === 0, meta: xpBad ? `${xpBad} invalid` : "ok" });
+img{
+  max-width:100%;
+  display:block;
+}
 
-    const runIds = new Set(runs.map(r => String(r.id)));
-    const missingLinks = entries.filter(e => e.runId && !runIds.has(String(e.runId))).length;
-    results.push({ name:"Run links consistent", pass: missingLinks === 0, meta: missingLinks ? `${missingLinks} missing` : "ok" });
+button,
+input,
+select,
+textarea{
+  font:inherit;
+}
 
-    try{
-      const s = await window.IronQuestState?.getSnapshot?.();
-      results.push({ name:"State snapshot builds", pass: !!s, meta: s ? `L${s.progression?.level || "?"}` : "" });
-    }catch(e){
-      results.push({ name:"State snapshot builds", pass:false, meta:String(e) });
-    }
+button{
+  -webkit-tap-highlight-color:transparent;
+}
 
-    let plansOk = true;
-    try{
-      const st = window.IronQuestPlans?.getState?.() || window.Plans?.getState?.() || null;
-      plansOk = !!st;
-    }catch(_){ plansOk = false; }
-    results.push({ name:"Plans state readable", pass: plansOk });
+a{
+  color:inherit;
+  text-decoration:none;
+}
 
-    return { results, entriesCount: entries.length, runsCount: runs.length };
+h1,h2,h3,h4,h5,h6{
+  margin:0 0 10px;
+  color:#f2fbf7;
+  line-height:1.15;
+  font-weight:800;
+  letter-spacing:.01em;
+}
+
+h1{font-size:28px;}
+h2{font-size:24px;}
+h3{font-size:19px;}
+h4{font-size:16px;}
+
+p{
+  margin:0 0 12px;
+  color:var(--text);
+}
+
+small,
+.muted,
+.subtle{
+  color:var(--muted);
+}
+
+hr{
+  border:none;
+  border-top:1px solid var(--line);
+  margin:16px 0;
+}
+
+/* ---------- app width / spacing ---------- */
+
+main,
+.app,
+#app,
+.page,
+.route,
+.screen,
+.tab-pane,
+.view,
+.section-wrap{
+  width:100%;
+}
+
+main,
+#app{
+  max-width:var(--maxw);
+  margin:0 auto;
+  padding:12px 14px 22px;
+}
+
+section{
+  margin-bottom:16px;
+}
+
+/* ---------- utility ---------- */
+
+.hidden{display:none !important;}
+.center{text-align:center;}
+.right{text-align:right;}
+.mt-0{margin-top:0 !important;}
+.mb-0{margin-bottom:0 !important;}
+.mb-8{margin-bottom:8px !important;}
+.mb-12{margin-bottom:12px !important;}
+.mb-16{margin-bottom:16px !important;}
+.mb-20{margin-bottom:20px !important;}
+
+.row{
+  display:flex;
+  gap:10px;
+  align-items:center;
+}
+
+.row.wrap{
+  flex-wrap:wrap;
+}
+
+.stack{
+  display:flex;
+  flex-direction:column;
+  gap:12px;
+}
+
+.grid{
+  display:grid;
+  gap:12px;
+}
+
+.grid-2{
+  display:grid;
+  grid-template-columns:repeat(2, minmax(0, 1fr));
+  gap:12px;
+}
+
+.grid-3,
+.stats-grid{
+  display:grid;
+  grid-template-columns:repeat(3, minmax(0, 1fr));
+  gap:10px;
+}
+
+@media (max-width:380px){
+  .grid-3,
+  .stats-grid{
+    gap:8px;
+  }
+}
+
+/* ---------- cards / panels ---------- */
+
+.card,
+.panel,
+.section-card,
+.system-card,
+.hud-card,
+.box{
+  position:relative;
+  background:
+    linear-gradient(180deg, rgba(20,29,30,.94), rgba(13,18,19,.96));
+  border:1px solid rgba(89,124,123,.25);
+  border-radius:var(--radius);
+  padding:16px;
+  box-shadow:var(--shadow), var(--glow);
+  overflow:hidden;
+  margin-bottom:14px;
+}
+
+.card::before,
+.panel::before,
+.section-card::before,
+.system-card::before,
+.hud-card::before,
+.box::before{
+  content:"";
+  position:absolute;
+  inset:0;
+  pointer-events:none;
+  background:
+    radial-gradient(circle at top left, rgba(0,224,143,.08), transparent 22%),
+    linear-gradient(180deg, rgba(255,255,255,.03), rgba(255,255,255,0));
+}
+
+.card-title,
+.panel-title,
+.section-title{
+  font-size:18px;
+  font-weight:800;
+  margin-bottom:10px;
+}
+
+.card-subtitle{
+  color:var(--muted);
+  font-size:13px;
+  margin-top:-4px;
+  margin-bottom:12px;
+}
+
+/* ---------- hero / home ---------- */
+
+.hero,
+.home-hero,
+.hunter-card,
+.hunter-status{
+  position:relative;
+  background:
+    radial-gradient(circle at top center, rgba(0,224,143,.10), transparent 24%),
+    linear-gradient(180deg, rgba(18,28,29,.98), rgba(11,16,17,.98));
+  border:1px solid rgba(90,128,126,.28);
+  border-radius:24px;
+  padding:18px;
+  box-shadow:0 18px 40px rgba(0,0,0,.45), 0 0 0 1px rgba(0,224,143,.06);
+  overflow:hidden;
+  margin-bottom:16px;
+}
+
+.hero::after,
+.home-hero::after,
+.hunter-card::after,
+.hunter-status::after{
+  content:"";
+  position:absolute;
+  inset:auto -15% -25% auto;
+  width:180px;
+  height:180px;
+  background:radial-gradient(circle, rgba(0,199,255,.12), transparent 60%);
+  pointer-events:none;
+}
+
+.hunter-avatar,
+.hero img,
+.home-avatar,
+.avatar-large,
+.hunter-card img{
+  width:100%;
+  max-width:100%;
+  border-radius:20px;
+  border:1px solid rgba(124,247,200,.18);
+  box-shadow:0 20px 40px rgba(0,0,0,.35);
+  object-fit:cover;
+  background:#0c1112;
+  margin-bottom:14px;
+}
+
+.hunter-header,
+.hero-header{
+  display:flex;
+  align-items:flex-start;
+  justify-content:space-between;
+  gap:12px;
+  margin-bottom:12px;
+}
+
+.hunter-name{
+  font-size:24px;
+  font-weight:900;
+  letter-spacing:.01em;
+}
+
+.hunter-rank,
+.rank-badge{
+  display:inline-flex;
+  align-items:center;
+  gap:6px;
+  min-height:30px;
+  padding:6px 10px;
+  border-radius:999px;
+  border:1px solid rgba(124,247,200,.18);
+  background:rgba(7,14,14,.75);
+  color:#d8fff0;
+  font-size:12px;
+  font-weight:700;
+}
+
+.hero-meta,
+.hunter-meta{
+  display:flex;
+  flex-wrap:wrap;
+  gap:8px;
+  margin-bottom:12px;
+}
+
+.badge,
+.pill,
+.chip,
+.tag{
+  display:inline-flex;
+  align-items:center;
+  justify-content:center;
+  gap:6px;
+  min-height:30px;
+  padding:6px 10px;
+  border-radius:999px;
+  border:1px solid rgba(106,141,140,.24);
+  background:rgba(11,17,18,.86);
+  color:var(--text);
+  font-size:12px;
+  font-weight:700;
+  white-space:nowrap;
+}
+
+.pill-soft{
+  background:rgba(255,255,255,.04);
+  color:var(--muted);
+}
+
+.pill-accent{
+  border-color:rgba(0,224,143,.32);
+  color:#d9fff1;
+  background:rgba(0,224,143,.10);
+}
+
+.pill-danger{
+  border-color:rgba(255,94,108,.28);
+  color:#ffd4d9;
+  background:rgba(255,94,108,.10);
+}
+
+/* ---------- progress / xp ---------- */
+
+.progress,
+.xpbar,
+.progress-bar,
+.bar{
+  width:100%;
+  height:10px;
+  border-radius:999px;
+  background:linear-gradient(180deg, #172022, #111819);
+  border:1px solid rgba(88,119,118,.22);
+  overflow:hidden;
+  box-shadow:inset 0 1px 2px rgba(0,0,0,.35);
+}
+
+.progress > div,
+.xpbar-fill,
+.progress-fill,
+.bar-fill{
+  height:100%;
+  width:0%;
+  border-radius:999px;
+  background:linear-gradient(90deg, var(--accent), var(--accent-2));
+  box-shadow:0 0 16px rgba(0,224,143,.28);
+  transition:width .35s ease;
+}
+
+.progress-label,
+.xp-meta{
+  display:flex;
+  justify-content:space-between;
+  gap:10px;
+  font-size:12px;
+  color:var(--muted);
+  margin-top:7px;
+}
+
+/* ---------- stats ---------- */
+
+.stat,
+.stat-card,
+.attr,
+.attribute-card{
+  background:linear-gradient(180deg, rgba(18,26,27,.95), rgba(12,17,18,.96));
+  border:1px solid rgba(85,119,118,.24);
+  border-radius:14px;
+  padding:12px 10px;
+  text-align:center;
+  box-shadow:inset 0 1px 0 rgba(255,255,255,.03);
+}
+
+.stat .label,
+.stat-key,
+.attr-key{
+  display:block;
+  color:var(--muted);
+  font-size:11px;
+  font-weight:700;
+  letter-spacing:.06em;
+  text-transform:uppercase;
+  margin-bottom:5px;
+}
+
+.stat .value,
+.stat-value,
+.attr-value{
+  display:block;
+  font-size:20px;
+  font-weight:900;
+  line-height:1;
+  color:#f3fff9;
+}
+
+.stat .sub,
+.attr-sub{
+  display:block;
+  font-size:11px;
+  color:var(--soft);
+  margin-top:6px;
+}
+
+/* ---------- forms ---------- */
+
+label{
+  display:block;
+  font-size:13px;
+  font-weight:700;
+  color:#dcece7;
+  margin-bottom:6px;
+}
+
+input[type="text"],
+input[type="number"],
+input[type="date"],
+input[type="search"],
+input[type="email"],
+input[type="file"],
+select,
+textarea{
+  width:100%;
+  min-height:46px;
+  padding:11px 13px;
+  border-radius:14px;
+  border:1px solid rgba(91,124,123,.28);
+  background:rgba(11,16,17,.94);
+  color:var(--text);
+  outline:none;
+  box-shadow:inset 0 1px 0 rgba(255,255,255,.02);
+}
+
+textarea{
+  min-height:110px;
+  resize:vertical;
+}
+
+input::placeholder,
+textarea::placeholder{
+  color:#6f8580;
+}
+
+input:focus,
+select:focus,
+textarea:focus{
+  border-color:rgba(0,224,143,.48);
+  box-shadow:0 0 0 3px rgba(0,224,143,.12);
+}
+
+/* ---------- buttons ---------- */
+
+button,
+.btn,
+.action-btn,
+.primary-btn{
+  appearance:none;
+  border:none;
+  border-radius:14px;
+  min-height:44px;
+  padding:10px 14px;
+  background:linear-gradient(180deg, #1de5a2, #00c67c);
+  color:#052216;
+  font-weight:800;
+  letter-spacing:.01em;
+  box-shadow:0 10px 20px rgba(0,224,143,.20);
+  cursor:pointer;
+  transition:transform .14s ease, box-shadow .14s ease, opacity .14s ease;
+}
+
+button:hover,
+.btn:hover,
+.action-btn:hover,
+.primary-btn:hover{
+  box-shadow:0 14px 22px rgba(0,224,143,.25);
+}
+
+button:active,
+.btn:active,
+.action-btn:active,
+.primary-btn:active{
+  transform:translateY(1px) scale(.985);
+}
+
+button.secondary,
+.btn.secondary,
+button.ghost,
+.btn.ghost,
+button.alt{
+  background:linear-gradient(180deg, #1a2324, #111718);
+  color:var(--text);
+  border:1px solid rgba(95,129,127,.28);
+  box-shadow:none;
+}
+
+button.warn{
+  background:linear-gradient(180deg, #ffd789, #ffbe45);
+  color:#332100;
+}
+
+button.danger{
+  background:linear-gradient(180deg, #ff8591, #ff5b6a);
+  color:#2d0810;
+}
+
+button:disabled,
+.btn:disabled{
+  opacity:.48;
+  cursor:not-allowed;
+  filter:saturate(.5);
+}
+
+/* button rows */
+.button-row,
+.actions,
+.action-row{
+  display:flex;
+  flex-wrap:wrap;
+  gap:8px;
+  margin-top:10px;
+}
+
+/* ---------- lists ---------- */
+
+.list,
+.menu,
+.item-list{
+  display:flex;
+  flex-direction:column;
+  gap:10px;
+}
+
+.list-item,
+.menu-item,
+.history-item,
+.plan-item,
+.quest-item{
+  padding:12px 12px;
+  border-radius:14px;
+  border:1px solid rgba(88,120,119,.18);
+  background:rgba(15,21,22,.84);
+}
+
+.list-item strong,
+.history-item strong,
+.plan-item strong{
+  display:block;
+  margin-bottom:4px;
+}
+
+/* ---------- plan / history / log ---------- */
+
+.history-day,
+.plan-day,
+.log-card,
+.form-card{
+  background:linear-gradient(180deg, rgba(17,24,25,.96), rgba(11,15,16,.96));
+  border:1px solid rgba(90,124,123,.22);
+  border-radius:18px;
+  padding:14px;
+  margin-bottom:12px;
+}
+
+.history-date,
+.day-title{
+  font-size:15px;
+  font-weight:800;
+  color:#f4fff9;
+  margin-bottom:10px;
+}
+
+.quick-add,
+.quick-row,
+.chips-row{
+  display:flex;
+  gap:8px;
+  flex-wrap:wrap;
+}
+
+.quick-add .chip,
+.quick-row .chip,
+.chips-row .chip{
+  min-height:32px;
+}
+
+/* ---------- review / report / diagnostics ---------- */
+
+.report-grid{
+  display:grid;
+  grid-template-columns:repeat(2, minmax(0, 1fr));
+  gap:10px;
+}
+
+.report-metric{
+  background:rgba(12,18,19,.86);
+  border:1px solid rgba(88,121,119,.22);
+  border-radius:14px;
+  padding:14px;
+}
+
+.report-metric .value{
+  display:block;
+  font-size:24px;
+  font-weight:900;
+  margin-top:4px;
+}
+
+.diag-ok{
+  color:#9dffce;
+}
+
+.diag-bad{
+  color:#ffb6bd;
+}
+
+/* ---------- tables (fallback) ---------- */
+
+table{
+  width:100%;
+  border-collapse:separate;
+  border-spacing:0;
+  overflow:hidden;
+  border:1px solid rgba(85,119,118,.22);
+  border-radius:16px;
+  background:rgba(12,18,19,.86);
+}
+
+th,td{
+  padding:12px 10px;
+  text-align:left;
+  border-bottom:1px solid rgba(85,119,118,.16);
+}
+
+th{
+  color:#d9ede7;
+  font-size:12px;
+  text-transform:uppercase;
+  letter-spacing:.05em;
+}
+
+tr:last-child td{
+  border-bottom:none;
+}
+
+/* ---------- nav ---------- */
+
+.bottom-nav,
+.bottom-tabs,
+nav.bottom,
+.tabbar{
+  position:fixed;
+  left:12px;
+  right:12px;
+  bottom:max(10px, env(safe-area-inset-bottom));
+  z-index:50;
+  display:grid;
+  grid-template-columns:repeat(5, minmax(0, 1fr));
+  gap:10px;
+  padding:10px;
+  border-radius:26px;
+  background:rgba(10,14,15,.86);
+  border:1px solid rgba(90,124,123,.22);
+  box-shadow:0 20px 40px rgba(0,0,0,.38), 0 0 0 1px rgba(255,255,255,.02) inset;
+  backdrop-filter:blur(16px);
+  -webkit-backdrop-filter:blur(16px);
+}
+
+.bottom-nav button,
+.bottom-tabs button,
+nav.bottom button,
+.tabbar button,
+.bottom-nav a,
+.bottom-tabs a,
+.tabbar a{
+  min-height:64px;
+  padding:8px 6px;
+  border-radius:18px;
+  border:1px solid rgba(87,118,117,.14);
+  background:linear-gradient(180deg, rgba(19,25,26,.92), rgba(12,16,17,.92));
+  color:#e2efe9;
+  box-shadow:none;
+  display:flex;
+  flex-direction:column;
+  justify-content:center;
+  align-items:center;
+  gap:4px;
+  font-size:12px;
+  font-weight:800;
+  line-height:1.1;
+}
+
+.bottom-nav .active,
+.bottom-tabs .active,
+.tabbar .active,
+.bottom-nav button[aria-current="page"]{
+  border-color:rgba(0,224,143,.38);
+  background:
+    radial-gradient(circle at top center, rgba(0,224,143,.16), transparent 60%),
+    linear-gradient(180deg, rgba(15,33,27,.96), rgba(10,18,15,.96));
+  color:#f3fff9;
+  box-shadow:0 0 0 1px rgba(0,224,143,.10), 0 10px 18px rgba(0,224,143,.10);
+}
+
+/* ---------- floating action button ---------- */
+
+.fab,
+.floating-action,
+#fab,
+.quick-fab{
+  position:fixed;
+  right:18px;
+  bottom:calc(var(--nav-h) + 22px + env(safe-area-inset-bottom));
+  width:64px;
+  height:64px;
+  border-radius:50%;
+  z-index:60;
+  display:flex;
+  align-items:center;
+  justify-content:center;
+  background:
+    radial-gradient(circle at 30% 30%, #4dffc0, #00d684 62%, #00ba73 100%);
+  color:#042013;
+  font-size:30px;
+  font-weight:900;
+  border:1px solid rgba(124,247,200,.35);
+  box-shadow:0 16px 28px rgba(0,224,143,.28), 0 0 0 6px rgba(0,224,143,.08);
+}
+
+/* ---------- top header fallback ---------- */
+
+.app-header,
+.topbar,
+header{
+  position:sticky;
+  top:0;
+  z-index:40;
+  backdrop-filter:blur(12px);
+  -webkit-backdrop-filter:blur(12px);
+  background:rgba(7,11,12,.72);
+  border-bottom:1px solid rgba(84,116,115,.12);
+}
+
+.app-header-inner,
+.topbar-inner,
+header > div{
+  max-width:var(--maxw);
+  margin:0 auto;
+  padding:14px 14px 12px;
+}
+
+.logo,
+.app-title{
+  font-size:22px;
+  font-weight:900;
+  letter-spacing:.02em;
+}
+
+.app-subtitle{
+  color:var(--muted);
+  font-size:13px;
+  margin-top:2px;
+}
+
+/* ---------- backup / repair / diagnostics buttons ---------- */
+
+.repair-box,
+.backup-box,
+.diagnostics-box{
+  background:linear-gradient(180deg, rgba(17,25,26,.95), rgba(11,16,17,.95));
+  border:1px solid rgba(90,123,122,.22);
+  border-radius:18px;
+  padding:14px;
+  margin-bottom:14px;
+}
+
+/* ---------- empty states ---------- */
+
+.empty,
+.empty-state{
+  text-align:center;
+  color:var(--muted);
+  padding:18px 12px;
+  border:1px dashed rgba(106,141,140,.22);
+  border-radius:16px;
+  background:rgba(11,15,16,.65);
+}
+
+/* ---------- overlays / modals ---------- */
+
+.modal,
+.sheet,
+.dialog{
+  background:linear-gradient(180deg, rgba(19,27,28,.98), rgba(11,16,17,.98));
+  color:var(--text);
+  border:1px solid rgba(92,126,124,.24);
+  border-radius:22px 22px 0 0;
+  box-shadow:0 -14px 34px rgba(0,0,0,.45);
+}
+
+.backdrop,
+.modal-backdrop{
+  background:rgba(0,0,0,.55);
+  backdrop-filter:blur(4px);
+  -webkit-backdrop-filter:blur(4px);
+}
+
+/* ---------- helpers for common ids ---------- */
+
+#home,
+#log,
+#run,
+#stats,
+#quests,
+#gates,
+#boss,
+#skills,
+#review,
+#health,
+#backup,
+#history,
+#plans,
+#diagnostics,
+#balance,
+#equipment{
+  max-width:var(--maxw);
+  margin:0 auto;
+}
+
+/* ---------- animation ---------- */
+
+@keyframes softPulse{
+  0%{ box-shadow:0 0 0 0 rgba(0,224,143,.18); }
+  70%{ box-shadow:0 0 0 12px rgba(0,224,143,0); }
+  100%{ box-shadow:0 0 0 0 rgba(0,224,143,0); }
+}
+
+@keyframes riseFade{
+  from{ opacity:0; transform:translateY(6px); }
+  to{ opacity:1; transform:translateY(0); }
+}
+
+.card,
+.panel,
+.hero,
+.hunter-card{
+  animation:riseFade .24s ease;
+}
+
+.fab{
+  animation:softPulse 2.6s infinite;
+}
+
+/* ---------- compact mobile improvements ---------- */
+
+@media (max-width:640px){
+  main,
+  #app{
+    padding-left:12px;
+    padding-right:12px;
   }
 
-  async function render(hostEl){
-    const host = hostEl || document.getElementById("diagnostics");
-    if(!host) return;
-    const snap = await window.IronQuestState?.getSnapshot?.().catch(()=>null);
-    const rep = await smoke();
-    const ua = navigator.userAgent;
-    const sw = ("serviceWorker" in navigator);
-    const controller = (navigator.serviceWorker && navigator.serviceWorker.controller) ? "active" : "none";
-
-    host.innerHTML = "";
-    host.appendChild(UI.card("Diagnostics", `
-      <div class="kv">
-        <div><span class="k">Build</span><span class="v">v10.3</span></div>
-        <div><span class="k">URL</span><span class="v">${location.href}</span></div>
-        <div><span class="k">UserAgent</span><span class="v">${ua}</span></div>
-        <div><span class="k">Service Worker</span><span class="v">${sw ? "supported" : "no"} / ${controller}</span></div>
-      </div>
-    `));
-
-    const list = rep.results.map(r => `
-      <div class="check ${r.pass ? "pass" : "fail"}">
-        <span class="mark">${ok(r.pass)}</span>
-        <span class="name">${line(r.name)}</span>
-        <span class="meta">${r.meta ? line(r.meta) : ""}</span>
-      </div>
-    `).join("");
-
-    host.appendChild(UI.card("Smoke Tests", `
-      <div class="checks">${list}</div>
-      <div class="row" style="margin-top:10px">
-        <button id="diag_run_integrity" class="btn primary">Run integrity repair</button>
-        <button id="diag_refresh" class="btn">Refresh</button>
-      </div>
-      <div class="muted" style="margin-top:10px">Wenn etwas rot ist: Integrity Repair ausführen und danach neu laden.</div>
-    `));
-
-    if(snap){
-      host.appendChild(UI.card("State", `
-        <div class="kv">
-          <div><span class="k">Level</span><span class="v">${snap.progression.level}</span></div>
-          <div><span class="k">XP</span><span class="v">${snap.progression.xp} / ${snap.progression.nextNeed}</span></div>
-          <div><span class="k">Today XP</span><span class="v">${snap.totals.todayXp}</span></div>
-          <div><span class="k">Week XP</span><span class="v">${snap.totals.weekXp}</span></div>
-          <div><span class="k">Streak</span><span class="v">${snap.streak}</span></div>
-        </div>
-      `));
-    }
-
-    host.querySelector("#diag_run_integrity")?.addEventListener("click", async ()=>{
-      try{
-        await window.IronQuestIntegrity?.run?.({ force:true });
-        window.IronQuestState?.invalidate?.();
-        window.Toast?.show?.("Integrity repair complete");
-        render(host);
-      }catch(e){
-        window.Toast?.show?.("Integrity failed: " + e);
-      }
-    });
-    host.querySelector("#diag_refresh")?.addEventListener("click", ()=>render(host));
+  .hero,
+  .home-hero,
+  .hunter-card,
+  .hunter-status,
+  .card,
+  .panel{
+    padding:14px;
+    border-radius:18px;
   }
 
-  function open(){
-    alert(["IRON QUEST Diagnostics","URL: " + location.href,"UserAgent: " + navigator.userAgent].join("
-"));
+  .hunter-name{
+    font-size:22px;
   }
-  window.IronQuestDiagnostics = { open, render, smoke };
-})();
+
+  h1{font-size:24px;}
+  h2{font-size:21px;}
+  h3{font-size:17px;}
+
+  .report-grid,
+  .grid-2{
+    grid-template-columns:1fr;
+  }
+}
+
+@media (max-width:420px){
+  body{
+    padding-bottom:calc(var(--nav-h) + 28px);
+  }
+
+  .bottom-nav,
+  .bottom-tabs,
+  .tabbar{
+    left:8px;
+    right:8px;
+    gap:8px;
+    padding:8px;
+  }
+
+  .bottom-nav button,
+  .bottom-tabs button,
+  .tabbar button,
+  .bottom-nav a,
+  .bottom-tabs a,
+  .tabbar a{
+    min-height:60px;
+    font-size:11px;
+    border-radius:16px;
+  }
+
+  .fab,
+  .floating-action,
+  #fab,
+  .quick-fab{
+    width:58px;
+    height:58px;
+    font-size:28px;
+    right:14px;
+  }
+
+  .grid-3,
+  .stats-grid{
+    grid-template-columns:repeat(3, minmax(0, 1fr));
+  }
+}
+
+/* ---------- safe fallback for very plain markup ---------- */
+
+body > img:first-of-type{
+  max-width:var(--maxw);
+  margin:12px auto;
+  border-radius:20px;
+  border:1px solid rgba(124,247,200,.18);
+  box-shadow:0 20px 40px rgba(0,0,0,.35);
+}
+
+body > div,
+body > section{
+  max-width:var(--maxw);
+  margin-left:auto;
+  margin-right:auto;
+}
+
+/* ---------- selection ---------- */
+
+::selection{
+  background:rgba(0,224,143,.24);
+  color:#ffffff;
+}
