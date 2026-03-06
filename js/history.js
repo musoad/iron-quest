@@ -1,132 +1,194 @@
 (() => {
   "use strict";
-  const KEY="ironquest_boss_v8";
-  const BOSSES=[
-    { week:2, name:"Foundation Beast", rank:"D", hp:6500, reward:1, xp:650 },
-    { week:4, name:"Asymmetry Lord", rank:"C", hp:9000, reward:1, xp:900 },
-    { week:6, name:"Core Guardian", rank:"C", hp:9800, reward:1, xp:950 },
-    { week:8, name:"Abyss Reaper", rank:"B", hp:12500, reward:2, xp:1200 },
-    { week:10, name:"Iron Champion", rank:"A", hp:16000, reward:2, xp:1600 },
-    { week:12, name:"MONARCH", rank:"S", hp:22000, reward:3, xp:2400 },
-  ];
 
-  function load(){ try{ return JSON.parse(localStorage.getItem(KEY))||{ cleared:{} }; }catch{ return { cleared:{} }; } }
-  function save(st){ localStorage.setItem(KEY, JSON.stringify(st)); }
-
-  function weekDamage(entries, week){
-    let dmg=0;
-    for(const e of entries){
-      if(Number(e.week||0)!==week) continue;
-      dmg += Number(e.xp||0);
-    }
-    // equipment & active buffs
-    const eq=window.IronQuestEquipment.bonuses();
-    const active=(window.__IQ_ACTIVE_BUFFS && window.__IQ_ACTIVE_BUFFS.gateDmg) || 1;
-    dmg *= (eq.gateDmg||1) * active;
-    return Math.round(dmg);
+  function esc(s){
+    return String(s ?? "").replace(/[&<>\"]/g, m => ({"&":"&amp;","<":"&lt;",">":"&gt;","\"":"&quot;"}[m]));
   }
 
-  async function render(container){
-    const entries=await window.IronDB.getAllEntries();
-    const today=window.Utils.isoDate(new Date());
-    const week=window.IronQuestProgression.getWeekNumberFor(today);
-    const st=load();
+  function byDateDesc(a,b){
+    // ISO date strings
+    return String(b.date||"").localeCompare(String(a.date||""));
+  }
 
-    const boss = BOSSES.find(b=>b.week===week) || null;
+  function groupByDate(entries){
+    const map = new Map();
+    for(const e of entries){
+      const d = String(e.date || "").slice(0,10) || "(ohne Datum)";
+      if(!map.has(d)) map.set(d, []);
+      map.get(d).push(e);
+    }
+    const days = Array.from(map.keys()).sort((a,b)=>String(b).localeCompare(String(a)));
+    return days.map(d=>({ date:d, items: map.get(d).slice().sort((a,b)=>Number(b.id||0)-Number(a.id||0)) }));
+  }
 
-    container.innerHTML=`
+  async function render(root){
+    const entries = await (window.IronDB?.getAllEntries?.() || Promise.resolve([]));
+    entries.sort(byDateDesc);
+
+    root.innerHTML = `
       <div class="card">
-        <h2>Boss Arena</h2>
-        <p class="hint">Nur in der jeweiligen Woche clearbar. Damage basiert auf Wochen-XP. Hybrid: ruhige UI, aber FINISH Moment.</p>
+        <h2>History</h2>
+        <p class="hint">Suche nach Übungen und klappe Tage ein/aus. Tippe auf 🗑️ um einzelne Einträge zu löschen.</p>
+        <div class="historySearchRow">
+          <input id="historyQ" type="text" placeholder="Search (e.g. Push Ups, Squats)…" autocomplete="off" />
+          <select id="historyPlan" class="select">
+            <option value="">All Plans</option>
+          </select>
+          <button class="secondary" id="historyToday">Today</button>
+        </div>
       </div>
-
-      <div class="card soft" id="bossCard"></div>
-
-      <div class="card">
-        <h2>Boss Timeline</h2>
-        <ul class="list" id="bossList"></ul>
-      </div>
+      <div id="historyBody"></div>
     `;
 
-    const bossCard=container.querySelector("#bossCard");
-    if(!boss){
-      bossCard.innerHTML = `<b>Kein Boss diese Woche.</b><div class="hint">Nächster Boss erscheint in Boss-Wochen (z.B. W2, W4, …)</div>`;
-    }else{
-      const dmg=weekDamage(entries, week);
-      const cleared=!!st.cleared[String(week)];
-      const rem=Math.max(0, boss.hp-dmg);
-      const pct=Math.max(0, Math.min(100, (dmg/boss.hp)*100));
+    const body = root.querySelector("#historyBody");
+    const qEl = root.querySelector("#historyQ");
+    const planEl = root.querySelector("#historyPlan");
+    const btnToday = root.querySelector("#historyToday");
 
-      bossCard.innerHTML=`
-        <div class="itemTop">
-          <div>
-            <b>${boss.name}</b>
-            <div class="hint">Week ${boss.week} • Rank ${boss.rank}</div>
-          </div>
-          <span class="badge ${cleared?"ok":"gold"}">${cleared?"CLEARED":"ACTIVE"}</span>
-        </div>
-        <div style="margin-top:12px;">
-          <div class="hint">Boss HP</div>
-          <div class="bar" style="margin-top:8px;"><div class="barFill" style="width:${pct}%;"></div></div>
-          <div class="row2" style="margin-top:10px;">
-            <div class="pill"><b>Damage:</b> ${window.Utils.fmt(dmg)}</div>
-            <div class="pill"><b>Remaining:</b> ${window.Utils.fmt(rem)}</div>
-          </div>
-        </div>
-        <div class="btnRow">
-          <button class="primary" id="btnFinish" ${cleared?"disabled":""}>FINISH</button>
-        </div>
-        <div class="hint">Reward: +${boss.reward} Chest • +${boss.xp} XP (Boss bonus entry)</div>
-      `;
+    const todayIso = window.Utils?.isoDate?.(new Date()) || new Date().toISOString().slice(0,10);
 
-      bossCard.querySelector("#btnFinish").onclick=async()=>{
-        if(cleared) return;
-        if(dmg<boss.hp){
-          window.IronQuestUIFX.showSystem(`Boss not defeated.\n\nDamage: ${dmg} / ${boss.hp}\nTrain more this week.`);
-          return;
-        }
-        st.cleared[String(week)] = { date: today, name: boss.name };
-        save(st);
-
-        window.IronQuestLoot.addChests(boss.reward);
-        window.IronQuestHunterRank.recordBossClear();
-
-        // Boss bonus entry
-        await window.IronDB.addEntry({
-          date: today,
-          week,
-          type: "Boss",
-          exercise: `Boss: ${boss.name}`,
-          detail: `Defeated • Reward +${boss.reward} Chest`,
-          xp: boss.xp
-        });
-
-        await window.IronDB.addSystem({ date: today, msg:`Boss defeated: ${boss.name}. Reward: +${boss.reward} chest.` });
-
-        window.IronQuestUIFX.showFinish(`FINISH!\n\n${boss.name} defeated.\nReward: +${boss.reward} Chest\nBonus: +${boss.xp} XP`);
-        (window.Toast && window.Toast.toast)("Boss defeated", `+${boss.reward} Chest`);
-
-        await render(container);
-      };
+    // Plan filter
+    function getPlans(){
+      try{
+        const P = window.IronQuestPlans;
+        const st = (P && (typeof P.getState==="function" ? P.getState() : (typeof P.state==="function" ? P.state() : null))) || null;
+        return (st && Array.isArray(st.plans)) ? st.plans : [];
+      }catch(_){ return []; }
+    }
+    function populatePlanOptions(){
+      if(!planEl) return;
+      const plans = getPlans();
+      // keep first option
+      planEl.querySelectorAll("option[data-dyn=\"1\"]").forEach(o=>o.remove());
+      plans.forEach(p=>{
+        const opt=document.createElement("option");
+        opt.value = String(p.id||"");
+        opt.textContent = p.name || "Plan";
+        opt.dataset.dyn="1";
+        planEl.appendChild(opt);
+      });
     }
 
-    const ul=container.querySelector("#bossList");
-    ul.innerHTML="";
-    for(const b of BOSSES){
-      const cleared=!!st.cleared[String(b.week)];
-      const li=document.createElement("li");
-      li.innerHTML=`
-        <div class="itemTop">
-          <div>
-            <b>W${b.week} — ${b.name}</b>
-            <div class="hint">Rank ${b.rank} • HP ${b.hp} • Reward ${b.reward} chest</div>
-          </div>
-          <span class="badge ${cleared?"ok":"lock"}">${cleared?"DONE":"LOCKED"}</span>
-        </div>
+    function draw(query, planId){
+      const t = String(query||"").trim().toLowerCase();
+      const pid = String(planId||"");
+      let planSet = null;
+      if(pid){
+        const p = getPlans().find(x=>String(x.id)===pid);
+        if(p && Array.isArray(p.items)) planSet = new Set(p.items.map(x=>String((x && (x.name||x.exercise)) || x).toLowerCase()));
+      }
+      const base = entries.filter(e => {
+        if(planSet){
+          const exn = String(e.exercise||"").toLowerCase();
+          if(!planSet.has(exn)) return false;
+        }
+        return true;
+      });
+      const filtered = !t ? base : base.filter(e => {
+        const name = String(e.exercise || e.type || "").toLowerCase();
+        const mg = String(e.muscleGroup||"").toLowerCase();
+        const sg = String(e.subGroup||"").toLowerCase();
+        return name.includes(t) || mg.includes(t) || sg.includes(t);
+      });
+      const groups = groupByDate(filtered);
+
+      body.innerHTML = groups.length ? groups.map((g,idx)=>`
+        <details class="card soft historyDay" ${idx<2 ? "open" : ""}>
+          <summary class="historyDaySum">
+            <div>
+              <b>${esc(g.date)}</b>
+              <span class="historyCount">${g.items.length} entries</span>
+            </div>
+            <span class="badge">W${esc(g.items[0]?.week ?? "—")}</span>
+          </summary>
+          <ul class="list historyList">
+            ${g.items.map(e=>`
+              <li class="historyItem" data-id="${esc(e.id)}">
+                <div class="historyLeft">
+                  <div class="historyName"><b>${esc(e.exercise || e.type || "Entry")}</b></div>
+                  <div class="small">${esc(e.muscleGroup||"")}${e.subGroup?" / "+esc(e.subGroup):""}${e.dayTag?" • "+esc(e.dayTag):""}</div>
+                  ${String(e.exercise||"").toLowerCase()==="jogging" && e.detail
+                    ? `<div class="small">${esc(e.detail)} • <span class="badge ok" style="margin-left:6px;">+${esc(e.xp||0)} XP</span></div>`
+                    : `<div class="small">${esc(e.sets ?? "—")}×${esc(e.reps ?? "—")} • <span class="badge ok" style="margin-left:6px;">+${esc(e.xp||0)} XP</span></div>`
+                  }
+                </div>
+                <button class="iconBtn danger" title="Delete" data-del="${esc(e.id)}">🗑️</button>
+              </li>
+            `).join("")}
+          </ul>
+        </details>
+      `).join("") : `
+        <div class="card soft"><p class="hint">Keine Einträge gefunden.</p></div>
       `;
-      ul.appendChild(li);
+
+      body.querySelectorAll("[data-del]").forEach(btn=>{
+        btn.addEventListener("click", async ()=>{
+          const idRaw = btn.getAttribute("data-del");
+          const id = (idRaw !== null && idRaw !== "") ? (isNaN(Number(idRaw)) ? idRaw : Number(idRaw)) : idRaw;
+          if(!confirm("Eintrag wirklich löschen?")) return;
+
+          // If this entry is a Run, also delete the corresponding run record so "Last Runs" stays in sync.
+          try{
+            const entryObj = (Array.isArray(entries) ? entries.find(x => String(x.id)===String(id)) : null);
+            const runId = entryObj && (entryObj.runId || entryObj.run_id);
+            const isRun = entryObj && (String(entryObj.exercise||"").toLowerCase()==="jogging" || String(entryObj.type||"").toLowerCase().includes("condition"));
+            if(runId && typeof window.IronDB?.deleteRun === "function"){
+              await window.IronDB.deleteRun(runId);
+            }else if(isRun && typeof window.IronDB?.getAllRuns === "function" && typeof window.IronDB?.deleteRun === "function"){
+              // fallback: match by date + km/min
+              const allRuns = await window.IronDB.getAllRuns();
+              const d = String(entryObj.date||"").slice(0,10);
+              const km = Number(entryObj.km||0);
+              const minutes = Number(entryObj.minutes||0);
+              const hit = (allRuns||[]).find(r => String(r.date||"").slice(0,10)===d && Math.abs(Number(r.km||0)-km)<0.01 && Math.abs(Number(r.minutes||0)-minutes)<0.01);
+              if(hit && hit.id) await window.IronDB.deleteRun(hit.id);
+            }
+          }catch(_){}
+          try{
+            if(typeof window.IronDB?.deleteEntry === "function"){
+              await window.IronDB.deleteEntry(id);
+            }else{
+              throw new Error("deleteEntry not available");
+            }
+            (window.Toast && window.Toast.show) && window.Toast.show("Gelöscht", "Eintrag entfernt.");
+          }catch(e){
+            console.warn(e);
+            alert("Konnte Eintrag nicht löschen.");
+          }
+          await render(root);
+        });
+      });
+    }
+
+    populatePlanOptions();
+    draw("", planEl ? planEl.value : "");
+
+    if(qEl){
+      qEl.addEventListener("input", ()=>draw(qEl.value, planEl ? planEl.value : ""));
+    if(planEl){
+      planEl.addEventListener("change", ()=>draw(qEl.value, planEl.value));
+    }
+    }
+    if(btnToday){
+      btnToday.addEventListener("click", ()=>{
+        if(qEl) qEl.value = "";
+        // open today's group if present
+        draw("", planEl ? planEl.value : "");
+        setTimeout(()=>{
+          try{
+            const day = root.querySelector(`details.historyDay summary + ul`);
+            const target = root.querySelector(`details.historyDay summary`);
+            const details = Array.from(root.querySelectorAll('details.historyDay'))
+              .find(d=>String(d.textContent||"").includes(todayIso));
+            if(details){
+              details.open = true;
+              details.scrollIntoView({ block:"start", behavior:"smooth" });
+            }
+          }catch(_){ }
+        }, 30);
+      });
     }
   }
 
-  window.IronQuestBossArena={ render };
+  window.IronQuestHistory = { render };
 })();
