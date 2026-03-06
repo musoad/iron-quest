@@ -104,7 +104,9 @@
     host.querySelector("#diag_refresh")?.addEventListener("click", ()=>render(host));
   }
 
-  function open(){ alert(["IRON QUEST Diagnostics","URL: " + location.href,"UserAgent: " + navigator.userAgent].join("
-")); }
+  function open(){
+    alert(["IRON QUEST Diagnostics","URL: " + location.href,"UserAgent: " + navigator.userAgent].join("
+"));
+  }
   window.IronQuestDiagnostics = { open, render, smoke };
 })();
