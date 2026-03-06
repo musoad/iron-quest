@@ -1,58 +1,34 @@
 (() => {
   "use strict";
 
-  // Hunter Card (mobile-first)
-
-  // Keep Home as the single place for identity & class.
   const CLASSES = [
     { key: "none", label: "Unassigned" },
     { key: "berserker", label: "Berserker" },
     { key: "assassin", label: "Assassin" },
     { key: "guardian", label: "Guardian" },
     { key: "ranger", label: "Ranger" },
-    { key: "monarch", label: "Monarch" },
+    { key: "monarch", label: "Monarch" }
   ];
-
   const GENDERS = [
     { key: "male", label: "Male" },
-    { key: "female", label: "Female" },
+    { key: "female", label: "Female" }
   ];
 
-  function safe(v, fallback) {
-    return (v === undefined || v === null || v === "") ? fallback : v;
+  function safe(v, fb){ return String(v ?? "").trim() || fb; }
+  function esc(s){ return String(s||"").replace(/[&<>\"]/g, m => ({"&":"&amp;","<":"&lt;",">":"&gt;",'"':"&quot;"}[m])); }
+  function avatarPath(cls, gender) {
+    const c = String(cls || "none").toLowerCase();
+    const safeClass = (c === "unassigned") ? "unassigned" : (c === "none" ? "unassigned" : c);
+    const g = String(gender || "male").toLowerCase() === "female" ? "female" : "male";
+    return `assets/avatars/${safeClass}_${g}.png`;
   }
-
-  function avatarPath(clsKey, genderKey) {
-    // files live at assets/avatars/<class>_<gender>.png
-    // Support both "none" and "unassigned" keys → map to the shipped unassigned_* avatars.
-    const c0 = (clsKey || "none").toLowerCase();
-    const c = (c0 === "none" || c0 === "unassigned") ? "unassigned" : c0;
-    const g = (genderKey || "male").toLowerCase();
-    return `assets/avatars/${c}_${g}.png`;
-  }
-
   function getProfile() {
-    const name = window.IronQuestProfile?.getName?.() || "Hunter";
+    const name = safe(window.IronQuestProfile?.getName?.(), "Hunter");
+    const rawClass = window.IronQuestClasses?.get?.() || window.IronQuestProfile?.getClass?.() || "none";
+    const cls = String(rawClass || "none").toLowerCase();
+    const startDate = window.IronQuestProgression?.getStartDate?.() || window.IronQuestProfile?.getStartDate?.() || window.Utils?.isoDate?.(new Date()) || "";
     const gender = window.IronQuestProfile?.getGender?.() || "male";
-    const startDate = (window.IronQuestProgression?.getStartDate?.() || window.IronQuestProfile?.getStartDate?.() || window.Utils?.isoDate?.(new Date()) || "");
-    const cls = window.IronQuestClasses?.get?.() || window.IronQuestProfile?.getClass?.() || "none";
     return { name, cls, startDate, gender };
-  }
-
-  async function getTotals() {
-    try {
-      const entries = await window.IronDB.getAllEntries();
-      const totalXp = entries.reduce((s, e) => s + Number(e.xp || 0), 0);
-      const lvlObj = window.IronQuestProgression?.levelFromTotalXp?.(totalXp) || { lvl: 1, remainder: totalXp, nextNeed: 100 };
-      const lvl = Number(lvlObj.lvl || 1);
-      const rank = window.IronQuestHunterRank?.compute?.(lvl, totalXp) || "E";
-      const next = Number(lvlObj.nextNeed || 100);
-      const into = Number(lvlObj.remainder || 0);
-      const pct = Math.max(0, Math.min(100, Math.round((into / Math.max(1, next)) * 100)));
-      return { totalXp, lvl, rank, next, into, pct };
-    } catch {
-      return { totalXp: 0, lvl: 1, rank: "E", next: 100, into: 0, pct: 0 };
-    }
   }
 
   async function getTodaySummary(){
@@ -90,40 +66,19 @@
     return out;
   }
 
-  async function computeStreak(){
-    // streak = consecutive days with >= 1 entry up to today
-    const today = window.Utils?.isoDate?.(new Date()) || String(new Date()).slice(0,10);
-    try{
-      const entries = await window.IronDB.getAllEntries();
-      const days = new Set(entries.map(e=>String(e.date||"").slice(0,10)).filter(Boolean));
-      let streak = 0;
-      let cur = new Date(today + "T00:00:00");
-      for(;;){
-        const key = window.Utils?.isoDate?.(cur) || cur.toISOString().slice(0,10);
-        if(!days.has(key)) break;
-        streak++;
-        cur.setDate(cur.getDate()-1);
-      }
-      return streak;
-    }catch{ return 0; }
-  }
-
   function getStats() {
-    // Prefer the Hunter stats system (derived from your logs) if available.
     const hs = window.IronQuestHunterStats?.getSnapshot?.();
     if(hs && hs.stats){
       return hs.order.map(k=>({ k, label: hs.labels[k], v: hs.stats[k].level }));
     }
-    // Fallback
-    const base = { STR: 1, END: 1, AGI: 1, INT: 1, PER: 1, LCK: 1 };
     return [
-      { k: "STR", label: "Strength" },
-      { k: "END", label: "Endurance" },
-      { k: "AGI", label: "Agility" },
-      { k: "INT", label: "Intellect" },
-      { k: "PER", label: "Perception" },
-      { k: "LCK", label: "Luck" },
-    ].map(x => ({ ...x, v: base[x.k] }));
+      { k: "STR", label: "Strength", v: 1 },
+      { k: "END", label: "Endurance", v: 1 },
+      { k: "AGI", label: "Agility", v: 1 },
+      { k: "INT", label: "Intellect", v: 1 },
+      { k: "PER", label: "Perception", v: 1 },
+      { k: "LCK", label: "Luck", v: 1 },
+    ];
   }
 
   function classAura(clsKey) {
@@ -137,26 +92,20 @@
     }
   }
 
-  function htmlEscape(str) {
-    return String(str).replace(/[&<>"]/g, m => ({ "&": "&amp;", "<": "&lt;", ">": "&gt;", '"': "&quot;" }[m]));
-  }
-
   async function render(root) {
+    if(!root) root = document.getElementById("home");
+    if(!root) return;
+
     const p = getProfile();
-    const snap = window.IronQuestState?.getSnapshot?.();
-    const totals = (snap && snap.level) ? (function(){
-      const totalXp = Number(snap.totalXp||0);
-      const lvl = Number(snap.level.lvl||1);
-      const rank = String(snap.rank||"E");
-      const next = Number(snap.level.nextNeed||100);
-      const into = Number(snap.level.remainder||0);
-      const pct = Math.max(0, Math.min(100, Math.round((into / Math.max(1, next)) * 100)));
-      return { totalXp, lvl, rank, next, into, pct };
-    })() : await getTotals();
+    const snap = await window.IronQuestState.getSnapshot();
     const stats = getStats();
     const today = await getTodaySummary();
+    const clsPreview = snap.classState || window.IronQuestClasses.preview(snap.progression.level);
+    const activeClass = clsPreview.active || window.IronQuestClasses.meta("none");
+    const locked = !clsPreview.unlocked;
+    const clsSafe = locked ? "none" : (p.cls || "none");
+    const clsLabel = (CLASSES.find(c => c.key === clsSafe)?.label) || activeClass.name || "Unassigned";
 
-    // Today Plan (weekly schedule from Plans) — shown on Home for 1-tap flow
     let todayPlan = [];
     try{
       const stP = window.IronQuestPlans?.getState?.();
@@ -165,42 +114,38 @@
       const assigned = (pPlan && pPlan.week && Array.isArray(pPlan.week[dayKey])) ? pPlan.week[dayKey] : [];
       const doneSet = new Set((today.names||[]).map(x=>String(x).toLowerCase()));
       todayPlan = assigned.map(name=>{
-        const it = (pPlan.items||[]).find(x=>x.name===name);
-        return {
-          name,
-          sets: it?.sets || "",
-          reps: it?.reps || "",
-          done: doneSet.has(String(name).toLowerCase())
-        };
+        const it = (pPlan?.items||[]).find(x=>x.name===name);
+        return { name, sets: it?.sets || "", reps: it?.reps || "", done: doneSet.has(String(name).toLowerCase()) };
       }).filter(x=>x.name);
-    }catch(_){ todayPlan = []; }
-    const streak = (snap && typeof snap.streak === "number") ? snap.streak : await computeStreak();
+    }catch(_){ }
 
-    const locked = totals.lvl < 10;
-    const clsSafe = locked ? "none" : (p.cls || "none");
-    const clsLabel = (CLASSES.find(c => c.key === clsSafe)?.label) || "Unassigned";
+    const gateReady = snap.week.daysLogged >= 2;
+    const bossReady = snap.week.daysLogged >= 3;
+    const eqBon = window.IronQuestEquipment?.bonuses?.() || { globalXp:1, gateDmg:1, runXp:1 };
 
     root.innerHTML = `
       <div class="hq-wrap">
-        <div class="hq-card" style="--aura:${classAura(clsSafe)}">
+        <div class="hq-card slCard" style="--aura:${classAura(clsSafe)}">
+          <div class="slScan"></div>
           <div class="hq-top">
             <div class="hq-avatar">
               <img id="hqAvatarImg" alt="Avatar" src="${avatarPath(clsSafe, p.gender)}" />
               <div class="hq-aura"></div>
             </div>
             <div class="hq-identity">
-              <div class="hq-name" id="hqName">${htmlEscape(p.name)}</div>
+              <div class="slEyebrow">Hunter Status</div>
+              <div class="hq-name" id="hqName">${esc(p.name)}</div>
               <div class="hq-sub">
-                <span class="pill">${htmlEscape(clsLabel)}</span>
-                <span class="pill">Rank ${htmlEscape(String(totals.rank))}</span>
-                <span class="pill">Lvl ${htmlEscape(String(totals.lvl))}</span>
+                <span class="pill">${esc(clsLabel)}</span>
+                <span class="pill">Rank ${esc(String(snap.rank))}</span>
+                <span class="pill">Lvl ${esc(String(snap.progression.level))}</span>
               </div>
               <div class="hq-xp">
                 <div class="hq-xp-row">
                   <span class="muted">XP</span>
-                  <span class="muted">${totals.into} / ${totals.next} (${totals.pct}%)</span>
+                  <span class="muted">${snap.progression.xp} / ${snap.progression.nextNeed}</span>
                 </div>
-                <div class="hq-xpbar"><div class="hq-xpfill" style="width:${totals.pct}%"></div></div>
+                <div class="hq-xpbar"><div class="hq-xpfill" style="width:${Math.round((snap.progression.xp/Math.max(1,snap.progression.nextNeed))*100)}%"></div></div>
               </div>
             </div>
           </div>
@@ -213,102 +158,97 @@
           </div>
 
           <div class="hq-mini">
-            <div class="hq-miniCard">
-              <div class="hq-miniT">Today</div>
-              <div class="hq-miniV">${today.count} logs • +${today.xp} XP</div>
-              <div class="hq-miniS">Streak: <b>${streak}</b> day${streak===1?"":"s"}</div>
+            <div class="hq-miniCard"><div class="hq-miniT">Today</div><div class="hq-miniV">${today.count} logs • +${today.xp} XP</div><div class="hq-miniS">Streak: <b>${snap.streak}</b> days</div></div>
+            <div class="hq-miniCard"><div class="hq-miniT">Week Progress</div><div class="hq-miniV">${snap.week.daysLogged}/${snap.week.workoutGoal} sessions</div><div class="miniBar"><div class="miniFill" style="width:${Math.round(snap.week.workoutPct*100)}%"></div></div></div>
+            <div class="hq-miniCard"><div class="hq-miniT">XP Goal</div><div class="hq-miniV">${Math.round(snap.totals.weekXp)} / ${snap.week.xpGoal}</div><div class="miniBar"><div class="miniFill" style="width:${Math.round(snap.week.xpPct*100)}%"></div></div></div>
+            <div class="hq-miniCard"><div class="hq-miniT">Next Unlock</div><div class="hq-miniV">${locked ? `Class at Lv ${clsPreview.unlockLevel}` : `Boss & loot`}</div><div class="hq-miniS">${locked ? `${clsPreview.unlockLevel - snap.progression.level} levels left` : `Keep training`}</div></div>
+          </div>
+
+          <div class="hq-grid">
+            <div class="hq-section">
+              <div class="hq-section-title">Class System</div>
+              <div class="classCard ${locked?'locked':''}">
+                <div class="classTop"><b>${esc(activeClass.name || 'Unassigned')}</b><span class="pill small">${locked?'Locked':'Active'}</span></div>
+                <div class="muted">${esc(activeClass.desc || '')}</div>
+                <div class="hq-chips classPerks">${(activeClass.perks||[]).map(x=>`<span class="hq-chip static">${esc(x)}</span>`).join("") || `<span class="hq-chip static">No perk yet</span>`}</div>
+              </div>
             </div>
-            <div class="hq-miniCard">
-              <div class="hq-miniT">Last</div>
-              <div class="hq-miniV"><b>${htmlEscape(today.lastName)}</b></div>
-              <div class="hq-miniS">${htmlEscape(today.lastDate)}</div>
-            </div>
-            <div class="hq-miniCard">
-              <div class="hq-miniT">Next unlock</div>
-              <div class="hq-miniV"><b>${locked ? "Classes" : "—"}</b></div>
-              <div class="hq-miniS">${locked ? "Unlocked at Level 10" : "Keep grinding"}</div>
+            <div class="hq-section">
+              <div class="hq-section-title">Gate / Boss Link</div>
+              <div class="systemBox compact">
+                <div class="sysTitle">[ PROGRESSION ]</div>
+                <div class="sysBody">Gate: ${gateReady ? 'Ready' : 'Need 2 training days'}\nBoss: ${bossReady ? 'Ready' : 'Need 3 training days'}\nEquipment Gate Bonus: x${Number(eqBon.gateDmg||1).toFixed(2)}</div>
+              </div>
+              <div class="hq-actions split">
+                <button class="hq-act" id="hqGoGates">🌀 Gates</button>
+                <button class="hq-act" id="hqGoBoss">👑 Boss</button>
+                <button class="hq-act" id="hqGoEquipment">🧰 Equipment</button>
+              </div>
             </div>
           </div>
 
-          ${todayPlan && todayPlan.length ? `
+          ${todayPlan.length ? `
             <div class="hq-plan">
               <div class="hq-planT">Today Plan</div>
               <div class="hq-planSub muted">${todayPlan.filter(x=>x.done).length} / ${todayPlan.length} done</div>
               <div class="hq-planList">
-                ${todayPlan.map(it=>{
-                  const sub = (it.sets||it.reps) ? `${htmlEscape(it.sets)}x${htmlEscape(it.reps)}` : "";
-                  return `
-                    <div class="hq-planRow ${it.done?"done":""}" data-plan="${htmlEscape(it.name)}" data-sets="${htmlEscape(it.sets)}" data-reps="${htmlEscape(it.reps)}">
-                      <div class="hq-planName">${htmlEscape(it.name)} ${sub?`<span class="pill small">${sub}</span>`:""}</div>
-                      <div class="hq-planBtns">
-                        ${it.done?`<span class="pill small">done</span>`:`<button class="btn small" data-plog>Log</button>`}
-                      </div>
-                    </div>
-                  `;
-                }).join("")}
+                ${todayPlan.map(it=>`<div class="hq-planRow ${it.done?"done":""}" data-plan="${esc(it.name)}" data-sets="${esc(it.sets)}" data-reps="${esc(it.reps)}"><div class="hq-planName">${esc(it.name)} ${(it.sets||it.reps)?`<span class="pill small">${esc(it.sets)}x${esc(it.reps)}</span>`:""}</div><div class="hq-planBtns">${it.done?`<span class="pill small">done</span>`:`<button class="btn small" data-plog>Log</button>`}</div></div>`).join("")}
               </div>
-            </div>
-          ` : ``}
+            </div>` : ``}
 
-
-          ${today.recent && today.recent.length ? `
+          ${today.recent.length ? `
             <div class="hq-recent">
               <div class="hq-recentT">Quick Log (1 tap)</div>
-              <div class="hq-chips">
-                ${today.recent.map(n=>`<button class="hq-chip" data-qlog="${htmlEscape(n)}">${htmlEscape(n)}</button>`).join("")}
-              </div>
-              <div class="hint">Tip: tap an exercise to jump into Log with it preselected.</div>
-            </div>
-          ` : ``}
+              <div class="hq-chips">${today.recent.map(n=>`<button class="hq-chip" data-qlog="${esc(n)}">${esc(n)}</button>`).join("")}</div>
+              <div class="hint">Tap an exercise to jump into Log with it preselected.</div>
+            </div>` : ``}
 
           <div class="hq-grid">
             <div class="hq-section">
               <div class="hq-section-title">Profile</div>
-              <label class="hq-field">
-                <span>Name</span>
-                <input id="hqNameInput" type="text" maxlength="24" value="${htmlEscape(p.name)}" placeholder="Your name" />
-              </label>
+              <label class="hq-field"><span>Name</span><input id="hqNameInput" type="text" maxlength="24" value="${esc(p.name)}"></label>
               <div class="hq-row">
-                <label class="hq-field">
-                  <span>Gender</span>
-                  <select id="hqGender">
-                    ${GENDERS.map(g => `<option value="${g.key}" ${g.key === p.gender ? "selected" : ""}>${g.label}</option>`).join("")}
-                  </select>
-                </label>
-                <label class="hq-field">
-                  <span>Class</span>
-                  <select id="hqClass" ${locked ? "disabled" : ""}>
-                    ${locked
-                      ? `<option value="none" selected>Unassigned</option>`
-                      : CLASSES.map(c => `<option value="${c.key}" ${(c.key === clsSafe) ? "selected" : ""}>${c.label}</option>`).join("")
-                    }
-                  </select>
-                </label>
+                <label class="hq-field"><span>Gender</span><select id="hqGender">${GENDERS.map(g => `<option value="${g.key}" ${g.key===p.gender?"selected":""}>${g.label}</option>`).join("")}</select></label>
+                <label class="hq-field"><span>Class</span><select id="hqClass" ${locked?"disabled":""}>${locked?`<option value="none" selected>Unassigned</option>`:CLASSES.map(c=>`<option value="${c.key}" ${c.key===clsSafe?"selected":""}>${c.label}</option>`).join("")}</select></label>
               </div>
-              <label class="hq-field">
-                <span>Start date</span>
-                <input id="hqStart" type="date" value="${htmlEscape(p.startDate)}" />
-              </label>
-              <div class="hint">${locked ? "Class locked until Level 10." : ""} Tip: You can set start date retroactively.</div>
+              <label class="hq-field"><span>Start date</span><input id="hqStart" type="date" value="${esc(p.startDate)}"></label>
+              <div class="hint">${locked ? `Class locked until Level ${clsPreview.unlockLevel}.` : `Your class perks are active.`}</div>
             </div>
-
             <div class="hq-section">
               <div class="hq-section-title">Stats</div>
-              <div class="hq-stats">
-                ${stats.map(s => `
-                  <div class="hq-stat">
-                    <div class="hq-stat-k">${s.k}</div>
-                    <div class="hq-stat-v">${s.v}</div>
-                    <div class="hq-stat-l">${htmlEscape(s.label)}</div>
-                  </div>
-                `).join("")}
-              </div>
-              <div class="hint">Stats steigen durch Training: Mehrgelenkig→STR, Unilateral→AGI, Core/Conditioning→END, Komplexe→INT, Konsistenz→LCK.</div>
+              <div class="hq-stats">${stats.map(s => `<div class="hq-stat"><div class="hq-stat-k">${s.k}</div><div class="hq-stat-v">${s.v}</div><div class="hq-stat-l">${esc(s.label)}</div></div>`).join("")}</div>
+              <div class="hint">Stats steigen logisch durch Training. Mehrgelenkig→STR, Unilateral→AGI, Core/Conditioning→END, Komplexe→INT, Konsistenz→LCK.</div>
             </div>
           </div>
         </div>
       </div>
     `;
+
+    const go = (tab)=>window.IronQuestNav?.go?.(tab);
+    const setIntentLog = (exerciseName, sets, reps)=>{
+      window.IronQuestIntent = window.IronQuestIntent || {};
+      window.IronQuestIntent.log = {
+        date: window.Utils?.isoDate?.(new Date()) || "",
+        exercise: exerciseName || "",
+        sets: sets || "",
+        reps: reps || ""
+      };
+    };
+
+    root.querySelector("#hqGoLog")?.addEventListener("click", ()=>{ setIntentLog(""); go("log"); });
+    root.querySelector("#hqGoRun")?.addEventListener("click", ()=>go("run"));
+    root.querySelector("#hqGoHistory")?.addEventListener("click", ()=>go("history"));
+    root.querySelector("#hqGoPlans")?.addEventListener("click", ()=>go("plans"));
+    root.querySelector("#hqGoGates")?.addEventListener("click", ()=>go("gates"));
+    root.querySelector("#hqGoBoss")?.addEventListener("click", ()=>go("boss"));
+    root.querySelector("#hqGoEquipment")?.addEventListener("click", ()=>go("equipment"));
+
+    root.querySelectorAll("[data-qlog]").forEach(btn=>btn.addEventListener("click", ()=>{ setIntentLog(btn.getAttribute("data-qlog")||""); go("log"); }));
+    root.querySelectorAll("[data-plog]").forEach(btn=>btn.addEventListener("click", ()=>{
+      const row = btn.closest("[data-plan]");
+      setIntentLog(row?.getAttribute("data-plan")||"", row?.getAttribute("data-sets")||"", row?.getAttribute("data-reps")||"");
+      go("log");
+    }));
 
     const nameInput = root.querySelector("#hqNameInput");
     const genderSel = root.querySelector("#hqGender");
@@ -316,29 +256,6 @@
     const startInput = root.querySelector("#hqStart");
     const avatarImg = root.querySelector("#hqAvatarImg");
     const nameLabel = root.querySelector("#hqName");
-
-    // Quick actions
-    const go = (tab)=>{ try{ window.IronQuestNav?.go?.(tab); }catch(_){} };
-    const setIntentLog = (exerciseName)=>{
-      try{
-        window.IronQuestIntent = window.IronQuestIntent || {};
-        window.IronQuestIntent.log = {
-          date: window.Utils?.isoDate?.(new Date()) || "",
-          exercise: exerciseName || ""
-        };
-      }catch(_){ }
-    };
-    root.querySelector("#hqGoLog")?.addEventListener("click", ()=>{ setIntentLog(""); go("log"); });
-    root.querySelector("#hqGoRun")?.addEventListener("click", ()=>go("run"));
-    root.querySelector("#hqGoHistory")?.addEventListener("click", ()=>go("history"));
-    root.querySelector("#hqGoPlans")?.addEventListener("click", ()=>go("plans"));
-
-    root.querySelectorAll("[data-qlog]").forEach(btn=>{
-      btn.addEventListener("click", ()=>{
-        setIntentLog(btn.getAttribute("data-qlog")||"");
-        go("log");
-      });
-    });
 
     const applyAvatar = () => {
       const cls = classSel?.value || "none";
@@ -348,43 +265,29 @@
       if (card) card.style.setProperty('--aura', classAura(cls));
     };
 
-    if (nameInput) {
-      nameInput.addEventListener("input", () => {
-        const v = safe(nameInput.value.trim(), "Hunter");
-        window.IronQuestProfile?.setName?.(v);
-        if (nameLabel) nameLabel.textContent = v;
-      });
-    }
-    if (genderSel) {
-      genderSel.addEventListener("change", () => {
-        window.IronQuestProfile?.setGender?.(genderSel.value);
-        applyAvatar();
-      });
-    }
-    if (classSel) {
-      classSel.addEventListener("change", () => {
-        // Persist to the real class system (used for multipliers)
-        if(window.IronQuestClasses?.set) window.IronQuestClasses.set(classSel.value);
-        // Backward compat
-        window.IronQuestProfile?.setClass?.(classSel.value);
-        applyAvatar();
-      });
-    }
-    if (startInput) {
-      startInput.addEventListener("change", () => {
-        // Start date drives progression/week numbers
-        if (window.IronQuestProgression?.setStartDate) window.IronQuestProgression.setStartDate(startInput.value);
-        // Backward compat (old key)
-        if (window.IronQuestProfile?.setStartDate) window.IronQuestProfile.setStartDate(startInput.value);
-      });
-    }
+    nameInput?.addEventListener("input", () => {
+      const v = safe(nameInput.value.trim(), "Hunter");
+      window.IronQuestProfile?.setName?.(v);
+      if (nameLabel) nameLabel.textContent = v;
+    });
+    genderSel?.addEventListener("change", () => {
+      window.IronQuestProfile?.setGender?.(genderSel.value);
+      applyAvatar();
+    });
+    classSel?.addEventListener("change", () => {
+      window.IronQuestClasses?.set?.(classSel.value);
+      window.IronQuestProfile?.setClass?.(classSel.value);
+      applyAvatar();
+      render(root);
+    });
+    startInput?.addEventListener("change", () => {
+      window.IronQuestProgression?.setStartDate?.(startInput.value);
+      window.IronQuestProfile?.setStartDate?.(startInput.value);
+    });
 
-    // Enforce class lock (if user downgraded/cleared data)
-    try{
-      if(locked && window.IronQuestClasses?.get && window.IronQuestClasses?.set){
-        if(window.IronQuestClasses.get() !== "none") window.IronQuestClasses.set("none");
-      }
-    }catch(_){ }
+    if(locked && window.IronQuestClasses?.get && window.IronQuestClasses?.set){
+      if(window.IronQuestClasses.get() !== "none") window.IronQuestClasses.set("none");
+    }
   }
 
   window.IronQuestHome = { render };
