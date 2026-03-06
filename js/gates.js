@@ -43,7 +43,7 @@
     const gate=gateOfWeek(week);
     const st=load();
     const rankKey=window.IronQuestHunterRank.compute(snap.progression.level, snap.totals.totalXp);
-    const rankMeta=window.IronQuestHunterRank.meta(rankKey);
+    const rankMeta=(window.IronQuestHunterRank.getMeta ? window.IronQuestHunterRank.getMeta(rankKey) : {name:rankKey,color:"rankE"});
     const dmg=weekDamage(entries, week);
     const hp=gate.hp + Math.max(0, (snap.progression.level-1) * 90);
     const cleared=!!st.clearedWeeks[String(week)];
