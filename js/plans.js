@@ -24,6 +24,7 @@
   }
   function save(st){
     localStorage.setItem(KEY, JSON.stringify(st));
+    try{ if(window.IronQuestState) window.IronQuestState.invalidate(); }catch(_){ }
   }
   function defaultState(){
     return { activeId: "planA", plans: [{ id:"planA", name:"Plan A", items: [], week: normalizeWeek(null) }] };
