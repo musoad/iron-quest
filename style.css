@@ -1259,3 +1259,112 @@ th{
     grid-template-columns:1fr;
   }
 }
+
+/* =========================
+   FIX: MORE MENU + STATS
+   ========================= */
+
+/* More / overlays / sheets */
+.more-sheet,
+#moreSheet,
+.modal,
+.sheet,
+.dialog,
+.overlay,
+.backdrop {
+  z-index: 9999 !important;
+}
+
+.more-sheet,
+#moreSheet,
+.sheet,
+.dialog {
+  position: fixed !important;
+  left: 12px !important;
+  right: 12px !important;
+  bottom: 96px !important;
+  max-width: 760px;
+  margin: 0 auto !important;
+}
+
+/* Bottom nav must stay below overlays */
+.bottom-nav,
+.bottom-tabs,
+.tabbar,
+nav.bottom {
+  z-index: 80 !important;
+}
+
+/* prevent nav buttons from stretching weirdly */
+.bottom-nav button,
+.bottom-tabs button,
+.tabbar button,
+nav.bottom button,
+.bottom-nav a,
+.bottom-tabs a,
+.tabbar a,
+nav.bottom a {
+  width: auto !important;
+  max-width: none !important;
+  transform: none !important;
+}
+
+/* Stats screen zoom fix */
+#stats,
+#stats .card,
+#stats .panel,
+#stats .box,
+#stats .system-card,
+#stats .section-card {
+  max-width: 100% !important;
+  width: 100% !important;
+}
+
+/* Stats cards in proper 3-column layout */
+#stats .stats-grid,
+#stats .grid-3,
+.stats-grid {
+  display: grid !important;
+  grid-template-columns: repeat(3, minmax(0, 1fr)) !important;
+  gap: 10px !important;
+  align-items: stretch !important;
+}
+
+/* prevent giant cards */
+#stats .stat,
+#stats .stat-card,
+#stats .attribute-card,
+#stats .attr {
+  padding: 12px 10px !important;
+  min-height: unset !important;
+  transform: none !important;
+}
+
+/* canvases/charts must not overflow */
+#stats canvas,
+canvas {
+  max-width: 100% !important;
+  height: auto !important;
+  display: block !important;
+}
+
+/* generic anti-zoom / anti-overflow fix */
+#stats *,
+#home * {
+  max-width: 100%;
+}
+
+/* mobile safety */
+@media (max-width: 430px){
+  #stats .stats-grid,
+  #stats .grid-3,
+  .stats-grid {
+    grid-template-columns: repeat(3, minmax(0, 1fr)) !important;
+    gap: 8px !important;
+  }
+
+  #stats .stat-value,
+  #stats .attr-value {
+    font-size: 18px !important;
+  }
+}
