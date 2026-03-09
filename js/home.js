@@ -16,12 +16,14 @@
 
   function safe(v, fb){ return String(v ?? "").trim() || fb; }
   function esc(s){ return String(s||"").replace(/[&<>\"]/g, m => ({"&":"&amp;","<":"&lt;",">":"&gt;",'"':"&quot;"}[m])); }
+
   function avatarPath(cls, gender) {
     const c = String(cls || "none").toLowerCase();
     const safeClass = (c === "unassigned") ? "unassigned" : (c === "none" ? "unassigned" : c);
     const g = String(gender || "male").toLowerCase() === "female" ? "female" : "male";
     return `assets/avatars/${safeClass}_${g}.png`;
   }
+
   function getProfile() {
     const name = safe(window.IronQuestProfile?.getName?.(), "Hunter");
     const rawClass = window.IronQuestClasses?.get?.() || window.IronQuestProfile?.getClass?.() || "none";
@@ -81,6 +83,18 @@
     ];
   }
 
+  function statSubLabel(key){
+    switch(String(key || "").toUpperCase()){
+      case "STR": return "Power";
+      case "END": return "Stamina";
+      case "AGI": return "Speed";
+      case "INT": return "Focus";
+      case "PER": return "Awareness";
+      case "LCK": return "Fortune";
+      default: return "";
+    }
+  }
+
   function classAura(clsKey) {
     switch ((clsKey || "none").toLowerCase()) {
       case "berserker": return "rgba(255,90,30,.40)";
@@ -117,7 +131,7 @@
         const it = (pPlan?.items||[]).find(x=>x.name===name);
         return { name, sets: it?.sets || "", reps: it?.reps || "", done: doneSet.has(String(name).toLowerCase()) };
       }).filter(x=>x.name);
-    }catch(_){ }
+    }catch(_){}
 
     const gateReady = snap.week.daysLogged >= 2;
     const bossReady = snap.week.daysLogged >= 3;
@@ -127,25 +141,84 @@
       <div class="hq-wrap">
         <div class="hq-card slCard" style="--aura:${classAura(clsSafe)}">
           <div class="slScan"></div>
+
           <div class="hq-top">
             <div class="hq-avatar">
               <img id="hqAvatarImg" alt="Avatar" src="${avatarPath(clsSafe, p.gender)}" />
               <div class="hq-aura"></div>
             </div>
+
             <div class="hq-identity">
               <div class="slEyebrow">Hunter Status</div>
               <div class="hq-name" id="hqName">${esc(p.name)}</div>
+
               <div class="hq-sub">
                 <span class="pill">${esc(clsLabel)}</span>
                 <span class="pill">Rank ${esc(String(snap.rank))}</span>
                 <span class="pill">Lvl ${esc(String(snap.progression.level))}</span>
               </div>
+
               <div class="hq-xp">
                 <div class="hq-xp-row">
                   <span class="muted">XP</span>
                   <span class="muted">${snap.progression.xp} / ${snap.progression.nextNeed}</span>
                 </div>
-                <div class="hq-xpbar"><div class="hq-xpfill" style="width:${Math.round((snap.progression.xp/Math.max(1,snap.progression.nextNeed))*100)}%"></div></div>
+                <div class="hq-xpbar">
+                  <div class="hq-xpfill" style="width:${Math.round((snap.progression.xp/Math.max(1,snap.progression.nextNeed))*100)}%"></div>
+                </div>
+              </div>
+
+              <div
+                style="
+                  display:grid;
+                  grid-template-columns:repeat(3, minmax(0,1fr));
+                  gap:10px;
+                  margin-top:14px;
+                "
+              >
+                ${stats.map(s => `
+                  <div
+                    style="
+                      background:linear-gradient(180deg, rgba(18,25,26,.96), rgba(11,16,17,.98));
+                      border:1px solid rgba(95,130,129,.20);
+                      border-radius:16px;
+                      padding:12px 8px;
+                      text-align:center;
+                      box-shadow:inset 0 1px 0 rgba(255,255,255,.02);
+                    "
+                  >
+                    <div
+                      style="
+                        display:block;
+                        font-size:11px;
+                        font-weight:800;
+                        letter-spacing:.06em;
+                        text-transform:uppercase;
+                        color:#9fb2ae;
+                        margin-bottom:6px;
+                      "
+                    >${esc(s.k)}</div>
+
+                    <div
+                      style="
+                        display:block;
+                        font-size:22px;
+                        line-height:1;
+                        font-weight:900;
+                        color:#f4fcf8;
+                      "
+                    >${esc(String(s.v))}</div>
+
+                    <div
+                      style="
+                        display:block;
+                        margin-top:6px;
+                        font-size:11px;
+                        color:#7b8d89;
+                      "
+                    >${esc(statSubLabel(s.k))}</div>
+                  </div>
+                `).join("")}
               </div>
             </div>
           </div>
@@ -158,26 +231,51 @@
           </div>
 
           <div class="hq-mini">
-            <div class="hq-miniCard"><div class="hq-miniT">Today</div><div class="hq-miniV">${today.count} logs • +${today.xp} XP</div><div class="hq-miniS">Streak: <b>${snap.streak}</b> days</div></div>
-            <div class="hq-miniCard"><div class="hq-miniT">Week Progress</div><div class="hq-miniV">${snap.week.daysLogged}/${snap.week.workoutGoal} sessions</div><div class="miniBar"><div class="miniFill" style="width:${Math.round(snap.week.workoutPct*100)}%"></div></div></div>
-            <div class="hq-miniCard"><div class="hq-miniT">XP Goal</div><div class="hq-miniV">${Math.round(snap.totals.weekXp)} / ${snap.week.xpGoal}</div><div class="miniBar"><div class="miniFill" style="width:${Math.round(snap.week.xpPct*100)}%"></div></div></div>
-            <div class="hq-miniCard"><div class="hq-miniT">Next Unlock</div><div class="hq-miniV">${locked ? `Class at Lv ${clsPreview.unlockLevel}` : `Boss & loot`}</div><div class="hq-miniS">${locked ? `${clsPreview.unlockLevel - snap.progression.level} levels left` : `Keep training`}</div></div>
+            <div class="hq-miniCard">
+              <div class="hq-miniT">Today</div>
+              <div class="hq-miniV">${today.count} logs • +${today.xp} XP</div>
+              <div class="hq-miniS">Streak: <b>${snap.streak}</b> days</div>
+            </div>
+
+            <div class="hq-miniCard">
+              <div class="hq-miniT">Week Progress</div>
+              <div class="hq-miniV">${snap.week.daysLogged}/${snap.week.workoutGoal} sessions</div>
+              <div class="miniBar"><div class="miniFill" style="width:${Math.round(snap.week.workoutPct*100)}%"></div></div>
+            </div>
+
+            <div class="hq-miniCard">
+              <div class="hq-miniT">XP Goal</div>
+              <div class="hq-miniV">${Math.round(snap.totals.weekXp)} / ${snap.week.xpGoal}</div>
+              <div class="miniBar"><div class="miniFill" style="width:${Math.round(snap.week.xpPct*100)}%"></div></div>
+            </div>
+
+            <div class="hq-miniCard">
+              <div class="hq-miniT">Next Unlock</div>
+              <div class="hq-miniV">${locked ? `Class at Lv ${clsPreview.unlockLevel}` : `Boss & loot`}</div>
+              <div class="hq-miniS">${locked ? `${clsPreview.unlockLevel - snap.progression.level} levels left` : `Keep training`}</div>
+            </div>
           </div>
 
           <div class="hq-grid">
             <div class="hq-section">
               <div class="hq-section-title">Class System</div>
-              <div class="classCard ${locked?'locked':''}">
-                <div class="classTop"><b>${esc(activeClass.name || 'Unassigned')}</b><span class="pill small">${locked?'Locked':'Active'}</span></div>
-                <div class="muted">${esc(activeClass.desc || '')}</div>
-                <div class="hq-chips classPerks">${(activeClass.perks||[]).map(x=>`<span class="hq-chip static">${esc(x)}</span>`).join("") || `<span class="hq-chip static">No perk yet</span>`}</div>
+              <div class="classCard ${locked ? 'locked' : ''}">
+                <div class="classTop">
+                  <b>${esc(activeClass.name || "Unassigned")}</b>
+                  <span class="pill small">${locked ? "Locked" : "Active"}</span>
+                </div>
+                <div class="muted">${esc(activeClass.desc || "")}</div>
+                <div class="hq-chips classPerks">
+                  ${(activeClass.perks||[]).map(x=>`<span class="hq-chip static">${esc(x)}</span>`).join("") || `<span class="hq-chip static">No perk yet</span>`}
+                </div>
               </div>
             </div>
+
             <div class="hq-section">
               <div class="hq-section-title">Gate / Boss Link</div>
               <div class="systemBox compact">
                 <div class="sysTitle">[ PROGRESSION ]</div>
-                <div class="sysBody">Gate: ${gateReady ? 'Ready' : 'Need 2 training days'}\nBoss: ${bossReady ? 'Ready' : 'Need 3 training days'}\nEquipment Gate Bonus: x${Number(eqBon.gateDmg||1).toFixed(2)}</div>
+                <div class="sysBody">Gate: ${gateReady ? "Ready" : "Need 2 training days"}\nBoss: ${bossReady ? "Ready" : "Need 3 training days"}\nEquipment Gate Bonus: x${Number(eqBon.gateDmg||1).toFixed(2)}</div>
               </div>
               <div class="hq-actions split">
                 <button class="hq-act" id="hqGoGates">🌀 Gates</button>
@@ -192,31 +290,69 @@
               <div class="hq-planT">Today Plan</div>
               <div class="hq-planSub muted">${todayPlan.filter(x=>x.done).length} / ${todayPlan.length} done</div>
               <div class="hq-planList">
-                ${todayPlan.map(it=>`<div class="hq-planRow ${it.done?"done":""}" data-plan="${esc(it.name)}" data-sets="${esc(it.sets)}" data-reps="${esc(it.reps)}"><div class="hq-planName">${esc(it.name)} ${(it.sets||it.reps)?`<span class="pill small">${esc(it.sets)}x${esc(it.reps)}</span>`:""}</div><div class="hq-planBtns">${it.done?`<span class="pill small">done</span>`:`<button class="btn small" data-plog>Log</button>`}</div></div>`).join("")}
+                ${todayPlan.map(it => `
+                  <div class="hq-planRow ${it.done ? "done" : ""}" data-plan="${esc(it.name)}" data-sets="${esc(it.sets)}" data-reps="${esc(it.reps)}">
+                    <div class="hq-planName">
+                      ${esc(it.name)}
+                      ${(it.sets || it.reps) ? `<span class="pill small">${esc(it.sets)}x${esc(it.reps)}</span>` : ""}
+                    </div>
+                    <div class="hq-planBtns">
+                      ${it.done ? `<span class="pill small">done</span>` : `<button class="btn small" data-plog>Log</button>`}
+                    </div>
+                  </div>
+                `).join("")}
               </div>
-            </div>` : ``}
+            </div>
+          ` : ""}
 
           ${today.recent.length ? `
             <div class="hq-recent">
               <div class="hq-recentT">Quick Log (1 tap)</div>
-              <div class="hq-chips">${today.recent.map(n=>`<button class="hq-chip" data-qlog="${esc(n)}">${esc(n)}</button>`).join("")}</div>
+              <div class="hq-chips">
+                ${today.recent.map(n => `<button class="hq-chip" data-qlog="${esc(n)}">${esc(n)}</button>`).join("")}
+              </div>
               <div class="hint">Tap an exercise to jump into Log with it preselected.</div>
-            </div>` : ``}
+            </div>
+          ` : ""}
 
           <div class="hq-grid">
             <div class="hq-section">
               <div class="hq-section-title">Profile</div>
-              <label class="hq-field"><span>Name</span><input id="hqNameInput" type="text" maxlength="24" value="${esc(p.name)}"></label>
+
+              <label class="hq-field">
+                <span>Name</span>
+                <input id="hqNameInput" type="text" maxlength="24" value="${esc(p.name)}">
+              </label>
+
               <div class="hq-row">
-                <label class="hq-field"><span>Gender</span><select id="hqGender">${GENDERS.map(g => `<option value="${g.key}" ${g.key===p.gender?"selected":""}>${g.label}</option>`).join("")}</select></label>
-                <label class="hq-field"><span>Class</span><select id="hqClass" ${locked?"disabled":""}>${locked?`<option value="none" selected>Unassigned</option>`:CLASSES.map(c=>`<option value="${c.key}" ${c.key===clsSafe?"selected":""}>${c.label}</option>`).join("")}</select></label>
+                <label class="hq-field">
+                  <span>Gender</span>
+                  <select id="hqGender">
+                    ${GENDERS.map(g => `<option value="${g.key}" ${g.key===p.gender ? "selected" : ""}>${g.label}</option>`).join("")}
+                  </select>
+                </label>
+
+                <label class="hq-field">
+                  <span>Class</span>
+                  <select id="hqClass" ${locked ? "disabled" : ""}>
+                    ${locked
+                      ? `<option value="none" selected>Unassigned</option>`
+                      : CLASSES.map(c => `<option value="${c.key}" ${c.key===clsSafe ? "selected" : ""}>${c.label}</option>`).join("")
+                    }
+                  </select>
+                </label>
               </div>
-              <label class="hq-field"><span>Start date</span><input id="hqStart" type="date" value="${esc(p.startDate)}"></label>
+
+              <label class="hq-field">
+                <span>Start date</span>
+                <input id="hqStart" type="date" value="${esc(p.startDate)}">
+              </label>
+
               <div class="hint">${locked ? `Class locked until Level ${clsPreview.unlockLevel}.` : `Your class perks are active.`}</div>
             </div>
+
             <div class="hq-section">
               <div class="hq-section-title">Stats</div>
-              <div class="hq-stats">${stats.map(s => `<div class="hq-stat"><div class="hq-stat-k">${s.k}</div><div class="hq-stat-v">${s.v}</div><div class="hq-stat-l">${esc(s.label)}</div></div>`).join("")}</div>
               <div class="hint">Stats steigen logisch durch Training. Mehrgelenkig→STR, Unilateral→AGI, Core/Conditioning→END, Komplexe→INT, Konsistenz→LCK.</div>
             </div>
           </div>
@@ -225,6 +361,7 @@
     `;
 
     const go = (tab)=>window.IronQuestNav?.go?.(tab);
+
     const setIntentLog = (exerciseName, sets, reps)=>{
       window.IronQuestIntent = window.IronQuestIntent || {};
       window.IronQuestIntent.log = {
@@ -243,10 +380,18 @@
     root.querySelector("#hqGoBoss")?.addEventListener("click", ()=>go("boss"));
     root.querySelector("#hqGoEquipment")?.addEventListener("click", ()=>go("equipment"));
 
-    root.querySelectorAll("[data-qlog]").forEach(btn=>btn.addEventListener("click", ()=>{ setIntentLog(btn.getAttribute("data-qlog")||""); go("log"); }));
-    root.querySelectorAll("[data-plog]").forEach(btn=>btn.addEventListener("click", ()=>{
+    root.querySelectorAll("[data-qlog]").forEach(btn => btn.addEventListener("click", ()=>{
+      setIntentLog(btn.getAttribute("data-qlog") || "");
+      go("log");
+    }));
+
+    root.querySelectorAll("[data-plog]").forEach(btn => btn.addEventListener("click", ()=>{
       const row = btn.closest("[data-plan]");
-      setIntentLog(row?.getAttribute("data-plan")||"", row?.getAttribute("data-sets")||"", row?.getAttribute("data-reps")||"");
+      setIntentLog(
+        row?.getAttribute("data-plan") || "",
+        row?.getAttribute("data-sets") || "",
+        row?.getAttribute("data-reps") || ""
+      );
       go("log");
     }));
 
@@ -261,8 +406,8 @@
       const cls = classSel?.value || "none";
       const gender = genderSel?.value || "male";
       if (avatarImg) avatarImg.src = avatarPath(cls, gender);
-      const card = root.querySelector('.hq-card');
-      if (card) card.style.setProperty('--aura', classAura(cls));
+      const card = root.querySelector(".hq-card");
+      if (card) card.style.setProperty("--aura", classAura(cls));
     };
 
     nameInput?.addEventListener("input", () => {
@@ -270,16 +415,19 @@
       window.IronQuestProfile?.setName?.(v);
       if (nameLabel) nameLabel.textContent = v;
     });
+
     genderSel?.addEventListener("change", () => {
       window.IronQuestProfile?.setGender?.(genderSel.value);
       applyAvatar();
     });
+
     classSel?.addEventListener("change", () => {
       window.IronQuestClasses?.set?.(classSel.value);
       window.IronQuestProfile?.setClass?.(classSel.value);
       applyAvatar();
       render(root);
     });
+
     startInput?.addEventListener("change", () => {
       window.IronQuestProgression?.setStartDate?.(startInput.value);
       window.IronQuestProfile?.setStartDate?.(startInput.value);
