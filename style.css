@@ -818,3 +818,46 @@ button.secondary,.btn.secondary{
   #stats .stats-grid,
   #stats .attributes-grid{gap:8px}
 }
+
+/* ---------- HOME STATS GRID (ADD TO END OF YOUR style.css) ---------- */
+
+.home-stats-grid{
+  display:grid;
+  grid-template-columns:repeat(3, minmax(0,1fr));
+  gap:10px;
+  margin-top:14px;
+}
+
+.home-stat-card{
+  background:linear-gradient(180deg, rgba(18,25,26,.96), rgba(11,16,17,.98));
+  border:1px solid rgba(95,130,129,.20);
+  border-radius:16px;
+  padding:12px 8px;
+  text-align:center;
+  box-shadow:inset 0 1px 0 rgba(255,255,255,.02);
+}
+
+.home-stat-label{
+  display:block;
+  font-size:11px;
+  font-weight:800;
+  letter-spacing:.06em;
+  text-transform:uppercase;
+  color:#9fb2ae;
+  margin-bottom:6px;
+}
+
+.home-stat-value{
+  display:block;
+  font-size:22px;
+  line-height:1;
+  font-weight:900;
+  color:#f4fcf8;
+}
+
+.home-stat-sub{
+  display:block;
+  margin-top:6px;
+  font-size:11px;
+  color:#7b8d89;
+}
