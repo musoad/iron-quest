@@ -1,92 +1,121 @@
 (() => {
   "use strict";
 
-  const EXERCISES = [
-    { name:"Jumping Jacks", type:"NEAT", muscleGroup:"Warm-up", subGroup:"Ganzkörper", equipment:"Ohne", difficulty:1, baseXP:6, recSets:1, recReps:20,
-      description:"Warm-up: 20 Jumping Jacks zum Aktivieren von Kreislauf und Ganzkörper." },
-    { name:"Air Squats", type:"NEAT", muscleGroup:"Warm-up", subGroup:"Unterkörper", equipment:"Ohne", difficulty:1, baseXP:6, recSets:1, recReps:10,
-      description:"Warm-up: 10 Air Squats zur Aktivierung von Quadrizeps und Glutes." },
-    { name:"Hip Hinges", type:"NEAT", muscleGroup:"Warm-up", subGroup:"Unterkörper", equipment:"Ohne", difficulty:1, baseXP:6, recSets:1, recReps:10,
-      description:"Warm-up: 10 Hip Hinges für Hüfte und hintere Kette." },
-    { name:"Armkreisen", type:"NEAT", muscleGroup:"Warm-up", subGroup:"Oberkörper", equipment:"Ohne", difficulty:1, baseXP:5, recSets:1, recReps:10,
-      description:"Warm-up: 10 Armkreisen pro Richtung für Schulterbeweglichkeit." },
-    { name:"Ausfallschritte", type:"NEAT", muscleGroup:"Warm-up", subGroup:"Unterkörper", equipment:"Ohne", difficulty:1, baseXP:6, recSets:1, recReps:10,
-      description:"Warm-up: 10 Ausfallschritte für Stabilität, Balance und Hüftöffnung." },
+  const KEY = "iq_plans_v12";
+  const WEEK_KEYS = ["mon","tue","wed","thu","fri","sat","sun"];
 
-    { name:"Bulgarian Split Squat", type:"Unilateral", muscleGroup:"Unterkörper", subGroup:"Quadrizeps / Glutes", equipment:"Kurzhanteln", difficulty:5, baseXP:24, recSets:4, recReps:10,
-      description:"Montag Unterkörper A: 4×8–10. Kontrolliert absenken, stabil hochdrücken." },
-    { name:"Romanian Deadlift", type:"Mehrgelenkig", muscleGroup:"Unterkörper", subGroup:"Hamstrings / Glutes", equipment:"Kurzhanteln", difficulty:4, baseXP:26, recSets:4, recReps:10,
-      description:"Montag Unterkörper A: 4×8–10. Hüfte weit nach hinten, Rücken neutral." },
-    { name:"Goblet Squat", type:"Mehrgelenkig", muscleGroup:"Unterkörper", subGroup:"Quadrizeps", equipment:"Kurzhanteln", difficulty:4, baseXP:24, recSets:4, recReps:10,
-      description:"Unterkörper A/B: 3–4×8–12. Hantel vor der Brust, tiefe saubere Kniebeuge." },
-    { name:"Hip Thrust", type:"Mehrgelenkig", muscleGroup:"Unterkörper", subGroup:"Glutes", equipment:"Kurzhanteln", difficulty:3, baseXP:22, recSets:3, recReps:12,
-      description:"Unterkörper A/B: 3×10–12. Oben kurz halten, Glutes aktiv anspannen." },
-    { name:"Plank", type:"Core", muscleGroup:"Core", subGroup:"Anterior Core", equipment:"Ohne", difficulty:3, baseXP:16, recSets:3, recReps:60,
-      description:"Montag Finish: 3×45–60 s. Gerade Linie halten, Bauch fest." },
-
-    { name:"Dumbbell Row", type:"Mehrgelenkig", muscleGroup:"Oberkörper", subGroup:"Rücken", equipment:"Kurzhanteln", difficulty:4, baseXP:24, recSets:4, recReps:12,
-      description:"Dienstag Oberkörper A: 4×8–12. Schulterblatt kontrolliert nach hinten ziehen." },
-    { name:"Push-ups", type:"Mehrgelenkig", muscleGroup:"Oberkörper", subGroup:"Brust", equipment:"Ohne", difficulty:3, baseXP:20, recSets:4, recReps:12,
-      description:"Oberkörper A/B: 3–4 Sätze nahe Muskelversagen mit sauberer Körperspannung." },
-    { name:"Shoulder Press", type:"Mehrgelenkig", muscleGroup:"Oberkörper", subGroup:"Schultern", equipment:"Kurzhanteln", difficulty:4, baseXP:22, recSets:3, recReps:10,
-      description:"Oberkörper A/B: 3×8–10. Überkopf drücken ohne Hohlkreuz." },
-    { name:"Renegade Row", type:"Komplexe", muscleGroup:"Oberkörper", subGroup:"Rücken / Core", equipment:"Kurzhanteln", difficulty:5, baseXP:26, recSets:4, recReps:10,
-      description:"Oberkörper A/B: 3–4×8–10. Rudern aus der Plank mit ruhiger Hüfte." },
-    { name:"Side Plank", type:"Core", muscleGroup:"Core", subGroup:"Obliques", equipment:"Ohne", difficulty:3, baseXP:16, recSets:3, recReps:40,
-      description:"Dienstag Oberkörper A: 3×30–40 s Seitstütz sauber halten." },
-    { name:"Seitheben", type:"Unilateral", muscleGroup:"Oberkörper", subGroup:"Schultern", equipment:"Kurzhanteln", difficulty:2, baseXP:14, recSets:3, recReps:15,
-      description:"Optional Oberkörper A: 3×12–15 für seitliche Schulter." },
-
-    { name:"Single-Leg Romanian Deadlift", type:"Unilateral", muscleGroup:"Unterkörper", subGroup:"Hamstrings / Glutes", equipment:"Kurzhanteln", difficulty:5, baseXP:23, recSets:3, recReps:10,
-      description:"Donnerstag Unterkörper B: 3×10. Balance halten, Hüfte sauber nach hinten." },
-    { name:"Reverse Lunge", type:"Unilateral", muscleGroup:"Unterkörper", subGroup:"Quadrizeps / Glutes", equipment:"Kurzhanteln", difficulty:4, baseXP:22, recSets:3, recReps:10,
-      description:"Donnerstag Unterkörper B: 3×10 je Seite. Kontrolliert zurück und hoch." },
-    { name:"Hollow Hold", type:"Core", muscleGroup:"Core", subGroup:"Anterior Core", equipment:"Ohne", difficulty:4, baseXP:18, recSets:3, recReps:40,
-      description:"Donnerstag Unterkörper B: 3×30–40 s. Rücken flach am Boden halten." },
-    { name:"Calf Raises", type:"Unilateral", muscleGroup:"Unterkörper", subGroup:"Waden", equipment:"Ohne", difficulty:2, baseXP:12, recSets:3, recReps:20,
-      description:"Optional Unterkörper B: 3×15–20 mit voller Bewegungsamplitude." },
-
-    { name:"Floor Press (Kurzhantel)", type:"Mehrgelenkig", muscleGroup:"Oberkörper", subGroup:"Brust", equipment:"Kurzhanteln", difficulty:4, baseXP:24, recSets:4, recReps:10,
-      description:"Freitag Oberkörper B: 4×8–10. Kräftiger Brust-/Trizeps-Press vom Boden." },
-    { name:"Russian Twist", type:"Core", muscleGroup:"Core", subGroup:"Rotation", equipment:"Ohne", difficulty:3, baseXP:15, recSets:3, recReps:20,
-      description:"Freitag Oberkörper B: 3×20. Kontrollierte Rotation mit Spannung im Bauch." },
-    { name:"Farmer Carry", type:"Conditioning", muscleGroup:"Oberkörper", subGroup:"Grip / Core", equipment:"Kurzhanteln", difficulty:3, baseXP:18, recSets:3, recReps:40,
-      description:"Optional Oberkörper B: 3×30–40 s schwer tragen, Rumpf fest." },
-
-    { name:"Joggen Intervall 4×4", type:"Conditioning", muscleGroup:"Laufen", subGroup:"Intervall", equipment:"Ohne", difficulty:4, baseXP:24, recSets:4, recReps:4,
-      description:"Montag VO₂max: 10 Minuten einlaufen, 4×4 Minuten schnell mit 2 Minuten locker, 5 Minuten auslaufen." },
-    { name:"Joggen locker Zone 2", type:"Conditioning", muscleGroup:"Laufen", subGroup:"Locker", equipment:"Ohne", difficulty:2, baseXP:20, recSets:1, recReps:40,
-      description:"Mittwoch: 30–45 Minuten locker. Du kannst noch sprechen ohne außer Atem zu sein." },
-    { name:"Lockerer Lauf", type:"Conditioning", muscleGroup:"Laufen", subGroup:"Optional", equipment:"Ohne", difficulty:1, baseXP:14, recSets:1, recReps:25,
-      description:"Samstag optional: 20–30 Minuten lockeres Joggen zur aktiven Regeneration." },
-    { name:"Mobility / Dehnen", type:"NEAT", muscleGroup:"Recovery", subGroup:"Mobility", equipment:"Ohne", difficulty:1, baseXP:8, recSets:1, recReps:20,
-      description:"Samstag optional: Mobility oder Dehnen für Recovery und Beweglichkeit." }
-  ];
-
-  const MUSCLE_GROUPS = Array.from(new Set(EXERCISES.map(e => e.muscleGroup))).sort();
-  const SUB_GROUPS = Array.from(new Set(EXERCISES.map(e => `${e.muscleGroup}|||${e.subGroup}`))).sort();
-
-  function byGroup(){
-    const map = {};
-    for(const e of EXERCISES){
-      const k = `${e.muscleGroup}|||${e.subGroup}`;
-      map[k] = map[k] || [];
-      map[k].push(e);
+  function normalizeWeek(w){
+    const src = (w && typeof w === "object") ? w : {};
+    const out = {};
+    for(const k of WEEK_KEYS){
+      const arr = Array.isArray(src[k]) ? src[k].map(x=>String(x||"").trim()).filter(Boolean) : [];
+      out[k] = Array.from(new Set(arr));
     }
-    for(const k of Object.keys(map)) map[k].sort((a,b)=>a.name.localeCompare(b.name));
-    return map;
+    return out;
   }
 
-  function list(){ return EXERCISES.slice(); }
-  function findByName(name){ return EXERCISES.find(e => e.name === name) || null; }
+  function defaultPlans(){
+    return [
+      {
+        id:"planA",
+        name:"Plan A",
+        note:"Montag Unterkörper A + Dienstag Oberkörper A • Joggen separat im Run-Tab",
+        items:[
+          { name:"Bulgarian Split Squat", sets:"4", reps:"8-10", unit:"Unterkörper A" },
+          { name:"Romanian Deadlift", sets:"4", reps:"8-10", unit:"Unterkörper A" },
+          { name:"Goblet Squat", sets:"3", reps:"10-12", unit:"Unterkörper A" },
+          { name:"Hip Thrust", sets:"3", reps:"10-12", unit:"Unterkörper A" },
+          { name:"Plank", sets:"3", reps:"45-60 s", unit:"Unterkörper A" },
+          { name:"Dumbbell Row", sets:"4", reps:"8-12", unit:"Oberkörper A" },
+          { name:"Push-ups", sets:"4", reps:"nahe Muskelversagen", unit:"Oberkörper A" },
+          { name:"Shoulder Press", sets:"3", reps:"8-10", unit:"Oberkörper A" },
+          { name:"Renegade Row", sets:"3", reps:"8-10", unit:"Oberkörper A" },
+          { name:"Side Plank", sets:"3", reps:"30-40 s", unit:"Oberkörper A" },
+          { name:"Seitheben", sets:"3", reps:"12-15", unit:"Optional" }
+        ],
+        week: normalizeWeek({
+          mon:["Bulgarian Split Squat","Romanian Deadlift","Goblet Squat","Hip Thrust","Plank"],
+          tue:["Dumbbell Row","Push-ups","Shoulder Press","Renegade Row","Side Plank","Seitheben"]
+        })
+      },
+      {
+        id:"planB",
+        name:"Plan B",
+        note:"Donnerstag Unterkörper B + Freitag Oberkörper B • Samstag optional Lauf/Mobility",
+        items:[
+          { name:"Goblet Squat", sets:"4", reps:"8-10", unit:"Unterkörper B" },
+          { name:"Single-Leg Romanian Deadlift", sets:"3", reps:"10", unit:"Unterkörper B" },
+          { name:"Reverse Lunge", sets:"3", reps:"10 je Seite", unit:"Unterkörper B" },
+          { name:"Hip Thrust", sets:"3", reps:"12", unit:"Unterkörper B" },
+          { name:"Hollow Hold", sets:"3", reps:"30-40 s", unit:"Unterkörper B" },
+          { name:"Calf Raises", sets:"3", reps:"15-20", unit:"Optional" },
+          { name:"Renegade Row", sets:"4", reps:"8-10", unit:"Oberkörper B" },
+          { name:"Floor Press (Kurzhantel)", sets:"4", reps:"8-10", unit:"Oberkörper B" },
+          { name:"Shoulder Press", sets:"3", reps:"10", unit:"Oberkörper B" },
+          { name:"Push-ups", sets:"3", reps:"max", unit:"Oberkörper B" },
+          { name:"Russian Twist", sets:"3", reps:"20", unit:"Oberkörper B" },
+          { name:"Farmer Carry", sets:"3", reps:"30-40 s", unit:"Optional" }
+        ],
+        week: normalizeWeek({
+          thu:["Goblet Squat","Single-Leg Romanian Deadlift","Reverse Lunge","Hip Thrust","Hollow Hold","Calf Raises"],
+          fri:["Renegade Row","Floor Press (Kurzhantel)","Shoulder Press","Push-ups","Russian Twist","Farmer Carry"]
+        })
+      }
+    ];
+  }
 
-  window.IronQuestExercises = {
-    EXERCISES,
-    TYPES:["Mehrgelenkig","Unilateral","Core","Conditioning","Komplexe","NEAT"],
-    MUSCLE_GROUPS,
-    SUB_GROUPS,
-    byGroup,
-    list,
-    findByName
-  };
+  function defaultState(){ return { activeId:"planA", plans: defaultPlans() }; }
+  function load(){ try{ return JSON.parse(localStorage.getItem(KEY) || "null"); }catch(_){ return null; } }
+  function save(st){ localStorage.setItem(KEY, JSON.stringify(st)); try{ window.IronQuestState?.invalidate?.(); }catch(_){ } }
+
+  function normalizeItem(it){
+    if(typeof it === 'string') return { name:it, sets:'', reps:'', unit:'' };
+    return {
+      name:String(it?.name || it?.exercise || '').trim(),
+      sets:it?.sets == null ? '' : String(it.sets),
+      reps:it?.reps == null ? '' : String(it.reps),
+      unit:it?.unit == null ? '' : String(it.unit)
+    };
+  }
+
+  function normalizeState(st){
+    const s = st && Array.isArray(st.plans) && st.plans.length ? st : defaultState();
+    s.plans = s.plans.map(p => ({
+      id:String(p.id || ('plan_' + Date.now())),
+      name:String(p.name || 'Plan'),
+      note:String(p.note || ''),
+      items:Array.isArray(p.items) ? p.items.map(normalizeItem).filter(x=>x.name) : [],
+      week: normalizeWeek(p.week)
+    }));
+    if(!s.plans.some(p=>p.id===s.activeId)) s.activeId = s.plans[0].id;
+    return s;
+  }
+
+  function getState(){ return normalizeState(load()); }
+  function setState(st){ save(normalizeState(st)); }
+  function state(){ return getState(); }
+  function getActive(){ const st=getState(); return st.plans.find(p=>p.id===st.activeId) || st.plans[0]; }
+  function setActive(id){ const st=getState(); if(st.plans.some(p=>p.id===id)){ st.activeId=id; save(st); } }
+  function createPlan(name){ const st=getState(); const id='plan_'+Date.now(); st.plans.push({ id, name:String(name||'Plan'), note:'', items:[], week:normalizeWeek(null) }); st.activeId=id; save(st); return id; }
+  function renamePlan(id,name){ const st=getState(); const p=st.plans.find(x=>x.id===id); if(p){ p.name=String(name||p.name); save(st);} }
+  function removePlan(id){ const st=getState(); st.plans = st.plans.filter(p=>p.id!==id); if(!st.plans.length) st.plans = defaultPlans(); if(!st.plans.some(p=>p.id===st.activeId)) st.activeId=st.plans[0].id; save(st); }
+
+  function addExerciseToPlan(planId,name,params){
+    const st=getState(); const p=st.plans.find(x=>x.id===planId); if(!p) return;
+    const ex=String(name||'').trim(); if(!ex) return;
+    if(!p.items.some(x=>x.name===ex)) p.items.push({ name:ex, sets:String(params?.sets ?? ''), reps:String(params?.reps ?? ''), unit:String(params?.unit ?? '') });
+    save(st);
+  }
+  function addExercise(name){ const p=getActive(); addExerciseToPlan(p.id,name,{}); }
+  function removeExerciseFromPlan(planId,name){ const st=getState(); const p=st.plans.find(x=>x.id===planId); if(!p) return; p.items=p.items.filter(x=>x.name!==String(name||'').trim()); for(const k of WEEK_KEYS){ p.week[k]=(p.week[k]||[]).filter(x=>x!==name); } save(st); }
+  function removeExercise(name){ const p=getActive(); removeExerciseFromPlan(p.id,name); }
+  function moveExercise(planId,name,dir){ const st=getState(); const p=st.plans.find(x=>x.id===planId); if(!p) return; const i=p.items.findIndex(x=>x.name===name); if(i<0) return; const j=dir==='up'?i-1:i+1; if(j<0||j>=p.items.length) return; [p.items[i],p.items[j]]=[p.items[j],p.items[i]]; save(st); }
+  function setParams(planId,name,sets,reps){ const st=getState(); const p=st.plans.find(x=>x.id===planId); const it=p?.items.find(x=>x.name===name); if(!it) return; it.sets=sets==null?'':String(sets); it.reps=reps==null?'':String(reps); save(st); }
+  function setUnit(planId,name,unit){ const st=getState(); const p=st.plans.find(x=>x.id===planId); const it=p?.items.find(x=>x.name===name); if(!it) return; it.unit=String(unit||''); save(st); }
+  function setDayAssignments(planId, dayKey, names){ const st=getState(); const p=st.plans.find(x=>x.id===planId); if(!p) return; p.week[String(dayKey||'').toLowerCase()] = Array.from(new Set((names||[]).map(x=>String(x||'').trim()).filter(Boolean))); save(st); }
+  function assignToDay(planId,dayKey,name){ const st=getState(); const p=st.plans.find(x=>x.id===planId); if(!p) return; const k=String(dayKey||'').toLowerCase(); const ex=String(name||'').trim(); if(!ex) return; p.week[k]=p.week[k]||[]; if(!p.week[k].includes(ex)) p.week[k].push(ex); save(st); }
+  function removeFromDay(planId,dayKey,name){ const st=getState(); const p=st.plans.find(x=>x.id===planId); if(!p) return; const k=String(dayKey||'').toLowerCase(); p.week[k]=(p.week[k]||[]).filter(x=>x!==String(name||'').trim()); save(st); }
+  function dayKeyForDate(d){ const day=(d instanceof Date? d : new Date()); return ["sun","mon","tue","wed","thu","fri","sat"][day.getDay()] || 'mon'; }
+
+  window.IronQuestPlans = { getState,setState,state,getActive,setActive,createPlan,renamePlan,removePlan,addExercise,removeExercise,addExerciseToPlan,removeExerciseFromPlan,moveExercise,setParams,setUnit,setDayAssignments,assignToDay,removeFromDay,dayKeyForDate };
 })();
