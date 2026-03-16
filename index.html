@@ -7,19 +7,17 @@
   <link rel="manifest" href="manifest.json" />
   <link rel="stylesheet" href="style.css" />
   <link rel="apple-touch-icon" href="icons/icon-192.png" />
-  <title>IRON QUEST — Hunter Ascended</title>
+  <title>IRON QUEST — Hybrid Training</title>
 </head>
-
 <body>
   <header class="topbar">
     <div class="brand">
-      <div class="app-icon">⚔</div>
+      <div class="app-icon">🏋️</div>
       <div class="brand-text">
         <div class="brand-title">IRON QUEST</div>
-        <div class="brand-sub" id="statusLine">Booting…</div>
+        <div class="brand-sub" id="statusLine">Hybrid Plan • Joggen • Stats • Health</div>
       </div>
     </div>
-
     <button class="icon-btn" id="btnSystemLog" title="System Log">⌁</button>
   </header>
 
@@ -35,20 +33,12 @@
     <section class="tab" id="plans"></section>
     <section class="tab" id="run"></section>
     <section class="tab" id="stats"></section>
-    <section class="tab" id="quests"></section>
-    <section class="tab" id="gates"></section>
-    <section class="tab" id="boss"></section>
-    <section class="tab" id="skills"></section>
     <section class="tab" id="review"></section>
     <section class="tab" id="health"></section>
     <section class="tab" id="backup"></section>
-    <section class="tab" id="equipment"></section>
-    <section class="tab" id="diagnostics"></section>
-    <section class="tab" id="balance"></section>
-</main>
+  </main>
 
   <nav class="bottom-nav">
-    <!-- Mobile-first: keep primary tabs always visible, everything else via "More" sheet (no feature loss) -->
     <button data-tab="home" class="active"><span class="i">🏠</span><span>Home</span></button>
     <button data-tab="log"><span class="i">📒</span><span>Log</span></button>
     <button data-tab="run"><span class="i">🏃</span><span>Run</span></button>
@@ -56,62 +46,35 @@
     <button id="btnMore"><span class="i">⋯</span><span>More</span></button>
   </nav>
 
-  <!-- Global Quick-Add (less clicks): opens an action sheet from anywhere -->
   <button id="fabGlobal" class="fab" title="Quick Add" aria-label="Quick Add">＋</button>
 
-  <!-- SCRIPTS: Reihenfolge ist wichtig -->
   <script defer src="js/utils.js"></script>
   <script defer src="js/schema.js"></script>
   <script defer src="js/ui.js"></script>
   <script defer src="js/uiEffects.js"></script>
-  <script defer src="js/diagnostics.js"></script>
-  <script defer src="js/balance.js"></script>
   <script defer src="js/toast.js"></script>
   <script defer src="js/urls.js"></script>
-
   <script defer src="js/db.js"></script>
   <script defer src="js/state.js"></script>
   <script defer src="js/exercises.js"></script>
   <script defer src="js/plans.js"></script>
-
   <script defer src="js/progression.js"></script>
   <script defer src="js/profile.js"></script>
   <script defer src="js/hunterRank.js"></script>
-  <script defer src="js/classes.js"></script>
-  <script defer src="js/periodization.js"></script>
-  <script defer src="js/skilltree_v2.js"></script>
   <script defer src="js/xpSystem.js"></script>
-
-  <script defer src="js/loot.js"></script>
-  <script defer src="js/equipment.js"></script>
-  <script defer src="js/share.js"></script>
-  <script defer src="js/collections.js"></script>
-
   <script defer src="js/attributes.js"></script>
-  <script defer src="js/coach_engine.js"></script>
   <script defer src="js/session.js"></script>
-  <script defer src="js/rpg.js"></script>
-
-  <!-- Derived hunter stats (STR/END/AGI/INT/PER/LCK) from logs -->
   <script defer src="js/hunterStats.js"></script>
-
   <script defer src="js/home.js"></script>
-  <script defer src="js/skills.js"></script>
   <script defer src="js/logFeature.js"></script>
   <script defer src="js/history.js"></script>
   <script defer src="js/plansView.js"></script>
   <script defer src="js/jogging.js"></script>
   <script defer src="js/analytics.js"></script>
-  <script defer src="js/challenges.js"></script>
-  <script defer src="js/gates.js"></script>
-  <script defer src="js/bossArena.js"></script>
   <script defer src="js/review.js"></script>
   <script defer src="js/health.js"></script>
   <script defer src="js/backup.js"></script>
-
-  <!-- Data integrity + XP audit (runs before app boot) -->
   <script defer src="js/integrity.js"></script>
-
   <script defer src="js/app.js"></script>
 </body>
 </html>
