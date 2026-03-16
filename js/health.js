@@ -38,10 +38,12 @@
     const rows=await window.IronDB.getAllHealth();
     rows.sort((a,b)=> (a.date<b.date?1:-1));
     const today=window.Utils.isoDate(new Date());
+    const latest = rows[0] || null;
     container.innerHTML=`
       <div class="card">
         <h2>Health</h2>
-        <p class="hint">Lokal gespeichert. Wochen-Chart zeigt letzten Messwert je Woche.</p>
+        <p class="hint">Health-Daten bleiben aktiv. Nutze sie für Gewicht, Taille, Blutdruck und Puls im Verlauf.</p>
+        ${latest ? `<div class="hq-mini reviewGrid" style="margin-top:10px;"><div class="hq-miniCard"><div class="hq-miniT">Gewicht</div><div class="hq-miniV">${Number(latest.weight||0).toFixed(1)} kg</div><div class="hq-miniS">${latest.date}</div></div><div class="hq-miniCard"><div class="hq-miniT">Taille</div><div class="hq-miniV">${Number(latest.waist||0).toFixed(1)} cm</div><div class="hq-miniS">${latest.date}</div></div><div class="hq-miniCard"><div class="hq-miniT">Puls</div><div class="hq-miniV">${latest.pulse||'—'}</div><div class="hq-miniS">Ruhepuls</div></div><div class="hq-miniCard"><div class="hq-miniT">Blutdruck</div><div class="hq-miniV">${latest.sys||'—'}/${latest.dia||'—'}</div><div class="hq-miniS">SYS / DIA</div></div></div>` : ''}
       </div>
 
       <div class="card">
